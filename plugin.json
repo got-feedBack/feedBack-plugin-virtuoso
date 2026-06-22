@@ -1,0 +1,23 @@
+{
+  "id": "virtuoso",
+  "name": "Virtuoso",
+  "version": "0.1.0",
+  "description": "Practice studio for guitar & bass — scale, technique, and rhythm drills, timed workouts, and jam backing that teach skills you take off the screen.",
+  "category": "practice",
+  "icon": "assets/thumb.png",
+  "license": "AGPL-3.0-only",
+  "nav": {
+    "label": "Virtuoso - Practice",
+    "screen": "virtuoso"
+  },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "settings": {
+    "html": "settings.html",
+    "server_files": [
+      "plugin_data/virtuoso/presets.json",
+      "plugin_data/virtuoso/tunings.json"
+    ]
+  },
+  "routes": "routes.py"
+}

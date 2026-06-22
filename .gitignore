@@ -1,0 +1,38 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+node_modules/
+dist/
+docs/sources/
+.virtuoso-shots/
+.claude/skills/run-virtuoso/node_modules/
+.claude/skills/run-virtuoso/package-lock.json
+.claude/skills/run-virtuoso/dump-chords.mjs
+.claude/skills/run-virtuoso/audit-ux.mjs
+.claude/skills/run-virtuoso/check-scoring.mjs
+# Ad-hoc per-feature throwaway proofs — local-only by convention (see CLAUDE.md "Development workflow");
+# promote a durable one to smoke-*.mjs + the npm test script instead of committing it as a probe.
+.claude/skills/run-virtuoso/probe-*.mjs
+.claude/skills/run-virtuoso/shot-*.mjs
+.claude/skills/run-virtuoso/*.png
+.claude/skills/run-virtuoso/.claude/
+.virtuoso-shots/blank-load.png
+
+# Local agent tooling (subagent definitions + their persisted memory)
+.claude/agents/
+.claude/agent-memory/
+
+# Local-only research notes (some carry competitor refs) — never commit
+.claude/research/
+
+# On-hand alternate soundfonts for A/B auditioning (not shipped)
+static/wafonts/alt/
+
+# Local DSP assets pending licensing clearance (commercial cab IRs, NAM captures) — not shipped.
+# EXCEPTION: the metal V30 cab IR is GPL-3 (Deer Ink Studios via AIDA-X) → it SHIPS;
+# the clean/overdrive cabs are commercial (Christian's lib) → local-only dogfood.
+static/irs/*
+!static/irs/v30_4x12.wav
+!static/irs/README.md
+static/nam/
