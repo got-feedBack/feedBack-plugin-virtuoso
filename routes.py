@@ -24,9 +24,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-PLUGIN_ID = "virtuoso"
+PLUGIN_ID = "virtuoso_beta"
 SCHEMA_VERSION = 1
-TEMP_ROOT_NAME = ".virtuoso-temp"
+TEMP_ROOT_NAME = ".virtuoso_beta-temp"
 SAMPLE_RATE = 44100
 
 
@@ -68,7 +68,7 @@ def _tunings_path(context: dict) -> Path:
 # a `conn` (sqlite3.Connection with check_same_thread=False) and `_lock`
 # (threading.Lock) — same pattern FeedBack uses for its own loops table.
 #
-# We keep our state in two dedicated tables prefixed `virtuoso_` so they
+# We keep our state in two dedicated tables prefixed `virtuoso_beta_` so they
 # don't get confused with the songs library. Schemas are conservative — IDs
 # are TEXT for presets (so the existing slug-style IDs from the JSON file
 # survive migration) and INTEGER AUTOINCREMENT for tunings (since the
@@ -78,7 +78,7 @@ def _ensure_tables(meta_db) -> None:
     with meta_db._lock:
         meta_db.conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS virtuoso_presets (
+            CREATE TABLE IF NOT EXISTS virtuoso_beta_presets (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 kind TEXT NOT NULL DEFAULT 'exercise',
@@ -89,7 +89,7 @@ def _ensure_tables(meta_db) -> None:
         )
         meta_db.conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS virtuoso_tunings (
+            CREATE TABLE IF NOT EXISTS virtuoso_beta_tunings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 family TEXT NOT NULL,
@@ -113,7 +113,7 @@ def _migrate_presets_from_json(meta_db, presets_path: Path) -> None:
         return
     try:
         existing = meta_db.conn.execute(
-            "SELECT COUNT(*) FROM virtuoso_presets"
+            "SELECT COUNT(*) FROM virtuoso_beta_presets"
         ).fetchone()[0]
     except Exception:
         return
@@ -139,7 +139,7 @@ def _migrate_presets_from_json(meta_db, presets_path: Path) -> None:
             except (TypeError, ValueError):
                 created = now
             meta_db.conn.execute(
-                "INSERT OR REPLACE INTO virtuoso_presets "
+                "INSERT OR REPLACE INTO virtuoso_beta_presets "
                 "(id, name, kind, config_json, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
@@ -162,7 +162,7 @@ def _migrate_tunings_from_json(meta_db, tunings_path: Path) -> None:
         return
     try:
         existing = meta_db.conn.execute(
-            "SELECT COUNT(*) FROM virtuoso_tunings"
+            "SELECT COUNT(*) FROM virtuoso_beta_tunings"
         ).fetchone()[0]
     except Exception:
         return
@@ -195,7 +195,7 @@ def _migrate_tunings_from_json(meta_db, tunings_path: Path) -> None:
             except (TypeError, ValueError):
                 created = now
             meta_db.conn.execute(
-                "INSERT OR IGNORE INTO virtuoso_tunings "
+                "INSERT OR IGNORE INTO virtuoso_beta_tunings "
                 "(name, family, string_count, midis_csv, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
@@ -248,7 +248,7 @@ def _snapshot_presets(meta_db, path: Path) -> None:
     try:
         rows = meta_db.conn.execute(
             "SELECT id, name, kind, config_json, created_at "
-            "FROM virtuoso_presets ORDER BY created_at DESC"
+            "FROM virtuoso_beta_presets ORDER BY created_at DESC"
         ).fetchall()
         presets = []
         for r in rows:
@@ -267,7 +267,7 @@ def _snapshot_tunings(meta_db, path: Path) -> None:
     try:
         rows = meta_db.conn.execute(
             "SELECT id, name, family, string_count, midis_csv, created_at "
-            "FROM virtuoso_tunings ORDER BY family, string_count, name"
+            "FROM virtuoso_beta_tunings ORDER BY family, string_count, name"
         ).fetchall()
         tunings = []
         for r in rows:
@@ -730,7 +730,7 @@ def setup(app: FastAPI, context: dict) -> None:
             raise HTTPException(503, "Plugin DB context unavailable.")
         rows = meta_db.conn.execute(
             "SELECT id, name, kind, config_json, created_at "
-            "FROM virtuoso_presets ORDER BY created_at DESC"
+            "FROM virtuoso_beta_presets ORDER BY created_at DESC"
         ).fetchall()
         out = []
         for r in rows:
@@ -746,11 +746,11 @@ def setup(app: FastAPI, context: dict) -> None:
         if meta_db is None:
             raise HTTPException(503, "Plugin DB context unavailable.")
         existing = meta_db.conn.execute(
-            "SELECT 1 FROM virtuoso_presets WHERE id = ?", (payload.id,)
+            "SELECT 1 FROM virtuoso_beta_presets WHERE id = ?", (payload.id,)
         ).fetchone()
         with meta_db._lock:
             meta_db.conn.execute(
-                "INSERT OR REPLACE INTO virtuoso_presets "
+                "INSERT OR REPLACE INTO virtuoso_beta_presets "
                 "(id, name, kind, config_json, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (payload.id, payload.name, payload.kind,
@@ -766,7 +766,7 @@ def setup(app: FastAPI, context: dict) -> None:
             raise HTTPException(503, "Plugin DB context unavailable.")
         with meta_db._lock:
             cur = meta_db.conn.execute(
-                "DELETE FROM virtuoso_presets WHERE id = ?", (preset_id,)
+                "DELETE FROM virtuoso_beta_presets WHERE id = ?", (preset_id,)
             )
             meta_db.conn.commit()
         if cur.rowcount == 0:
@@ -785,7 +785,7 @@ def setup(app: FastAPI, context: dict) -> None:
             raise HTTPException(503, "Plugin DB context unavailable.")
         rows = meta_db.conn.execute(
             "SELECT id, name, family, string_count, midis_csv, created_at "
-            "FROM virtuoso_tunings ORDER BY family, string_count, name"
+            "FROM virtuoso_beta_tunings ORDER BY family, string_count, name"
         ).fetchall()
         out = []
         for r in rows:
@@ -810,19 +810,19 @@ def setup(app: FastAPI, context: dict) -> None:
                 raise HTTPException(400, f"midi out of range: {m}")
         csv = ",".join(str(int(m)) for m in payload.midis)
         existing = meta_db.conn.execute(
-            "SELECT id FROM virtuoso_tunings WHERE name = ?", (payload.name,)
+            "SELECT id FROM virtuoso_beta_tunings WHERE name = ?", (payload.name,)
         ).fetchone()
         with meta_db._lock:
             if existing:
                 meta_db.conn.execute(
-                    "UPDATE virtuoso_tunings SET family=?, string_count=?, midis_csv=? "
+                    "UPDATE virtuoso_beta_tunings SET family=?, string_count=?, midis_csv=? "
                     "WHERE id=?",
                     (payload.family, payload.string_count, csv, existing[0]),
                 )
                 tuning_id = existing[0]
             else:
                 cur = meta_db.conn.execute(
-                    "INSERT INTO virtuoso_tunings "
+                    "INSERT INTO virtuoso_beta_tunings "
                     "(name, family, string_count, midis_csv, created_at) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (payload.name, payload.family, payload.string_count, csv, time.time()),
@@ -838,7 +838,7 @@ def setup(app: FastAPI, context: dict) -> None:
             raise HTTPException(503, "Plugin DB context unavailable.")
         with meta_db._lock:
             cur = meta_db.conn.execute(
-                "DELETE FROM virtuoso_tunings WHERE id = ?", (tuning_id,)
+                "DELETE FROM virtuoso_beta_tunings WHERE id = ?", (tuning_id,)
             )
             meta_db.conn.commit()
         if cur.rowcount == 0:
@@ -867,9 +867,9 @@ def setup(app: FastAPI, context: dict) -> None:
         scale = str(session.get("scale", "major")).replace("_", " ")
         mode = str(session.get("mode", "practice")).replace("_", " ")
         title = f"Virtuoso - {key} {scale} {mode}"
-        slug = "virtuoso-" + uuid.uuid4().hex[:12]
+        slug = "virtuoso_beta-" + uuid.uuid4().hex[:12]
         sloppak_dir = temp_root / f"{slug}.sloppak"
-        work_dir = Path(tempfile.mkdtemp(prefix="virtuoso-work-", dir=str(data_dir)))
+        work_dir = Path(tempfile.mkdtemp(prefix="virtuoso_beta-work-", dir=str(data_dir)))
         try:
             (work_dir / "arrangements").mkdir(parents=True, exist_ok=True)
             stems_dir = work_dir / "stems"
@@ -894,7 +894,7 @@ def setup(app: FastAPI, context: dict) -> None:
                     "capo": 0,
                 }],
                 "stems": [{"id": "full", "file": stem_file, "default": True}],
-                "virtuoso": {"version": SCHEMA_VERSION, "generated": True, "session": session},
+                "virtuoso_beta": {"version": SCHEMA_VERSION, "generated": True, "session": session},
             }
             (work_dir / "manifest.yaml").write_text(_dump_yaml(manifest), encoding="utf-8")
 
