@@ -36,3 +36,7 @@ static/irs/*
 !static/irs/v30_4x12.wav
 !static/irs/README.md
 static/nam/
+
+# Local session launcher (opens an admin Claude Code session rooted here) — local convenience, not shipped
+start-session.cmd
+start-session.ps1
