@@ -334,7 +334,7 @@ async function run() {
     {
       const wlFails = [];
       const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-      await ctx2.addInitScript(() => { window.__awake = []; window.slopsmithDesktop = { power: { setScreenAwake: (v) => window.__awake.push(!!v) } }; });
+      await ctx2.addInitScript(() => { window.__awake = []; window.feedBackDesktop = { power: { setScreenAwake: (v) => window.__awake.push(!!v) } }; });   // feedBackDesktop = the FeedBack desktop bridge (hostDesktop() reads it first)
       const p2 = await ctx2.newPage();
       p2.on("pageerror", (e) => { if (!isBenign(e.message)) wlFails.push(`pageerror: ${e.message}`); });
       await p2.goto(`${HOST}/`, { waitUntil: "domcontentloaded" });

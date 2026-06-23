@@ -20,7 +20,7 @@ Paths in this file are relative to the repo root (`<unit>/` in the skill-generat
 This skill targets the actual machine these tools were built on. From a clean machine on the same Windows host:
 
 - **FeedBack Desktop** installed at `C:\Program Files\Slopsmith\`. The installer ships a working Python 3.12 at `resources\python\python.exe` with every dep already in `site-packages` — we reuse it instead of building a venv.
-- **A FeedBack source checkout** at `C:\Users\chris\slopsmith\` (the user's existing clone). Only `main.py` is needed from it — the bundled Python's `sys.path` resolves `server`, `lib`, `plugins/__init__.py` from `C:\Program Files\Slopsmith\resources\slopsmith\` regardless. Override with `$env:SLOPSMITH_CHECKOUT` if you keep it elsewhere.
+- **The FeedBack host checkout** at `C:\dev\feedback\repos\feedback\` (the default `checkout` source as of 2026-06-23). It holds `main.py` and is run via the venv python (below); its own `server`/`lib`/`plugins` load. Override with `$env:SLOPSMITH_CHECKOUT` if you keep it elsewhere. (Legacy `bundled` mode still uses the frozen Slopsmith install at `C:\Program Files\Slopsmith\`.)
 - **Node.js** + `npm` on PATH. First run of `driver.mjs` requires Playwright + Chromium:
   ```bash
   cd .claude/skills/run-virtuoso
@@ -102,14 +102,17 @@ Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue | Select-Obje
 
 `launch.ps1` can boot **two different FeedBack runtimes**, selected by `SLOPSMITH_SOURCE`:
 
-- **`checkout`** (**DEFAULT** since 2026-06-04) — your git checkout (`C:\Users\chris\slopsmith`)
-  run via a **venv python** (no `._pth` isolation → the checkout's own code loads). This is our
-  **primary test target: CURRENT FeedBack**, which ships the **Minigames scoring SDK** (so
-  on-screen note-detection/grading is available — see the Scoring note below) plus the latest
-  host capabilities. **`launch.ps1` AUTO-PULLS it current on every launch** (non-fatal: skipped
-  on a dirty tree or when offline; refreshes the venv only when `requirements.txt` changed in
-  the pull). Needs the one-time venv setup below.
-- **`bundled`** — the frozen Desktop install at `C:\Program Files\Slopsmith\…` (older). Its
+- **`checkout`** (**DEFAULT**; retargeted to the FeedBack host 2026-06-23) — the FeedBack
+  mainline checkout (`C:\dev\feedback\repos\feedback`) run via a **venv python** (no `._pth`
+  isolation → the checkout's own code loads). This is our **primary test target: CURRENT
+  FeedBack**, which ships the **Minigames scoring SDK** (so on-screen note-detection/grading is
+  available — see the Scoring note below) plus the latest host capabilities. **`launch.ps1`
+  AUTO-PULLS it current on every launch** (non-fatal: skipped on a dirty tree or when offline;
+  refreshes the venv only when `requirements.txt` changed in the pull). On startup it also
+  completes first-run onboarding via `/api/profile` so FeedBack's `#v3-onboarding` modal never
+  blocks the driver/smoke suites. Needs the one-time venv setup below.
+- **`bundled`** — the frozen LEGACY Slopsmith Desktop install at `C:\Program Files\Slopsmith\…`
+  (older, pre-FeedBack). Its
   `python312._pth` pins imports to the bundled code, so this tests against **what users on the
   current Desktop release actually run** — notably **WITHOUT the Minigames scoring SDK** (so no
   on-screen note-detection/grading). Use it before a release to verify the installed base:
@@ -117,12 +120,12 @@ Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue | Select-Obje
   $env:SLOPSMITH_SOURCE = 'bundled'; & .claude\skills\run-virtuoso\launch.ps1
   ```
 
-**One-time setup for the checkout runtime** (a venv at `C:\Users\chris\slopsmith-venv`,
-overridable via `SLOPSMITH_VENV`):
+**One-time setup for the checkout runtime** (a venv at `C:\Users\chris\slopsmith-venv` — named
+for history, now serves the FeedBack checkout; overridable via `SLOPSMITH_VENV`):
 ```powershell
-git -C C:\Users\chris\slopsmith pull          # FeedBack ships from `main`, not Desktop installers — pulling IS updating
+git -C C:\dev\feedback\repos\feedback pull     # FeedBack ships from `main` — pulling IS updating
 py -3 -m venv C:\Users\chris\slopsmith-venv
-& C:\Users\chris\slopsmith-venv\Scripts\python.exe -m pip install -r C:\Users\chris\slopsmith\requirements.txt
+& C:\Users\chris\slopsmith-venv\Scripts\python.exe -m pip install -r C:\dev\feedback\repos\feedback\requirements.txt
 ```
 No build step (Tailwind via CDN, static served as-is). `launch.ps1` sets `PYTHONPATH`
 (checkout root + `lib/`, mirroring the bundled `._pth`) and `SLOPSMITH_PLUGINS_DIR`
@@ -182,8 +185,8 @@ The driver doesn't currently exercise `temp-sloppak`. If a PR touches that route
 **`Bundled Python not found at C:\Program Files\Slopsmith\resources\python\python.exe`**
 FeedBack Desktop isn't installed (or installed elsewhere). Install it from the official release, then re-run.
 
-**`FeedBack source not found at C:\Users\chris\slopsmith`**
-Clone `https://github.com/byrongamatos/slopsmith.git` to that path, or set `$env:SLOPSMITH_CHECKOUT` to your clone before running `launch.ps1`. Only `main.py` is actually read from this checkout.
+**`FeedBack source not found at C:\dev\feedback\repos\feedback`**
+Clone the FeedBack host repo to that path (or refresh it via `C:\Dev\feedback\update-all.ps1`), or set `$env:SLOPSMITH_CHECKOUT` to your clone before running `launch.ps1`. The checkout is run directly via the venv python, so its full `server`/`lib`/`plugins` tree must be present.
 
 **`Failed to load routes for plugin 'virtuoso' … NameError: name 'filename' is not defined`**
 Old bug in `routes.py` where FastAPI path parameters in `@app.get(f"…/{filename}")` got eaten by the surrounding f-string. Fixed; if you see it again, double the braces: `f"…/{{filename}}"`.

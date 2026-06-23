@@ -11,9 +11,8 @@
 //   node .claude/skills/run-virtuoso/driver.mjs all-renderers
 //
 // Prerequisites (one-time, see SKILL.md):
-//   - FeedBack Desktop installed at C:\Program Files\Slopsmith\
-//     (provides the bundled Python + slopsmith source)
-//   - Plugin junctioned at %LOCALAPPDATA%\Slopsmith\plugins\virtuoso
+//   - The FeedBack host running via launch.ps1 (defaults to the FeedBack
+//     checkout at C:\dev\feedback\repos\feedback; junctions this plugin in)
 //   - "npm i playwright" available via npx (auto-installs on first run)
 //
 // The driver expects an already-running host. If the port is closed, it
@@ -38,17 +37,30 @@ async function ensureHost() {
   if (!body.ok) throw new Error(`Plugin status not ok: ${JSON.stringify(body)}`);
 }
 
+// FeedBack (v0.3.0+) can show a first-run #v3-onboarding modal (a fixed,
+// full-screen overlay) that intercepts pointer events and blocks every click.
+// launch.ps1 completes onboarding via /api/profile so it normally never
+// renders; this is a belt-and-suspenders removal for a host where it wasn't
+// pre-completed (e.g. a fresh config dir or a manually-started host).
+async function dismissOnboarding(page) {
+  await page
+    .evaluate(() => document.getElementById("v3-onboarding")?.remove())
+    .catch(() => {});
+}
+
 async function gotoVirtuoso(page) {
   // FeedBack is an SPA — load the shell, then wait for loadPlugins() to
   // inject the plugin's <section id="virtuoso"> into the DOM, then call
   // showScreen() to activate it. plugin.json declares nav.screen = "virtuoso".
   await page.goto(`${HOST}/`, { waitUntil: "domcontentloaded" });
+  await dismissOnboarding(page);
   // FeedBack mounts each plugin screen under #plugin-<id>. The plugin's own
   // root markup (#virtuoso-root, from screen.html) lives inside that.
   // Screen sections are display:none until activated — wait on "attached".
   await page.waitForSelector("#plugin-virtuoso", { state: "attached", timeout: 20_000 });
   await page.waitForFunction(() => typeof window.showScreen === "function", { timeout: 5_000 });
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
+  await dismissOnboarding(page);
   await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10_000 });
   // The bootstrap script in screen.html runs bind() on DOMContentLoaded; give
   // it a moment to wire up everything (pathway dropdown, view-switcher).

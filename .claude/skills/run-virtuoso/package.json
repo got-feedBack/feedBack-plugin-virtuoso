@@ -22,8 +22,9 @@
     "smoke:backing": "node smoke-backing-engine.mjs",
     "smoke:contained": "node smoke-contained-verifier.mjs",
     "smoke:level-gate": "node smoke-level-gate-async.mjs",
+    "smoke:host-surface": "node smoke-host-surface.mjs",
     "test": "node run-all.mjs",
-    "test:seq": "node smoke-renderers.mjs && node smoke-generators.mjs && node smoke-highway-settings.mjs && node smoke-strings.mjs && node smoke-meter-subdiv.mjs && node smoke-over-barline.mjs && node smoke-herta.mjs && node smoke-audioctx.mjs && node smoke-connect.mjs && node smoke-variation.mjs && node smoke-session-sync.mjs && node smoke-progress.mjs && node smoke-core-purity.mjs && node smoke-gems.mjs && node smoke-scoring-e2e.mjs && node smoke-backing-engine.mjs && node smoke-contained-verifier.mjs && node smoke-level-gate-async.mjs"
+    "test:seq": "node smoke-renderers.mjs && node smoke-generators.mjs && node smoke-highway-settings.mjs && node smoke-strings.mjs && node smoke-meter-subdiv.mjs && node smoke-over-barline.mjs && node smoke-herta.mjs && node smoke-audioctx.mjs && node smoke-connect.mjs && node smoke-variation.mjs && node smoke-session-sync.mjs && node smoke-progress.mjs && node smoke-core-purity.mjs && node smoke-gems.mjs && node smoke-scoring-e2e.mjs && node smoke-backing-engine.mjs && node smoke-contained-verifier.mjs && node smoke-level-gate-async.mjs && node smoke-host-surface.mjs"
   },
   "keywords": [],
   "author": "",

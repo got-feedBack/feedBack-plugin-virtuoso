@@ -1,17 +1,17 @@
 {
-  "_comment": "Pinned reference = the plugin versions the mainline FeedBack game ships, captured from the live desktop plugin set. launch.ps1's preflight asserts the dev host's graded-through / borrowed siblings match these, so 'green on my dev host' tracks 'works in the game' instead of drifting silently. RE-CAPTURE on each host-release overlap sweep (ROADMAP standing ritual) and bump capturedDate.",
-  "capturedFrom": "%LOCALAPPDATA%/Temp/slopsmith/plugins  (live desktop extraction = what the game actually runs)",
-  "capturedDate": "2026-06-22",
-  "host": { "channel": "feedback-desktop", "version": "0.2.9" },
+  "_comment": "Pinned reference = the plugin versions the mainline FeedBack host ships. launch.ps1's preflight asserts the dev host's graded-through / borrowed siblings match these, so 'green on my dev host' tracks 'works in the game' instead of drifting silently. Captured from the FeedBack mainline checkout (C:\\dev\\feedback\\repos\\feedback\\plugins — the default checkout test target) plus the pinned note_detect dev link. RE-CAPTURE on each host-release overlap sweep (ROADMAP standing ritual) and bump capturedDate.",
+  "capturedFrom": "C:/dev/feedback/repos/feedback/plugins (FeedBack mainline checkout = the default dev host source) + the pinned note_detect dev link at %LOCALAPPDATA%/Slopsmith/plugins/note_detect",
+  "capturedDate": "2026-06-23",
+  "host": { "channel": "feedback-checkout", "version": "0.3.0" },
   "plugins": {
     "note_detect": {
       "version": "1.15.3",
       "critical": true,
       "requiresApi": ["isContainedVerifierAvailable", "setContainedChart", "pushContainedPlayhead", "drainContainedVerdicts", "releaseContainedChart"],
-      "note": "The verifier Virtuoso grades through. Below 1.15.x the contained-verifier API is absent and grading silently falls back to setVerifyTarget — the 'green notes don't fire' class of ghost."
+      "note": "The verifier Virtuoso grades through (pinned dev link, not bundled in the FeedBack checkout). Below 1.15.x the contained-verifier API is absent and grading silently falls back to setVerifyTarget — the 'green notes don't fire' class of ghost."
     },
-    "minigames":  { "version": "0.1.0", "critical": true,  "note": "The host scoring SDK (slopsmithMinigames) the pitch tracker uses. Absent host -> no scoring." },
-    "highway_3d": { "version": "3.26.0", "critical": false, "note": "Borrowed 3D viz + native hit-flare. Dev hosts currently ship 3.22.0 (drift) — surfaced as a WARN." },
-    "nam_tone":   { "version": "1.2.0",  "critical": false, "note": "Optional borrowed amp-capture tone for live input." }
+    "minigames":  { "version": "0.1.1", "critical": true,  "note": "The host scoring SDK (slopsmithMinigames) the pitch tracker uses. Absent host -> no scoring. FeedBack v0.3.0 ships 0.1.1 (was 0.1.0 on the older Slopsmith reference)." },
+    "highway_3d": { "version": "3.26.0", "critical": false, "note": "Borrowed 3D viz + native hit-flare. The FeedBack checkout ships 3.26.0 (matches); the older legacy Slopsmith host shipped 3.22.0 (drift -> WARN)." },
+    "nam_tone":   { "version": "1.2.0",  "critical": false, "note": "Optional borrowed amp-capture tone for live input. NOT bundled in the FeedBack checkout (separate install) -> surfaces as a benign WARN." }
   }
 }

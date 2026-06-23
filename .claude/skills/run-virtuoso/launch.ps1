@@ -6,10 +6,12 @@
 # server is up at http://127.0.0.1:<port>/ and driver.mjs can connect.
 #
 # Defaults assume the layout on this machine:
-#   - FeedBack Desktop installed at "C:\Program Files\Slopsmith\"
-#     (provides the bundled Python at resources\python\python.exe AND the
-#     slopsmith source at resources\slopsmith\ on the bundled Python's
-#     sys.path; the user's slopsmith checkout is the CWD that holds main.py)
+#   - checkout mode (DEFAULT): the FeedBack host source at
+#     "C:\dev\feedback\repos\feedback" (holds main.py), run via the venv python
+#     below. This is our CURRENT-FeedBack test target (the host the game ships).
+#   - bundled mode: the frozen LEGACY Slopsmith Desktop at
+#     "C:\Program Files\Slopsmith\" (bundled Python + slopsmith source on its
+#     sys.path). Pre-release legacy check only; see the SLOPSMITH_SOURCE note.
 #   - The plugin source lives next to this script (../../..)
 #
 # Override via env vars: VIRTUOSO_PORT, SLOPSMITH_CHECKOUT, DLC_DIR,
@@ -20,7 +22,10 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PluginRoot = (Resolve-Path (Join-Path $ScriptDir '..\..\..')).Path
 $Port = if ($env:VIRTUOSO_PORT) { $env:VIRTUOSO_PORT } else { '8765' }
-$Checkout = if ($env:SLOPSMITH_CHECKOUT) { $env:SLOPSMITH_CHECKOUT } else { 'C:\Users\chris\slopsmith' }
+# DEFAULT host source = the FeedBack mainline checkout (current FeedBack, the host
+# the game ships). Was the legacy Slopsmith clone; migrated 2026-06-23. Override
+# with $env:SLOPSMITH_CHECKOUT (e.g. point back at an old slopsmith clone).
+$Checkout = if ($env:SLOPSMITH_CHECKOUT) { $env:SLOPSMITH_CHECKOUT } else { 'C:\dev\feedback\repos\feedback' }
 # Which FeedBack RUNTIME to boot:
 #   checkout (DEFAULT) — your git checkout ($Checkout), AUTO-PULLED current on every
 #            launch (see the auto-update block below), run via a normal venv python
@@ -34,6 +39,10 @@ $Checkout = if ($env:SLOPSMITH_CHECKOUT) { $env:SLOPSMITH_CHECKOUT } else { 'C:\
 #            SDK). Use `$env:SLOPSMITH_SOURCE='bundled'` before a release to verify
 #            the version users currently have.
 $Source = if ($env:SLOPSMITH_SOURCE) { $env:SLOPSMITH_SOURCE } else { 'checkout' }
+# The venv python that runs the checkout. Named slopsmith-venv for historical
+# reasons but it now serves the FeedBack checkout (its deps satisfy FeedBack's
+# requirements.txt). Rebuild against $Checkout\requirements.txt if the host ever
+# fails to start; override with $env:SLOPSMITH_VENV.
 $VenvDir = if ($env:SLOPSMITH_VENV) { $env:SLOPSMITH_VENV } else { 'C:\Users\chris\slopsmith-venv' }
 if ($Source -eq 'checkout') {
   $PythonExe = Join-Path $VenvDir 'Scripts\python.exe'
@@ -65,7 +74,7 @@ if (-not (Test-Path $PythonExe)) {
   throw "Bundled Python not found at $PythonExe. Install FeedBack Desktop first."
 }
 if (-not (Test-Path (Join-Path $Checkout 'main.py'))) {
-  throw "FeedBack source not found at $Checkout. Set `$env:SLOPSMITH_CHECKOUT or git clone the slopsmith repo there."
+  throw "FeedBack source not found at $Checkout (expected main.py). Set `$env:SLOPSMITH_CHECKOUT, or clone the FeedBack host repo to C:\dev\feedback\repos\feedback."
 }
 
 # Keep the checkout CURRENT before each launch, so our primary test target tracks
@@ -207,6 +216,30 @@ if (-not $ready) {
   if (Test-Path "$LogFile.err") { Get-Content "$LogFile.err" -Tail 30 }
   exit 1
 }
+
+# ── Complete first-run onboarding so the modal never blocks driving ──────────
+# FeedBack (v0.3.0+) shows a full-screen #v3-onboarding modal whenever the
+# server-side profile has onboarded=0 (server.py: POST /api/profile sets
+# onboarded=1). That modal intercepts pointer events and breaks driver.mjs +
+# every smoke suite's first click. Completing onboarding once via the API marks
+# the (config-dir) profile onboarded — it then never renders for ANY browser
+# context, so the whole headless harness works untouched. Idempotent (only POSTs
+# when not already onboarded) and version-aware (legacy Slopsmith host has no
+# /api/profile -> 404 -> caught -> skipped). Non-fatal by design.
+$prevEAP2 = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+try {
+  $prof = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/profile" -TimeoutSec 3
+  if ($prof -and $prof.onboarded) {
+    Write-Host "[launch] onboarding already complete (profile.onboarded=1)"
+  } else {
+    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/profile" -Method Post `
+      -ContentType 'application/json' -Body '{"display_name":"Dev Tester"}' -TimeoutSec 5 | Out-Null
+    Write-Host "[launch] completed first-run onboarding (profile.onboarded=1) -- #v3-onboarding modal suppressed"
+  }
+} catch {
+  Write-Host "[launch] onboarding auto-complete skipped (no /api/profile or error): $($_.Exception.Message)"
+}
+$ErrorActionPreference = $prevEAP2
 
 # ── Environment preflight: assert the dev host matches the mainline reference ─
 # Turns "detection behaves differently from the game / green notes don't fire"
