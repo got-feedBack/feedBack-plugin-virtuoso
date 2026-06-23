@@ -34,6 +34,15 @@ Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm t
 
 **At end** — move finished items here; log new **Open threads** or a **STOPPED HERE** handoff. Write durable *decisions* to project memory. Keep `CLAUDE.md` / `AGENTS.md` in sync. If `screen.js` changed, run `node --check screen.js` + the smoke suite. Commit working changes in Conventional-Commits style; **commit/push only when asked.**
 
-## STOPPED HERE (v0.1.0 relaunch)
+## STOPPED HERE (2026-06-22 — bundled-Virtuoso migration shipped)
 
-Clean-history rebrand + relaunch landed as the **genesis commit** (plugin id `virtuoso`, `v0.1.0`) in `got-feedback/feedBack-plugin-virtuoso`. The full pre-0.1.0 development history is preserved in the original private archive repo. `node --check` clean · smoke **18/18** green · 3-agent pre-push audit (host-compat / detector / operability) clean. **NEXT:** work the Open threads above — **name clearance before any public launch** is the gating one.
+SlopScale → Virtuoso migration is **shipped + verified end-to-end**:
+- **Bundle swap** (`feedBack-desktop#31`, `4d19398`) + **first-class sidebar** (`feedBack#554`, `ea25cfe`) **merged to host `main`** (admin-merged together; CI was the org Actions billing block, not the code). Virtuoso is now bundled AND holds its dedicated sidebar slot; ships to users via `update_manager`.
+- Old **`feedback-plugin-slopscale-fork` repo deleted** (retired); stale local `slopscale` install removed.
+- Host **`feedBack#558`** (autoplay/auto-exit) + **note_detect 1.15.3** swept → **no impact** (contained playback; uses none of the new APIs).
+- **Installed note_detect updated 1.10.0 → 1.15.3** (its dead `slopsmith/` remote repointed to `got-feedback/feedback-plugin-notedetect`); desktop now grades on the contained verifier.
+- **Beta channel** cut + installed: `virtuoso-beta` @ `0.1.0-beta.1`.
+- Repo **moved locally** to `C:\Dev\feedback-plugin-virtuoso`; dev-host junction re-pointed (smoke 18/18 green from new location).
+- `node --check` clean · **smoke 18/18 green** (against note_detect 1.15.3, contained-verifier path) · `main` == `virtuoso-dev` == `5cbb60e`+handoff.
+
+**NEXT (all in Open threads):** (1) **HOST CHECK** on Byron's next desktop build that a clean build actually bundles `virtuoso`; (2) **name/trademark clearance** before any public launch (the gating item); (3) optional local: regenerate `.claude/settings.local.json` allow-list; (4) optional: drum voice #4 / `virtuoso.progress` XP store (Four-Pillar charette leftovers).
