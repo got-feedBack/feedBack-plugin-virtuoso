@@ -143,6 +143,24 @@ if ((Test-Path $NoteDetectSrc) -and -not (Test-Path $NoteDetectLink)) {
   cmd /c mklink /J "$NoteDetectLink" "$NoteDetectSrc" | Out-Null
 }
 
+# ── Prune foreign / shadow plugins from the dev plugins dir ──────────────────
+# This script only ever ADDS links; with no prune step an orphan silently rides
+# along. A retired 'slopscale' link that ALSO declared id:virtuoso once shadowed
+# the real repo here -- the host caches by id+version, so a same-version shadow
+# can win the scan and serve STALE code (the "my edit didn't take" ghost). Keep
+# EXACTLY the dev set; remove anything else. Links only -- never the targets.
+$AllowedDevPlugins = @('virtuoso', 'note_detect')
+Get-ChildItem -LiteralPath $PluginsBase -Force -ErrorAction SilentlyContinue | ForEach-Object {
+  if ($AllowedDevPlugins -contains $_.Name) { return }
+  $isReparse = ($_.Attributes.value__ -band 1024) -ne 0   # FILE_ATTRIBUTE_REPARSE_POINT
+  if ($isReparse) {
+    Write-Host "[launch] pruning foreign dev plugin '$($_.Name)' (removing link only, not its target)"
+    cmd /c rmdir "$($_.FullName)" | Out-Null   # rmdir on a junction/symlink drops the LINK, never the target
+  } else {
+    Write-Host "[launch] WARNING: unexpected real dir '$($_.Name)' in $PluginsBase -- NOT auto-deleting; remove by hand if it's cruft"
+  }
+}
+
 Write-Host "[launch] starting server [$Source] via $PythonExe on http://127.0.0.1:$Port/ (log: $LogFile)"
 $env:HOST = '127.0.0.1'
 $env:PORT = $Port
@@ -188,4 +206,73 @@ if (-not $ready) {
   if (Test-Path $LogFile) { Get-Content $LogFile -Tail 30 }
   if (Test-Path "$LogFile.err") { Get-Content "$LogFile.err" -Tail 30 }
   exit 1
+}
+
+# ── Environment preflight: assert the dev host matches the mainline reference ─
+# Turns "detection behaves differently from the game / green notes don't fire"
+# from a multi-hour ghost hunt into a named, immediate failure. Reference =
+# env-reference.json (the versions the shipped FeedBack game runs). CRITICAL
+# mismatches abort (exit 2); non-critical drift only WARNs (so npm test still
+# runs). Re-capture the reference on each host-release overlap sweep.
+$RefPath = Join-Path $ScriptDir 'env-reference.json'
+$ref = $null
+if (Test-Path $RefPath) {
+  try { $ref = Get-Content $RefPath -Raw | ConvertFrom-Json }
+  catch { Write-Host "[preflight] WARNING: could not parse env-reference.json: $($_.Exception.Message)" }
+}
+if ($ref) {
+  # Where the running host loads each plugin from: note_detect = the pinned dev
+  # link; the core borrows = the active host's own plugins dir (mode-dependent).
+  if ($Source -eq 'checkout') {
+    $HostPluginsDir = Join-Path $Checkout 'plugins'
+  } else {
+    $HostPluginsDir = Join-Path (Split-Path (Split-Path $PythonExe -Parent) -Parent) 'slopsmith\plugins'
+  }
+  function Get-PluginVersion($dir) {
+    $pj = Join-Path $dir 'plugin.json'
+    if (-not (Test-Path $pj)) { return $null }
+    try { return (Get-Content $pj -Raw | ConvertFrom-Json).version } catch { return $null }
+  }
+  $crit = @(); $warn = @()
+  Write-Host "[preflight] host mode: $Source  |  reference captured $($ref.capturedDate)"
+  foreach ($name in $ref.plugins.PSObject.Properties.Name) {
+    $spec = $ref.plugins.$name
+    $dir  = if ($name -eq 'note_detect') { $NoteDetectLink } else { Join-Path $HostPluginsDir $name }
+    $got  = Get-PluginVersion $dir
+    $tag  = if ($spec.critical) { 'CRITICAL' } else { 'borrow' }
+    if (-not $got) {
+      if ($spec.critical) { $crit += "$name MISSING (expected $($spec.version))" } else { $warn += "$name missing (expected $($spec.version))" }
+      Write-Host "[preflight]   $name : <missing>   (ref $($spec.version), $tag)"
+    } elseif ($got -ne $spec.version) {
+      if ($spec.critical) { $crit += "$name $got != reference $($spec.version)" } else { $warn += "$name $got != reference $($spec.version)" }
+      Write-Host "[preflight]   $name : $got   != ref $($spec.version)  [$tag DRIFT]"
+    } else {
+      Write-Host "[preflight]   $name : $got   == ref  [$tag ok]"
+    }
+    if ($name -eq 'note_detect' -and $got -and $spec.requiresApi) {
+      $sj = Join-Path $dir 'screen.js'
+      if (Test-Path $sj) {
+        $src = Get-Content $sj -Raw
+        $absent = @($spec.requiresApi | Where-Object { $src -notmatch [regex]::Escape($_) })
+        if ($absent.Count) { $crit += "note_detect missing contained-verifier API: $($absent -join ', ')" }
+        else { Write-Host "[preflight]   note_detect contained-verifier API: present" }
+      }
+    }
+  }
+  # Uniqueness: exactly one plugin claiming id:virtuoso under the dev dir.
+  $vIds = @(Get-ChildItem -LiteralPath $PluginsBase -Force -ErrorAction SilentlyContinue | ForEach-Object {
+    $pj = Join-Path $_.FullName 'plugin.json'
+    if (Test-Path $pj) { try { if ((Get-Content $pj -Raw | ConvertFrom-Json).id -eq 'virtuoso') { $_.Name } } catch {} }
+  })
+  if ($vIds.Count -ne 1) { $crit += "expected exactly one id:virtuoso plugin, found $($vIds.Count): $($vIds -join ', ')" }
+  else { Write-Host "[preflight]   id:virtuoso sources: 1 ($($vIds[0])) ok" }
+
+  foreach ($w in $warn) { Write-Host "[preflight] WARN  $w" }
+  if ($crit.Count) {
+    Write-Host "[preflight] ENVIRONMENT DRIFT -- aborting (these make grading behave unlike the game):"
+    foreach ($c in $crit) { Write-Host "  - $c" }
+    Write-Error "[preflight] env drift: $($crit.Count) critical mismatch(es). Fix the env, or update env-reference.json if the reference itself moved (host-release sweep)."
+    exit 2
+  }
+  Write-Host "[preflight] OK -- dev host matches the mainline reference."
 }
