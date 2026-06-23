@@ -93,6 +93,7 @@ Promoted from patterns in past-session feedback — the things Christian kept ha
 | `docs/sources/` | Source PDFs — reference material only. |
 | `docs/images/` | Screenshots embedded in the docs / README (the four renderers, the modes, result cards). |
 | `scripts/cut-beta.mjs` | Regenerates the renamed `virtuoso-beta` branch from `virtuoso-dev` (the beta channel — see Part 3 session-end checklist). |
+| `docs/local-dogfood.md` | **Repeatable local dogfood + dev-beta runbook** — the canonical launch pathway (`launch-desktop.ps1` = real desktop with the live repo; `launch.ps1` = headless smoke host), the userData-symlink load mechanism + the stale-link gotcha (the actual cause of "my edits don't show / behaves differently from the game"), and cut-beta. **Read before debugging test-instance inconsistency.** |
 | `README.md` | User-facing feature list + install steps. |
 | `ROADMAP.md` | Phase plan; **read at session start**. Authoritative for "what's shipped vs planned". |
 | `AGENTS.md` | Codex variant; mirrors this file. |
