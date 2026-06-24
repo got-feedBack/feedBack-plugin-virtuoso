@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.0-beta.1';
+  const VIRTUOSO_VERSION = '0.1.1-beta.1';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -4191,7 +4191,7 @@
   function syncHighwaySettings(bundle) { if (!bundle) return; bundle.inverted = readHighwayInverted(); bundle.lefty = readLefty(); bundle.renderScale = readRenderScale(); }
 
   function goScreen(id) {
-    if (window.slopsmith && typeof window.slopsmith.navigate === 'function') return window.slopsmith.navigate(id);
+    if (hostBus() && typeof hostBus().navigate === 'function') return hostBus().navigate(id);
     if (typeof window.showScreen === 'function') return window.showScreen(id);
     document.querySelector(`[data-screen="${id}"]`)?.click();
   }
@@ -13558,39 +13558,69 @@
     };
   }
 
-  function loadScriptOnce(id, src) { return new Promise((resolve, reject) => { if (document.getElementById(id)) return resolve(); const s = document.createElement('script'); s.id = id; s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error(`Failed to load ${src}`)); document.head.appendChild(s); }); }
+  // ── Host-surface accessors (FeedBack re-chrome compatibility) ────────────────
+  // FeedBack renamed the host window-globals slopsmith*->feedBack* (the capability
+  // bus, the Minigames scoring SDK, the desktop bridge). It aliases SOME legacy
+  // names (window.slopsmith = window.feedBack; a dual-published slopsmithMinigames)
+  // but NOT all (feedBackViz_* and feedBackDesktop have no legacy alias — the v0.3.0
+  // breaks). Read the new name first, fall back to the legacy one, so Virtuoso
+  // grades / renders / borrows correctly on FeedBack AND an older Slopsmith host.
+  // Shell-only (§11-§15); the host-independent generation core (§1-§10) never
+  // touches these (guarded by smoke-core-purity).
+  function hostBus()       { return window.feedBack || window.slopsmith || null; }
+  function hostMinigames() { return window.feedBackMinigames || window.slopsmithMinigames || null; }
+  function hostDesktop()   { return window.feedBackDesktop || window.slopsmithDesktop || null; }
+
+  function loadScriptOnce(id, src) { return new Promise((resolve, reject) => { if (document.getElementById(id)) return resolve(); const s = document.createElement('script'); s.id = id; s.src = src; s.onload = () => resolve(); s.onerror = () => { try { s.remove(); } catch (_) {} reject(new Error(`Failed to load ${src}`)); }; document.head.appendChild(s); }); }
   // Piano Roll is groundwork only: gated to a future piano pathway and kept
   // disabled in the UI for now. When a piano pathway/instrument ships, return
   // true here (and reveal the Piano Roll view button) to enable it.
   function pianoPathwayActive() { return false; }
 
-  // Borrow a host visualization plugin's renderer factory (registered as
-  // window.slopsmithViz_<id>). Lazy-loads the host plugin script and polls
-  // briefly for deferred registration — the host may register its global a tick
-  // or two after onload fires. Returns null if it never registers so callers
+  // Borrow a host visualization plugin's renderer factory. FeedBack registers it
+  // as feedBackViz_<id>; older Slopsmith hosts used slopsmithViz_<id> (the
+  // re-chrome rename, with NO host alias — the v0.3.0 cause of the 3D highway
+  // silently falling back to 2D, taking the host's native green hit-flare with
+  // it). vizFactoryFor() tries both names. Lazy-loads the host plugin script and
+  // polls briefly for deferred registration — the host may register its global a
+  // tick or two after onload fires. Returns null if it never registers so callers
   // can fall back to a built-in renderer.
   // ===========================================================================
   // §12 · RENDERER FACTORY + BORROWED HOST VIZ
   // resolveRendererFactory() selects/loads a renderer; borrowHostViz() lazy-loads
   // host viz plugins (highway_3d, jumpingtab, piano).
   // ===========================================================================
-  async function borrowHostViz(globalName, scriptPath) {
-    if (typeof window[globalName] === 'function') return window[globalName];
+  function vizFactoryFor(vizId) {
+    const a = 'feedBackViz_' + vizId, b = 'slopsmithViz_' + vizId;
+    return (typeof window[a] === 'function' && window[a]) || (typeof window[b] === 'function' && window[b]) || null;
+  }
+  async function borrowHostViz(vizId, scriptPath) {
+    let f = vizFactoryFor(vizId);
+    if (typeof f === 'function') return f;
     let loaded = true;
     // If the script 404s / errors (the host doesn't ship this viz plugin — e.g.
     // a source checkout without the Desktop-bundled Jumping Tab/Piano), bail
     // immediately instead of polling 3s for a global that will never register.
-    // Fast, clean fallback to the in-tree renderer.
-    try { await loadScriptOnce('virtuoso_beta-viz-' + globalName, scriptPath); }
+    // Fast, clean, QUIET fallback to the in-tree renderer (legitimate absence).
+    try { await loadScriptOnce('virtuoso_beta-viz-' + vizId, scriptPath); }
     catch (_) { loaded = false; }
     if (loaded) {
       // Loaded — but the host may register its global a tick or two after onload.
       const start = Date.now();
-      while (typeof window[globalName] !== 'function' && Date.now() - start < 3000) {
+      while (typeof vizFactoryFor(vizId) !== 'function' && Date.now() - start < 3000) {
         await new Promise(r => setTimeout(r, 50));
       }
+      f = vizFactoryFor(vizId);
+      if (typeof f !== 'function') {
+        // Script PRESENT but no factory registered under either name = host-viz
+        // CONTRACT DRIFT (e.g. another slopsmith*->feedBack* global rename). Make
+        // it LOUD so smoke-host-surface / smoke-renderers turns red, instead of a
+        // silent 2D fallback the way the v0.3.0 viz rename hid for a whole release.
+        try { console.error('[Virtuoso host-viz] ' + scriptPath + ' loaded but no viz factory registered (feedBackViz_' + vizId + ' / slopsmithViz_' + vizId + ') — host viz contract drift?'); } catch (_) {}
+      }
     }
-    return typeof window[globalName] === 'function' ? window[globalName] : null;
+    f = vizFactoryFor(vizId);
+    return typeof f === 'function' ? f : null;
   }
 
   async function resolveRendererFactory(kind) {
@@ -13600,7 +13630,7 @@
     // highway (see attachRenderer). The in-tree 2D highway remains only as a
     // last-resort fallback if Jumping Tab can't load.
     if (kind === 'builtin_2d') {
-      const f = await borrowHostViz('slopsmithViz_jumpingtab', '/api/plugins/jumpingtab/screen.js');
+      const f = await borrowHostViz('jumpingtab', '/api/plugins/jumpingtab/screen.js');
       return f ? { factory:f, label:'Jumping Tab' } : { factory:makeBuiltin2DRenderer, label:'2D Highway (fallback)' };
     }
     if (kind === 'tab_2d') return { factory:makeBuiltin2DTabRenderer, label:'Tab' };
@@ -13608,11 +13638,11 @@
     // Piano Roll — groundwork; borrows the host Piano Highway viz. Reachable
     // only when pianoPathwayActive() (currently false).
     if (kind === 'piano_roll') {
-      const f = await borrowHostViz('slopsmithViz_piano', '/api/plugins/piano/screen.js');
+      const f = await borrowHostViz('piano', '/api/plugins/piano/screen.js');
       return f ? { factory:f, label:'Piano Roll' } : { factory:makeBuiltin2DRenderer, label:'Piano Roll (unavailable)' };
     }
     if (kind === 'highway_3d') {
-      const f = await borrowHostViz('slopsmithViz_highway_3d', '/api/plugins/highway_3d/screen.js');
+      const f = await borrowHostViz('highway_3d', '/api/plugins/highway_3d/screen.js');
       return f ? { factory:f, label:'3D Note Highway' } : { factory:makeBuiltin2DRenderer, label:'2D Highway (fallback)' };
     }
     return { factory:makeBuiltin2DRenderer, label:'2D Highway (default)' };
@@ -14841,8 +14871,8 @@
           const loopLen = segmentLoopB - segmentLoopA;
           playAnchorChartTime -= loopLen;
           currentPracticeTime -= loopLen;
-          if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
-            window.slopsmith.emit('virtuoso_beta:loop:wrap', { a: segmentLoopA, b: segmentLoopB, time: currentPracticeTime });
+          if (hostBus() && typeof hostBus().emit === 'function') {
+            hostBus().emit('virtuoso_beta:loop:wrap', { a: segmentLoopA, b: segmentLoopB, time: currentPracticeTime });
           }
           _loopWraps++;
           const lc = $('virtuoso_beta-loop-count');
@@ -14999,11 +15029,11 @@
       // Only follow while the host engine is actually RUNNING — when it's
       // stopped the main game itself plays HTML5 → OS default, and following
       // the saved device would make us diverge from it.
-      const bridge = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+      const bridge = hostDesktop() && hostDesktop().audio;
       // Diagnostic (2026-06-07, the Arch+Focusrite "it did not" follow-up): a
       // desktop host WITHOUT the audio bridge API previously fell through
       // identically to a web host — silent, nothing for the user to paste.
-      if (window.slopsmithDesktop && (!bridge || typeof bridge.isAudioRunning !== 'function') && !_sinkWarned['no-bridge']) {
+      if (hostDesktop() && (!bridge || typeof bridge.isAudioRunning !== 'function') && !_sinkWarned['no-bridge']) {
         _sinkWarned['no-bridge'] = true;
         console.warn('[Virtuoso] feedback-desktop detected but its audio bridge API is unavailable (downlevel host?) — cannot read the engine output device; playing to the system default output.');
       }
@@ -15997,7 +16027,7 @@
   const _mixIn = { lvl: 0, inFlight: false, lastPoll: 0 };
   function mixerInputLevel() {
     if (playing && _lvlMode !== 'none' && _lvlSamples.length) return _lvlSamples[_lvlSamples.length - 1].L;
-    const bridge = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const bridge = hostDesktop() && hostDesktop().audio;
     if (bridge && typeof bridge.getLevels === 'function' && !_mixIn.inFlight && performance.now() - _mixIn.lastPoll > 100) {
       _mixIn.inFlight = true; _mixIn.lastPoll = performance.now();
       let p = null; try { p = bridge.getLevels(); } catch (_) { p = null; }
@@ -18532,13 +18562,13 @@
   // playback. The host's wake lock (#686) is tied to its own song:play/pause events,
   // which our CONTAINED player never emits — so we hold our own. Web Wake Lock API
   // (secure-context only → active on localhost / HTTPS) + the host's Electron native
-  // power bridge (`window.slopsmithDesktop.power.setScreenAwake`) when present (the Web
+  // power bridge (`hostDesktop().power.setScreenAwake`) when present (the Web
   // API is unreliable in Electron). Both degrade silently where unsupported. The Web
   // sentinel auto-releases when the tab hides; we re-acquire on re-show while playing.
   let _wakeLock = null, _wantWakeLock = false;
   function acquireWakeLock() {
     _wantWakeLock = true;
-    try { window.slopsmithDesktop?.power?.setScreenAwake?.(true); } catch (_) {}
+    try { hostDesktop()?.power?.setScreenAwake?.(true); } catch (_) {}
     if (_wakeLock || !navigator.wakeLock || typeof navigator.wakeLock.request !== 'function') return;
     navigator.wakeLock.request('screen').then((s) => {
       // request() is async — playback may have STOPPED while it was pending. If we no
@@ -18551,7 +18581,7 @@
   }
   function releaseWakeLock() {
     _wantWakeLock = false;
-    try { window.slopsmithDesktop?.power?.setScreenAwake?.(false); } catch (_) {}
+    try { hostDesktop()?.power?.setScreenAwake?.(false); } catch (_) {}
     if (_wakeLock) { try { _wakeLock.release(); } catch (_) {} _wakeLock = null; }
   }
 
@@ -21411,7 +21441,7 @@
   function startLevelMeter() {
     stopLevelMeter();
     _lvlMode = 'none'; _lvlSamples = [];
-    const bridge = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const bridge = hostDesktop() && hostDesktop().audio;
     if (bridge && typeof bridge.getLevels === 'function') {
       // getLevels() is ASYNC on the desktop bridge — `ipcRenderer.invoke(...)`
       // returns a Promise (note_detect itself awaits it). Reading `.inputLevel`
@@ -21474,7 +21504,7 @@
   // Uses slopsmithMinigames.scoring.createContinuous (bundled, no registration
   // required). Silently no-ops when the Minigames plugin isn't loaded.
   function ptAvailable() {
-    return typeof window.slopsmithMinigames?.scoring?.createContinuous === 'function';
+    return typeof hostMinigames()?.scoring?.createContinuous === 'function';
   }
 
   function startPitchTracker(bundle) {
@@ -21638,7 +21668,7 @@
         // EMA made a semitone step read ~47¢ on its FIRST frame — at the ±50¢ gate
         // boundary for exactly the chromatic content this judge must catch. The
         // meter strip re-smooths for display in ptOnPitch; scoring uses raw frames.
-        _ptHandle = window.slopsmithMinigames.scoring.createContinuous({ smoothingMs: 12 });
+        _ptHandle = hostMinigames().scoring.createContinuous({ smoothingMs: 12 });
       } catch (_) { _ptHandle = null; }
       if (_ptHandle && typeof _ptHandle.on === 'function') {
         _ptHandle.on('pitch', ptOnPitch);
@@ -22018,7 +22048,7 @@
     _tunerTargets = opens.map((midi) => ({ midi, name: NOTE_NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1) }));
     _tunerHold = { idx: -1, count: 0 }; _tunerLocked = new Set();
     // Same guarded SDK call as startPitchTracker — no mic / no SDK degrades to a no-op.
-    try { _tunerHandle = window.slopsmithMinigames.scoring.createContinuous({ smoothingMs: 40 }); } catch (_) { _tunerHandle = null; }
+    try { _tunerHandle = hostMinigames().scoring.createContinuous({ smoothingMs: 40 }); } catch (_) { _tunerHandle = null; }
     if (!_tunerHandle || typeof _tunerHandle.on !== 'function') { _tunerHandle = null; return; }
     _tunerHandle.on('pitch', tunerOnPitch);
     _tunerHandle.on('end', () => { _tunerHandle = null; });
@@ -22126,7 +22156,7 @@
   // Accuracy gate: if pitch tracker ran (hit+miss > 0) and accuracy < 65%, skip.
   // Passive attribution: custom sessions within ±5 BPM of a pathway tier BPM
   // count toward that pathway.
-  // SDK: emits window.slopsmith 'virtuoso_beta:tier:unlocked' when a new high is set.
+  // SDK: emits a 'virtuoso_beta:tier:unlocked' bus event when a new high is set.
   function pathwayTiersLoad() {
     try { return JSON.parse(localStorage.getItem('virtuoso_beta.pathway_tiers') || '{}'); }
     catch { return {}; }
@@ -22141,8 +22171,8 @@
     if (tier <= (cur.highest_tier ?? -1)) return null;
     all[pathwayId] = Object.assign({}, cur, { highest_tier: tier });   // MERGE — never drop bestBpm/feltBpm
     pathwayTiersSave(all);
-    if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
-      window.slopsmith.emit('virtuoso_beta:tier:unlocked', {
+    if (hostBus() && typeof hostBus().emit === 'function') {
+      hostBus().emit('virtuoso_beta:tier:unlocked', {
         pathway: pathwayId, tier, label: TIER_LABELS[tier] || `T${tier + 1}`
       });
     }
@@ -22608,8 +22638,8 @@
   // actual XP-intake surface is for feedback-compatibility to verify when the live
   // hook lands; this only defines the outbound shape.)
   function emitProgress(kind, nodeId, extra) {
-    if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
-      try { window.slopsmith.emit('virtuoso_beta:progress', Object.assign({ source:'virtuoso_beta', kind, nodeId, at:Date.now() }, extra || {})); } catch (_) {}
+    if (hostBus() && typeof hostBus().emit === 'function') {
+      try { hostBus().emit('virtuoso_beta:progress', Object.assign({ source:'virtuoso_beta', kind, nodeId, at:Date.now() }, extra || {})); } catch (_) {}
     }
   }
   // A run is "clean" by the same signal the Speed climb uses (≥65% of judged notes
@@ -24603,7 +24633,7 @@
     $('virtuoso_beta-settings-shortcuts')?.addEventListener('click', () => { toggleSettingsMenu(false); toggleCheatSheet(true); });
     $('virtuoso_beta-settings-host')?.addEventListener('click', () => {
       toggleSettingsMenu(false);
-      try { if (window.slopsmith && typeof window.slopsmith.navigate === 'function') window.slopsmith.navigate('settings'); } catch (_) {}
+      try { if (hostBus() && typeof hostBus().navigate === 'function') hostBus().navigate('settings'); } catch (_) {}
     });
     // Settings prefs: accent theme · default XP mode · default count-in.
     document.querySelectorAll('#virtuoso_beta-theme-pick .virtuoso_beta-theme-swatch').forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.theme || '')));
@@ -24691,8 +24721,8 @@
     // the initial paint reliable. (Also covers re-entry after the user
     // navigated to Library or another screen and came back.)
     let fireInitialGenerate = null; // set by fireInitialGenerateWhenLaidOut below; idempotent
-    if (window.slopsmith && typeof window.slopsmith.on === 'function') {
-      window.slopsmith.on('screen:changed', (ev) => {
+    if (hostBus() && typeof hostBus().on === 'function') {
+      hostBus().on('screen:changed', (ev) => {
         if (ev?.detail?.id !== 'plugin-virtuoso_beta') return;
         // Sidebar always shows when the plugin is (re)selected.
         panelCollapsed = false; syncPanelToggle();
@@ -24731,7 +24761,7 @@
       // tell us about screen shows, defer instead: the RO keeps watching and
       // the screen:changed hook above fires the deferred initial generate.
       setTimeout(() => {
-        if (!host.offsetParent && window.slopsmith && typeof window.slopsmith.on === 'function') return;
+        if (!host.offsetParent && hostBus() && typeof hostBus().on === 'function') return;
         fire();
       }, 1000);
     })();
@@ -24767,16 +24797,16 @@
     } else {
       drawOnce();
     }
-    if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
-      window.slopsmith.emit('virtuoso_beta:loop:set', { a: aNum, b: bNum });
+    if (hostBus() && typeof hostBus().emit === 'function') {
+      hostBus().emit('virtuoso_beta:loop:set', { a: aNum, b: bNum });
     }
   }
   function clearSegmentLoop() {
     if (segmentLoopA == null && segmentLoopB == null) return;
     segmentLoopA = null;
     segmentLoopB = null;
-    if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
-      window.slopsmith.emit('virtuoso_beta:loop:clear', {});
+    if (hostBus() && typeof hostBus().emit === 'function') {
+      hostBus().emit('virtuoso_beta:loop:clear', {});
     }
   }
   function getSegmentLoop() { return { a: segmentLoopA, b: segmentLoopB }; }
