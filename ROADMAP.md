@@ -36,7 +36,21 @@ Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm t
 
 **At end** — move finished items here; log new **Open threads** or a **STOPPED HERE** handoff. Write durable *decisions* to project memory. Keep `CLAUDE.md` / `AGENTS.md` in sync. If `screen.js` changed, run `node --check screen.js` + the smoke suite. Commit working changes in Conventional-Commits style; **commit/push only when asked.**
 
-## STOPPED HERE (2026-06-24 — Byron achievements review + doc-count fix; both review-only/docs)
+## STOPPED HERE (2026-06-26 — fullscreen shipped to dev + host #590 merged; PUSHED)
+
+The fullscreen follow-up is done on `virtuoso-dev` and the host capability it needs is merged. **Pushed to `origin/virtuoso-dev`** this session (fast-forward `5c3ca74 → 9ddf62a`, 3 commits):
+- `4989eef feat(ui): opt into host fullscreen plugin screen mode (v0.1.2)` — `plugin.json` (+`"fullscreen": true`, **0.1.1→0.1.2**), `screen.js` (`VIRTUOSO_VERSION`→0.1.2), `screen.html` (dropped the `80px` navbar pad → `padding:18px`).
+- `eff8a0b docs(testing)` + `9ddf62a docs(roadmap)` — docs only.
+
+**Host side: PR #590 (the `"fullscreen": true` host capability) is MERGED into got-feedback/feedBack `main` (commit `4c3ec2f`).** Authored on Christian's behalf; the maintainer rebased+merged. Memory: `project_fullscreen_plugin_screens`.
+
+**VERIFIED working** on the dev host (`run-virtuoso` `launch.ps1`; checkout auto-pulled to `4c3ec2f`): immersive class on, topbar hidden, sidebar = 72px icon rail, `#virtuoso-root` fills 1368×900 at top:0 — no cut-off, no dead top pad. Screenshot `.virtuoso-shots/fullscreen.png` (local, gitignored). **Smoke 16/19** — the 3 fails (variation / progress / level-gate-async) are HOST-side console noise, **not Virtuoso regressions**: a missing diagnostic-song `/art` (404), `/api/library/stats` 500 (`NoneType` host bug), a Windows charmap `→` log error; level-gate passed run solo (parallel flakiness). `node --check` clean.
+
+**BEFORE promoting `virtuoso-dev` → `main` (publish gate, unchanged):** smoke 19/19 with a clean host, dogfood the fullscreen change on the REAL desktop (`launch-desktop.ps1`), re-cut beta (`node scripts/cut-beta.mjs --push`). **Caveat:** the shipped Desktop bundles an OLDER host (pre-#590), so Virtuoso stays embedded there until FeedBack cuts a release including `4c3ec2f` — real-desktop fullscreen dogfood only works after that host release.
+
+**NEXT (carry-forward):** (1) once a host release includes #590, dogfood fullscreen on the real desktop, then promote dev→main + re-cut beta. (2) **name/trademark clearance — the one real gate for any public launch.** (3) host-team follow-ups (Byron's court): immersive profile/streak badge, Core instrument-selection integration, mobile back-affordance. (4) if Byron reworks achievements to competency, re-read `docs/host-achievements-review.md` + the boundary memory before wiring. (5) the dev host may still be running on `:8765`.
+
+## Previous session (2026-06-24 — Byron achievements review + doc-count fix; both review-only/docs)
 
 Quiet session, no Virtuoso runtime code changed by me. Two things landed, both safe to clear on:
 
