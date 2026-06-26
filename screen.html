@@ -93,19 +93,16 @@
   }
 
   .virtuoso-root {
-    /* FeedBack's navbar is a transparent, position:fixed, 64px-tall bar that
-       floats over the active screen. The host mounts plugin screens as bare
-       containers at top:0 (no offset), so — like the host's own screens, which
-       use pt-24 — we must clear the navbar ourselves. Without this top padding
-       the Virtuoso header renders under the navbar and the "FeedBack" logo
-       overlaps it. */
-    /* App shell: fill the viewport exactly (the host mounts us full-bleed at
-       top:0, so 100vh == our container) and never let the PAGE scroll — only
-       the controls rail scrolls internally. This is what keeps the render
-       stage + transport always visible at 1080p/1440p/ultrawide/4K instead of
-       the whole menu running off the bottom. */
+    /* Virtuoso opts into the host's FULL-SCREEN plugin mode (plugin.json
+       "fullscreen": true; FeedBack with the #590 capability). The host then
+       hides its topbar, collapses the sidebar to an icon rail, and pins our
+       screen to fill the content area. So we fill the viewport exactly (with
+       the topbar gone, 100vh == our slot height) and never let the PAGE scroll
+       — only the controls rail scrolls internally — which keeps the render
+       stage + transport always visible at 1080p/1440p/ultrawide/4K. The old
+       floating-navbar top padding is gone now the host owns the chrome. */
     height: 100vh;
-    padding: 80px 18px 18px;
+    padding: 18px;
     color: var(--vir-text-dim);
     font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: radial-gradient(1100px 560px at 82% -12%, var(--vir-glow), transparent 60%), linear-gradient(180deg, var(--vir-bg-0) 0%, var(--vir-bg-1) 100%);
