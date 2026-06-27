@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.6';
+  const VIRTUOSO_VERSION = '0.1.7';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -22582,6 +22582,8 @@
   // The card IMAGE — a canvas render of the SAME model (ux spec: 1200×630, verdict-led,
   // green ✓ only on a true clear, theme palette/font read live off --vir-card-*; same-origin
   // → toBlob won't taint). Returns the canvas, or null.
+  // LOCAL FALLBACK ONLY: shareCardAction prefers note_detect's canonical card
+  // (window.noteDetect.renderResultsCard) and uses this when it's absent.
   function renderShareCardImage(s) {
     const m = shareCardModel(s); if (!m) return null;
     const W = 1200, H = 630, P = 64;
@@ -22724,10 +22726,67 @@
       return (j && j.ok) ? j : null;
     } catch (_) { return null; }
   }
-  // Copy/download with the host-checked fallback ladder (feedback-compatibility):
-  // Save → server-folder save → browser download; Copy → image→clipboard → download → text.
+  // ── Consume note_detect's ONE canonical results card when present (don't
+  // duplicate it). note_detect (PR #43, ≥1.18) exposes window.noteDetect.
+  // renderResultsCard / copyResultsCard / saveResultsCard so plugins reuse a
+  // single card implementation; we FEED Virtuoso's data + its --vir palette
+  // (via a passed overlay element) and FEATURE-DETECT — renderShareCardImage
+  // above stays a thin local fallback so Virtuoso still runs with note_detect
+  // absent (must not hard-depend).
+  function _ndCardApi() {
+    const nd = (typeof window !== 'undefined') ? window.noteDetect : null;
+    return (nd && typeof nd.renderResultsCard === 'function'
+      && typeof nd.copyResultsCard === 'function'
+      && typeof nd.saveResultsCard === 'function') ? nd : null;
+  }
+  // Map Virtuoso's share-card model → note_detect's card `data`. The stats[]
+  // override drives our non-note_detect layout; eyebrow/hero/sub/brand are all
+  // overridden so the shared renderer reproduces Virtuoso's card from its data.
+  function _resultsCardData(s) {
+    const m = shareCardModel(s); if (!m) return null;
+    return {
+      eyebrow: m.eyebrow,
+      hero: (m.heroGreen ? '✓ ' : '') + m.hero,
+      artist: m.sub || undefined,        // descriptive line → the card's sub
+      instrument: m.lane,                // LADDER / CUSTOM / JAM / WORKOUT
+      stats: (m.stats || []).slice(0, 4),
+      brand: 'virtuoso · practice studio for guitar & bass',
+    };
+  }
+  // A detached element carrying Virtuoso's palette as the --nd-* vars the shared
+  // renderer reads off opts.overlayEl. Attached under #virtuoso-root so
+  // getComputedStyle resolves; the caller removes it after the render.
+  function _virCardOverlay() {
+    let accent = '#60a5fa';
+    try { const root = $('virtuoso-root'); if (root) { const v = getComputedStyle(root).getPropertyValue('--vir-accent-edge').trim(); if (v) accent = v; } } catch (_) {}
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:0;height:0;pointer-events:none;';
+    const set = (k, v) => el.style.setProperty(k, v);
+    set('--nd-accent', accent); set('--nd-accent2', accent);
+    set('--nd-hit', '#22c55e'); set('--nd-miss', '#ef4444');
+    set('--nd-text', '#f8fafc'); set('--nd-dim', '#94a3b8'); set('--nd-warn', '#fbbf24');
+    set('--nd-bg', 'rgba(8,8,18,0.96)');
+    set('--nd-font-display', 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+    ($('virtuoso-root') || document.body).appendChild(el);
+    return el;
+  }
+  // Copy/download. PREFER note_detect's canonical card+ladder; else the local
+  // host-checked fallback ladder (feedback-compatibility): image→clipboard
+  // (Promise to keep the click activation) → download PNG → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
+    const nd = _ndCardApi();
+    if (nd) {
+      const data = _resultsCardData(s);
+      if (data) {
+        const overlay = _virCardOverlay();
+        try {
+          if (action === 'download') { const r = await nd.saveResultsCard(data, { overlayEl: overlay }); return (r && r.ok) ? 'saved' : 'failed'; }
+          return (await nd.copyResultsCard(data, { overlayEl: overlay })) || 'failed';
+        } catch (_) { /* fall through to the local fallback below */ }
+        finally { try { overlay.remove(); } catch (_) {} }
+      }
+    }
     // Ensure the active theme's display face is loaded before the canvas rasterizes
     // (the DOM card gets it via CSS font-display; the canvas needs it resident).
     await loadCardFonts();
