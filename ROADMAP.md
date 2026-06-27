@@ -19,8 +19,9 @@ Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm t
 ## Planned — action items for a future session
 
 - **Consume note_detect's results-card function (DECIDED — do NOT duplicate locally).** note_detect's results card is the canonical design (no grade; Top Section; per-section practice; Copy card / Save-to-Pictures + toast; glow A/B), shipping as `got-feedback/feedback-plugin-notedetect` **PR #43**. Christian's call (2026-06-27): once #43 merges, **Virtuoso pulls this function FROM note_detect** rather than mirroring it locally — collapsing the existing duplicate (`renderShareCardImage` / `shareCardAction` / `shareRowHtml`). A local Option-A port was explicitly NOT pursued.
-  - **Prerequisite (note_detect side):** note_detect must EXPOSE the card renderer + copy/save on its public `window.noteDetect` API (today they're private inside the IIFE). Cleanest as a small addition to #43 (or a fast-follow), so the capability is consumable at merge.
-  - **Virtuoso side (post-merge):** replace the local share-card impl with calls to `window.noteDetect.*`, keeping a thin local fallback (Virtuoso must run without note_detect). Feature-detect, don't hard-depend.
+  - **Sequence (DECIDED — fast-follow, keep #43 focused):** two PRs after #43 merges.
+    1. **note_detect** PR: EXPOSE the card renderer + copy/save on the public `window.noteDetect` API (today private inside the IIFE) — e.g. `renderResultsCard(data, overlayEl)` / `copyResultsCard()` / `saveResultsCard()`.
+    2. **Virtuoso** PR: replace the local share-card impl with calls to `window.noteDetect.*`, feature-detected, keeping the current impl as a thin fallback (Virtuoso must run without note_detect — don't hard-depend).
   - Charrette also floats promoting it to a host-level capability long-term; consuming from note_detect is the agreed near-term path. Rationale: testbed `docs/results-scorecard-charrette.md`.
 
 ## Open threads
