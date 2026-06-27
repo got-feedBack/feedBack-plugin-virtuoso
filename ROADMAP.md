@@ -19,9 +19,8 @@ Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm t
 ## Planned — action items for a future session
 
 - **Consume note_detect's results-card function (DECIDED — do NOT duplicate locally).** note_detect's results card is the canonical design (no grade; Top Section; per-section practice; Copy card / Save-to-Pictures + toast; glow A/B), shipping as `got-feedback/feedback-plugin-notedetect` **PR #43**. Christian's call (2026-06-27): once #43 merges, **Virtuoso pulls this function FROM note_detect** rather than mirroring it locally — collapsing the existing duplicate (`renderShareCardImage` / `shareCardAction` / `shareRowHtml`). A local Option-A port was explicitly NOT pursued.
-  - **Sequence (DECIDED — fast-follow, keep #43 focused):** two PRs after #43 merges.
-    1. **note_detect** PR: EXPOSE the card renderer + copy/save on the public `window.noteDetect` API (today private inside the IIFE) — e.g. `renderResultsCard(data, overlayEl)` / `copyResultsCard()` / `saveResultsCard()`.
-    2. **Virtuoso** PR: replace the local share-card impl with calls to `window.noteDetect.*`, feature-detected, keeping the current impl as a thin fallback (Virtuoso must run without note_detect — don't hard-depend).
+  - **Sequence (UPDATED 2026-06-27):** the note_detect exposure landed **inside PR #43** after all (folded in while it was unreviewed) — `window.noteDetect.renderResultsCard(data, opts)` / `copyResultsCard()` / `saveResultsCard()`, with the renderer honouring caller overrides (`eyebrow`, `hero`, `stats[]`, `brand`) + `opts.overlayEl` for palette. So only ONE PR remains:
+    - **Virtuoso** PR (after #43 merges): replace the local `renderShareCardImage`/`shareCardAction`/`shareRowHtml` with `window.noteDetect.*`, feeding Virtuoso's data (eyebrow/hero/stats/brand) + its `--vir` palette via a passed overlay element; feature-detect and keep the current impl as a thin fallback (Virtuoso must run without note_detect — don't hard-depend). Verified the shared renderer reproduces Virtuoso's card from its data.
   - Charrette also floats promoting it to a host-level capability long-term; consuming from note_detect is the agreed near-term path. Rationale: testbed `docs/results-scorecard-charrette.md`.
 
 ## Open threads
