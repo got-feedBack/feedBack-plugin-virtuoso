@@ -16,6 +16,13 @@ Virtuoso ships a mature, working feature set inherited at relaunch — **this is
 
 Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm test`) + the in-`screen.js` startup guards. **Smoke 18/18 green at relaunch.**
 
+## Planned — action items for a future session
+
+- **Consume note_detect's results-card function (DECIDED — do NOT duplicate locally).** note_detect's results card is the canonical design (no grade; Top Section; per-section practice; Copy card / Save-to-Pictures + toast; glow A/B), shipping as `got-feedback/feedback-plugin-notedetect` **PR #43**. Christian's call (2026-06-27): once #43 merges, **Virtuoso pulls this function FROM note_detect** rather than mirroring it locally — collapsing the existing duplicate (`renderShareCardImage` / `shareCardAction` / `shareRowHtml`). A local Option-A port was explicitly NOT pursued.
+  - **Prerequisite (note_detect side):** note_detect must EXPOSE the card renderer + copy/save on its public `window.noteDetect` API (today they're private inside the IIFE). Cleanest as a small addition to #43 (or a fast-follow), so the capability is consumable at merge.
+  - **Virtuoso side (post-merge):** replace the local share-card impl with calls to `window.noteDetect.*`, keeping a thin local fallback (Virtuoso must run without note_detect). Feature-detect, don't hard-depend.
+  - Charrette also floats promoting it to a host-level capability long-term; consuming from note_detect is the agreed near-term path. Rationale: testbed `docs/results-scorecard-charrette.md`.
+
 ## Open threads
 
 - **⚠ Name not yet cleared — gating for any PUBLIC launch.** "Virtuoso" hasn't passed a trademark / domain / store-name screen, and it's a common music word (likely crowded in classes 9 / 41 / 42). The private 0.1.0 id cutover is done; run a USPTO/EUIPO TM screen + `.com`/`.app` + App/Play store-name + a dictation test **before** any public launch. (A further rename would be another `virtuoso`-id data migration, so clear the name before promoting widely.)
