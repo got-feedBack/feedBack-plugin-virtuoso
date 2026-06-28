@@ -1,0 +1,4 @@
+# Keep the git hook + Node scripts LF so the shebang doesn't break on a fresh
+# non-Windows clone (Git-for-Windows autocrlf would otherwise rewrite them CRLF).
+.githooks/pre-commit text eol=lf
+*.mjs text eol=lf
