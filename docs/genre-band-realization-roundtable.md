@@ -349,8 +349,8 @@ Folded: ✅ host (§6) ✅ market (§11). Still incoming:
 ## 11. Market framing & guardrails (market-analyst)
 
 **The honest reframe — this fix gets us TO the bar, it is not the moat.** "Pick a genre → a decent band +
-mixer, instantly" is now **table-stakes** (AI backing-track generators like backingtrack.app/SOUNDRAW, plus
-iReal Pro and Strum Machine, all ship it — several with bigger sample libs than a web plugin). Today's
+mixer, instantly" is now **table-stakes** (AI backing-track generators and dedicated backing-band /
+accompaniment apps all ship it — several with bigger sample libs than a web plugin). Today's
 collapse leaves us **below** that bar, which is why it reads as urgent. **We do NOT win a tone arms race** —
 the realism bar is not "sound like a record," it's **"each genre is audibly its OWN band, not the same kit
 re-skinned."** Fixing the collapse clears table-stakes; that's necessary and the right priority.

@@ -98,10 +98,10 @@ The local engine and the hosted wall are very different bets. The local engine i
 table-stakes; the wall is the expensive, legally-sensitive, off-mission half.
 
 - **Positioning (market lane).** Badges are table-stakes — nobody picks a practice tool for
-  its badge list. But a public *count/ranked* surface reads as the Rocksmith / Yousician
+  its badge list. But a public *count/ranked* surface reads as the gamified-guitar-app
   "feels like a game, doesn't teach me" aesthetic — the exact thing a serious practice tool
   positions *against*. In the comps, the public name-wall correlates with the "gaming the
-  detector / metrics over learning" complaint; tools like Melodics and Justin Guitar
+  detector / metrics over learning" complaint; the serious-practice tools
   deliberately avoid one. Strava works only because *distance is the accomplishment* and the
   layer is cooperative-cheer — "notes hit" is not the accomplishment; skill is.
 - **The legal constraint amputates the compelling version.** The §1204 / data-minimization

@@ -58,7 +58,7 @@ If you're adding or modifying anything in the scale/arpeggio/position area, hold
 Pedagogy synthesized from established guitar instructional material covering: jazz improvisation / 5-shape arpeggio systems / line construction across 12 keys; full-neck modal maps and sweep picking methodology; CAGED fretboard mapping; chord vocabulary and string-group voicings; and various genre-specific technique references (blues, metal, jazz, funk).
 
 Web research:
-- [CAGED vs 3 Notes Per String — JustinGuitar](https://www.justinguitar.com/guitar-lessons/caged-vs-3-notes-per-string-3nps-scale-systems-sc-987)
+- [CAGED vs 3 Notes Per String — JustinGuitar](https://www.justinguitar.com/guitar-lessons/caged-vs-3-notes-per-string-3nps-scale-systems-sc-987) <!-- brand-ok: external lesson source citation, not competitive positioning -->
 - [3 Notes Per String Major Scale Patterns — Applied Guitar Theory](https://appliedguitartheory.com/lessons/3-notes-per-string-major-scale-patterns/)
 - [The 5 Major Scale CAGED Shapes — GuitarHabits](https://www.guitarhabits.com/the-5-major-scale-caged-shapes-positions/)
 - [Scale Positions for Guitar — Jens Larsen](https://jenslarsen.nl/scale-positions-for-guitar/)

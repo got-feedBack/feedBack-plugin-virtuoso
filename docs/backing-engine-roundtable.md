@@ -36,9 +36,9 @@ a nameable **combination** of (comp cell × bass figure × drum feel × voicing 
 
 **USP, one sentence:** *the backing is a **teaching instrument wired to the drill and to the
 fretboard mirror**, not an accompaniment.* The same engine generates the exercise **and** the
-backing **and** lights the target chord/guide tones — nobody else closes that loop. iReal Pro
-accompanies but never teaches the line over the changes; Band-in-a-Box is lifelike but
-pedagogically inert; Chordify is song-locked; the play-along trainers bake backing into songs and
+backing **and** lights the target chord/guide tones — nobody else closes that loop. The backing-track apps
+accompany but never teach the line over the changes; the band-simulator tools are lifelike but
+pedagogically inert; the chord-chart apps are song-locked; the play-along trainers bake backing into songs and
 never expose the *grammar*. The empty intersection we own: **generative + skill-locked + mirrored**
 backing, parameterized to a device, in any key, that visibly teaches the changes.
 
