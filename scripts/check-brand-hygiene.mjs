@@ -37,7 +37,14 @@ const SKIP_PATH = /^static\/wafonts\//; // committed base64 sampler blobs — te
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const re = new RegExp("\\b(" + DENY.map(esc).join("|") + ")\\b", "i");
 
-const files = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter(Boolean);
+// `--staged` (used by the pre-commit hook) checks only the files being
+// committed, so a pre-existing leak elsewhere can't block an unrelated commit
+// on another branch. No flag (manual / session-end / CI) scans the whole tree.
+const staged = process.argv.includes("--staged");
+const listCmd = staged
+  ? "git diff --cached --name-only --diff-filter=ACM"
+  : "git ls-files";
+const files = execSync(listCmd, { encoding: "utf8" }).split("\n").filter(Boolean);
 const hits = [];
 for (const f of files) {
   if (f === SELF || SKIP_EXT.test(f) || SKIP_PATH.test(f)) continue;
@@ -61,4 +68,4 @@ if (hits.length) {
   console.error("or add `brand-ok` on the line for a genuine external SOURCE citation (a lesson reference).");
   process.exit(1);
 }
-console.log(`✓ brand-hygiene: clean — ${DENY.length} denied terms, ${files.length} tracked files scanned.`);
+console.log(`✓ brand-hygiene: clean — ${DENY.length} denied terms, ${files.length} ${staged ? "staged" : "tracked"} file(s) scanned.`);

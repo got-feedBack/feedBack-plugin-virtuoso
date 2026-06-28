@@ -2,7 +2,7 @@
 # Brand / IP hygiene — block any commit that names a competitor in a tracked
 # file (the "market lane" rule: named comps live only in local-only .claude/).
 # Enable once per clone:  git config core.hooksPath .githooks
-node scripts/check-brand-hygiene.mjs || {
+node scripts/check-brand-hygiene.mjs --staged || {
   echo "" >&2
   echo "pre-commit BLOCKED by brand-hygiene (see above). Generalize the name, or" >&2
   echo "use the brand-ok escape hatch for a genuine source citation." >&2
