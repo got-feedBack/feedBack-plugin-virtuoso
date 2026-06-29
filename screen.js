@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.2';
+  const VIRTUOSO_VERSION = '0.1.3';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -69,15 +69,17 @@
   // queued on the same AudioContext clock before the previous one ends.
   const SCHED_WINDOW_SECONDS = 10;
   const SCHED_REFILL_AHEAD = 4;
-  // The host detector's hard tracking floor (YIN minHz:70 in the minigames SDK,
-  // verified vs checkout a04050b 2026-06-06): pitches below this are INVISIBLE
-  // to the mic — bass E1 (41 Hz) / A1 (55 Hz), drop-C/B guitar low strings.
-  // Sub-floor expected notes are honest-ungraded (excluded from judgment like
-  // chords — the click is the judge); the tuner octave-folds sub-floor targets
-  // (YIN reports the 2nd harmonic). FLIP TRIGGER: the host exposing minHz on
-  // createContinuous (their yinDetect already accepts it — host-expert watch
-  // item); then run the staged E1 probe and retire these gates where cleared.
-  const DETECTOR_MIN_HZ = 70;
+  // Detector tracking floor (Hz): pitches below this are honest-ungraded (excluded
+  // from judgment like chords — the click is the judge); the tuner octave-folds
+  // sub-floor targets (YIN reports the 2nd harmonic). LOWERED 70 → 30 (2026-06-28)
+  // per the notedetect-expert verdict: note_detect's low-end is fixed (30 Hz
+  // detection floor + 2048 frame ≈ 3× bass recall + sample-rate accumulation buffer
+  // + HPS; native comb/ML on the DI rig), so the old 70 Hz gate OVER-exempted low
+  // bass the detector now hears (E1 41 Hz, A1 55 Hz, 5-string low B 30.9 Hz). 30 Hz
+  // sits just below low B. RISK (accepted on the user's call): 70 originally tracked
+  // the minigames SDK's YIN minHz — if the WEB SDK is still 70, sub-70 notes go
+  // MISSED, not exempt, on the web path; the desktop/DI-rig contained verifier is 30.
+  const DETECTOR_MIN_HZ = 30;
 
   const STRING_SETUPS = {
     guitar_6_standard: { label:'6-string guitar — standard', instrument:'guitar', openMidis:[40,45,50,55,59,64], tuning:[0,0,0,0,0,0] },
@@ -16909,7 +16911,7 @@
       if (exempt > 0) {
         rows.push(`Judged: <strong>${info.judged}</strong> of <strong>${info.total}</strong> — the other ${exempt} were shown, not judged:${devTail(`(judged ${info.judged}/${info.total})`)}`);
         if (info.exemptChords) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptChords}</strong> chord notes — this ear hears one note at a time${devTail('(mono detector)')}</span>`);
-        if (info.exemptSubFloor) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptSubFloor}</strong> notes too low for the mic to hear — play them with the click; they never count against you${devTail('(&lt; 70 Hz floor)')}</span>`);
+        if (info.exemptSubFloor) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptSubFloor}</strong> notes too low for the mic to hear — play them with the click; they never count against you${devTail(`(&lt; ${DETECTOR_MIN_HZ} Hz floor)`)}</span>`);
         if (info.exemptMuted) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptMuted}</strong> muted ghost notes — a good mute has no pitch to judge${devTail('(mt, pitch-exempt)')}</span>`);
         if (info.exemptFast) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptFast}</strong> notes too fast for this ear to certify one-by-one — play them; the judged notes around them carry the proof${devTail(`(ring &lt; ${info.floorMs}ms floor)`)}</span>`);
         if (info.exemptLegato) rows.push(`<span class="virtuoso-results-exrow">· <strong>${info.exemptLegato}</strong> slurred notes — the pick that starts each slur is judged; the slur itself has no attack to time${devTail('(ho/po, pick-frame judged)')}</span>`);
@@ -17107,6 +17109,21 @@
       card.classList.toggle('vir-has-hero', !!hero);   // the card widens only when a hero renders
       card.classList.remove('vir-enter'); void card.offsetWidth; card.classList.add('vir-enter');
     }
+    // Auto-save the card to the configured folder, once per run (opt-in; mirrors
+    // note_detect). A run signature guards against re-saving when the same card is
+    // re-opened. Best-effort + async (loads the display face first); silent on fail.
+    try {
+      if (localStorage.getItem('virtuoso.autosaveCard') === '1') {
+        const sig = `${s.duration_ms || 0}|${s.bpm || 0}|${s.displayName || s.mode || ''}`;
+        if (showResultsModal._autoSig !== sig) {
+          showResultsModal._autoSig = sig;
+          (async () => {
+            try { if (document.fonts && document.fonts.load) await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } catch (_) {}
+            try { const cv = renderShareCardImage(s); if (cv) await saveCardToServer(cv, s, true); } catch (_) {}
+          })();
+        }
+      }
+    } catch (_) {}
     // Draw the hero AFTER the canvas is in the layout (size comes from CSS width).
     if (hero) requestAnimationFrame(() => { try { hero.draw(); } catch (_) {} });
     // The % count-up — the meter-settling idiom (an LCD landing on its value).
@@ -17405,7 +17422,9 @@
   }
   function applyTheme(name) {
     const root = $('virtuoso-root'); if (!root) return;
-    root.classList.remove('vir-theme-ember', 'vir-theme-violet');
+    // Drop any accent-theme class generically so the picker stays data-driven —
+    // a new swatch (data-theme="…") + its .vir-theme-… CSS works with no edit here.
+    Array.from(root.classList).forEach(c => { if (c.indexOf('vir-theme-') === 0) root.classList.remove(c); });
     if (name) root.classList.add('vir-theme-' + name);
     try { localStorage.setItem('virtuoso.theme', name || ''); } catch (_) {}
     document.querySelectorAll('#virtuoso-theme-pick .virtuoso-theme-swatch').forEach(b => b.classList.toggle('active', (b.dataset.theme || '') === (name || '')));
@@ -17433,6 +17452,15 @@
   function applyCountInGrid(val) {
     document.querySelectorAll('#virtuoso-countin-grid .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.grid === val));
   }
+  // Studio energy (settings → Studio energy): the host-parity "Lit" chrome treatment
+  // is one root class (.vir-lit, default ON). 'calm' reverts to EXACTLY the restrained
+  // base look — the user's toggle-back guarantee. Persisted; no playing-surface impact.
+  function applyEnergy(mode) {
+    const lit = mode !== 'calm';
+    const root = $('virtuoso-root'); if (root) root.classList.toggle('vir-lit', lit);
+    try { localStorage.setItem('virtuoso.energy', lit ? 'lit' : 'calm'); } catch (_) {}
+    document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.energy === (lit ? 'lit' : 'calm')));
+  }
   function applyCountInDefault(val) {
     const bars = Math.max(1, Math.min(8, parseInt(val, 10) || 1));
     setFieldSilent('countIn', String(bars));   // the field is the source; syncTransport reflects the segments
@@ -17453,6 +17481,8 @@
     const sel = $('virtuoso-countin-default');
     if (sel) sel.value = ci;
     applyCountInGrid(countInGridOn() ? 'on' : 'off');
+    let energy = 'lit'; try { energy = localStorage.getItem('virtuoso.energy') || 'lit'; } catch (_) {}
+    applyEnergy(energy);
   }
 
   function schedulePluckedString(ctx, when, freq, dur, instrument, gainScale, bendSemis) {
@@ -19006,17 +19036,49 @@
       ].join('');
     }
     const bars = measureSeconds(cfg) > 0 ? Math.round(c.duration / measureSeconds(cfg)) : 0;
-    // Key cell doubles as the identity: chromatic has no key/scale, so name the pattern.
-    const keyCell = cfg.mode === 'chromatic'
-      ? cell('Pattern', CHROMATIC_PATTERN_LABELS[cfg.chromaticPattern] || cfg.chromaticPattern)
-      : cell('Key', `${cfg.key} ${String(cfg.scale || '').replace(/_/g, ' ')}`);
+    // ── Editable LCD cells (DAW transport convention) ──────────────────────────
+    // Key · Meter · Count-in join Tempo as in-place edits: each is a quiet <select>
+    // that reads like the readout, commits via the delegated handler in bind()
+    // (writes the Inspector field → regenerate). Works as a live OVERRIDE in any
+    // mode, exactly like the editable Tempo cell.
+    const opt = (value, label, cur) => `<option value="${esc(value)}"${String(value) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+    const lcdSel = (id, label, inner, title) =>
+      `<div class="virtuoso-lcd-cell"><span class="virtuoso-lcd-lbl">${esc(label)}</span><span class="virtuoso-lcd-val"><select id="${id}" class="virtuoso-lcd-select" aria-label="${esc(title)}" title="${esc(title)}">${inner}</select></span></div>`;
+    // Key — root note editable; the scale name stays a static suffix. chromatic has
+    // no key/scale, so it keeps a static Pattern identity cell.
+    let keyCell;
+    if (cfg.mode === 'chromatic') {
+      keyCell = cell('Pattern', CHROMATIC_PATTERN_LABELS[cfg.chromaticPattern] || cfg.chromaticPattern);
+    } else {
+      const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const scaleName = String(cfg.scale || '').replace(/_/g, ' ');
+      keyCell = `<div class="virtuoso-lcd-cell"><span class="virtuoso-lcd-lbl">Key</span><span class="virtuoso-lcd-val"><select id="virtuoso-lcd-key" class="virtuoso-lcd-select" aria-label="Key — root note" title="Key — root note">${NOTES.map(n => opt(n, n, cfg.key)).join('')}</select> ${esc(scaleName)}</span></div>`;
+    }
+    // Meter — mirror the Inspector meter <select> options (zero drift) with compact
+    // n/d labels; editable here even when that Inspector field is Custom-only-hidden.
+    const curMeterVal = (cfg.meter.grouping && cfg.meter.grouping.length > 1)
+      ? `${cfg.meter.numerator}/${cfg.meter.denominator}:${cfg.meter.grouping.join('+')}`
+      : `${cfg.meter.numerator}/${cfg.meter.denominator}`;
+    const formMeter = document.querySelector('#virtuoso-controls [name="meter"]');
+    const meterCell = formMeter
+      ? lcdSel('virtuoso-lcd-meter', 'Meter', Array.from(formMeter.options).map(o => {
+          const m = parseMeter(o.value);
+          const short = m.grouping.length > 1 ? `${m.numerator}/${m.denominator} ${m.grouping.join('+')}` : `${m.numerator}/${m.denominator}`;
+          return opt(o.value, short, curMeterVal);
+        }).join(''), 'Meter')
+      : cell('Meter', `${cfg.meter.numerator}/${cfg.meter.denominator}`);
+    // Count-in — bars of lead-in (mirrors the Inspector Count-in select).
+    const ciCur = cfg.countInBars != null ? cfg.countInBars : 1;
+    const countInCell = lcdSel('virtuoso-lcd-countin', 'Count-in',
+      [1, 2, 4].map(n => opt(n, n === 1 ? '1 bar' : n + ' bars', ciCur)).join(''), 'Count-in bars');
     return [
       keyCell,
       // Tempo is an editable LCD cell (DAW transport convention): same glyphs as
       // a readout, commits via the delegated handler in bind() (two-way with the
       // Inspector BPM field). Sessions (above) keep no tempo cell — mixed tempos.
       `<div class="virtuoso-lcd-cell"><span class="virtuoso-lcd-lbl">Tempo</span><span class="virtuoso-lcd-val"><input id="virtuoso-lcd-bpm" class="virtuoso-lcd-input" type="number" min="30" max="260" step="1" value="${esc(cfg.bpm)}" aria-label="Tempo (BPM)" title="Click to edit the tempo — applies on Enter"> BPM</span></div>`,
-      cell('Meter', `${cfg.meter.numerator}/${cfg.meter.denominator}`),
+      meterCell,
+      countInCell,
       cell('Bars', bars),
       cell('Length', len),
       cell('Notes', c.notes.length)
@@ -22365,7 +22427,12 @@
         if (arc) m.sub = arc;
       } catch (_) {}
       const cleared = (s.chapters || []).filter(c => c.earned).length;
-      stat('BLOCKS', s.chapters.length); stat('TIME', dur); if (cleared > 0) stat('CLEARED', cleared);
+      const longest = (s.chapters || []).reduce((a, c) => (c && c.durSec > (a ? a.durSec : -1)) ? c : a, null);
+      stat('BLOCKS', s.chapters.length);
+      stat('CLEARED', `${cleared}/${s.chapters.length}`);
+      stat('TIME', dur);
+      if (longest && (longest.name || longest.role)) stat('TOP BLOCK', longest.name || longest.role);
+      if (s.streak > 0) stat('DAY', String(s.streak));
       return m;
     }
     // LADDER / CUSTOM — earned-led (green) or honest descriptive
@@ -22395,6 +22462,19 @@
       m.eyebrow = 'PRACTICED';
       m.hero = `${_scaleLabel(s.scale) || (s.displayName || 'Practice')}${s.key ? ` in ${s.key}` : ''}`;
       stat('TEMPO', s.bpm ? s.bpm + ' BPM' : null); stat('KEY', s.key); stat('TIME', dur);
+    }
+    // Performance facts — always present for a graded (non-felt) run so the card
+    // carries real info even on a 0-hit run: ACCURACY + HITS LEAD the row (note_detect
+    // parity). Jam/Workout already returned with their own stats; felt runs stay
+    // felt-not-scored (no %). A clean-run PB / day-streak rounds the row out to ~6.
+    if (!(s.feltResult && s.feltResult.flip)) {
+      const r = s.results || {};
+      if (r.judgedPassed > 0) {
+        m.stats.unshift({ label: 'HITS', value: `${r.hits}/${r.judgedPassed}` });
+        m.stats.unshift({ label: 'ACCURACY', value: `${Math.round((r.hits / r.judgedPassed) * 100)}%` });
+      }
+      if (s.recognizer && s.recognizer.bpm) m.stats.push({ label: 'BEST', value: `${s.recognizer.bpm} BPM` });
+      else if (s.streak > 0) m.stats.push({ label: 'DAY', value: String(s.streak) });
     }
     // Secondary earned ✓ lines (text card only — the image keeps one hero).
     if (s.depth && s.depth.travelKey && !s.depth.travelRung) m.extra.push(`Travels — first clean run in ${s.depth.travelKey}`);
@@ -22440,46 +22520,103 @@
     const GREEN = '#22c55e', TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
     const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
     const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    const font = (px, w, mono) => ctx.font = `${w} ${px}px ${mono ? MONO : SANS}`;
+    const DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
+    // Full esports parity in LIT — the share card uses the display face for the
+    // wordmark/eyebrow/hero/labels; Calm keeps the system face (the toggle-back rule).
+    let lit = false; try { lit = !!$('virtuoso-root')?.classList.contains('vir-lit'); } catch (_) {}
+    const HEAD = lit ? 'disp' : false;
+    const font = (px, w, m) => ctx.font = `${w} ${px}px ${m === 'disp' ? DISP : m ? MONO : SANS}`;
     const pill = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
     const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = accent; ctx.fillRect(0, 0, W, 5);                                   // accent spine
-    ctx.strokeStyle = 'rgba(148,163,184,0.16)'; ctx.lineWidth = 1; ctx.strokeRect(24.5, 24.5, W - 49, H - 49);
+    // Neon frame — the live card's glow-ring recipe MIRRORed onto the canvas: an
+    // earned card frames in meter-green (the cleared-only color), otherwise the live
+    // theme accent. A soft top-left corner bloom adds depth; the big readouts stay
+    // crisp (no glow on the text itself — legibility over spectacle).
+    const frameC = m.heroGreen ? GREEN : accent;
+    const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
+    cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = frameC; ctx.fillRect(0, 0, W, 5);                                   // accent spine (earned → green)
+    ctx.save();
+    ctx.shadowColor = frameC; ctx.shadowBlur = 26; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
+    pill(26, 26, W - 52, H - 52, 18); ctx.stroke();                                     // glowing accent frame
+    ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    pill(29, 29, W - 58, H - 58, 16); ctx.stroke();                                     // inner bevel hairline
+    ctx.restore();
     ctx.textBaseline = 'alphabetic';
     // Brand strip
     ctx.fillStyle = accent; pill(P, 70, 6, 40, 3); ctx.fill();
-    ctx.fillStyle = TXT; font(40, 800); ctx.fillText('Virtuoso', P + 22, 104);
-    font(15, 700); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
+    ctx.fillStyle = TXT; font(40, 800, HEAD); ctx.fillText('Virtuoso', P + 22, 104);
+    font(15, 700, HEAD); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
     ctx.fillStyle = accentSoft; pill(pX, 72, pW, 34, 17); ctx.fill();
     ctx.strokeStyle = accent; ctx.lineWidth = 1.5; pill(pX, 72, pW, 34, 17); ctx.stroke();
     ctx.fillStyle = accent; ctx.fillText(pT, pX + 14, 95);
     // Eyebrow + hero
-    ctx.fillStyle = accent; font(18, 700); ctx.fillText(m.eyebrow.toUpperCase(), P, 212);
+    ctx.fillStyle = accent; font(18, 700, HEAD); ctx.letterSpacing = '3px'; ctx.fillText(m.eyebrow.toUpperCase(), P, 212); ctx.letterSpacing = '0px';
     const heroMaxW = W - P * 2;
-    let hs = 64; font(hs, 700); if (ctx.measureText((m.heroGreen ? '✓ ' : '') + m.hero).width > heroMaxW) { hs = 50; font(hs, 700); }
+    let hs = 64; font(hs, 700, HEAD); if (ctx.measureText((m.heroGreen ? '✓ ' : '') + m.hero).width > heroMaxW) { hs = 50; font(hs, 700, HEAD); }
     let hx = P; const hy = 296;
-    if (m.heroGreen) { ctx.fillStyle = GREEN; ctx.fillText('✓', hx, hy); hx += ctx.measureText('✓  ').width; font(hs, 700); }
+    if (m.heroGreen) { ctx.fillStyle = GREEN; ctx.fillText('✓', hx, hy); hx += ctx.measureText('✓  ').width; font(hs, 700, HEAD); }
     ctx.fillStyle = TXT; ctx.fillText(_fitCanvasText(ctx, m.hero, heroMaxW - (hx - P)), hx, hy);
     if (m.sub) { ctx.fillStyle = DIM; font(23, 500); ctx.fillText(_fitCanvasText(ctx, m.sub, heroMaxW), P, hy + 42); }
-    // Stats row
-    let sx = P; const sy = 452;
-    for (const st of m.stats.slice(0, 4)) {
-      ctx.fillStyle = MUT; font(13, 600); ctx.fillText(st.label.toUpperCase(), sx, sy);
-      ctx.fillStyle = TXT; font(27, 700, /\d/.test(st.value)); ctx.fillText(st.value, sx, sy + 38);
-      sx += Math.max(ctx.measureText(st.value).width, 70) + 54;
-    }
-    ctx.fillStyle = FAINT; font(14, 500); ctx.fillText('virtuoso · practice studio for guitar & bass', P, H - 42);
+    // Stats row — up to 6 even columns (note_detect parity): tracked display-face
+    // labels + display-face, color-coded values. Green stays cleared-only (never a
+    // stat), so the pop comes from the accent on TEMPO/BEST. No marketing footer —
+    // the wordmark already brands the card.
+    const cols = m.stats.slice(0, 6), sy = 470;
+    const colW = cols.length ? (W - P * 2) / cols.length : 0;
+    const valColor = (label) => (label === 'TEMPO' || label === 'BEST') ? accent : (label === 'TIME' || label === 'DAY') ? MUT : TXT;
+    cols.forEach((st, i) => {
+      const cx = P + i * colW;
+      ctx.fillStyle = MUT; font(12, 700, HEAD); ctx.letterSpacing = '1.5px'; ctx.fillText(st.label.toUpperCase(), cx, sy); ctx.letterSpacing = '0px';
+      ctx.fillStyle = valColor(st.label); font(28, 700, HEAD); ctx.fillText(st.value, cx, sy + 42);
+    });
     return cv;
   }
+  // A safe "Virtuoso - <hero> - <date>.png" basename for the saved card (mirrors
+  // note_detect's "Artist - Title - date.png" convention, adapted to practice).
+  function shareCardFilename(s) {
+    let what = 'Practice';
+    try { const m = shareCardModel(s); what = (m && (m.hero || m.lane)) || what; } catch (_) {}
+    const d = new Date();
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `Virtuoso - ${what} - ${date}.png`.replace(/[<>:"/\\|?* -]/g, '-');
+  }
+  // Save the card PNG to the user's configured folder via the local server route —
+  // the save FOLDER is SHARED with note_detect (localStorage slopsmith_notedetect_save_dir),
+  // so both plugins write their cards to the same place. Returns the server result,
+  // or null when the route/server isn't there (caller falls back to a download).
+  // auto=true preserves every take (the server never overwrites on a name clash).
+  async function saveCardToServer(cv, s, auto) {
+    if (!cv) return null;
+    let dir = ''; try { dir = localStorage.getItem('slopsmith_notedetect_save_dir') || ''; } catch (_) {}
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    if (!blob) return null;
+    const q = `dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(shareCardFilename(s))}${auto ? '&auto=1' : ''}`;
+    try {
+      const resp = await fetch(`/api/plugins/virtuoso/save-card?${q}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+      if (!resp.ok) return null;
+      const j = await resp.json().catch(() => null);
+      return (j && j.ok) ? j : null;
+    } catch (_) { return null; }
+  }
   // Copy/download with the host-checked fallback ladder (feedback-compatibility):
-  // image→clipboard (Promise to keep the click activation) → download PNG → text.
+  // Save → server-folder save → browser download; Copy → image→clipboard → download → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
+    // Ensure the self-hosted display face is loaded before the canvas rasterizes
+    // (the DOM card gets it via CSS font-display; the canvas needs it resident).
+    try { if (document.fonts && document.fonts.load) { await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } } catch (_) {}
     const cv = renderShareCardImage(s);
     const toBlob = () => new Promise(r => cv.toBlob(r, 'image/png'));
-    const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = 'virtuoso-card.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
-    if (action === 'download') { if (cv && await download()) return 'saved'; }
+    const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = shareCardFilename(s); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
+    if (action === 'download') {
+      // Save to the configured (shared) folder via the local server; fall back to a
+      // browser download if the route/server isn't available.
+      if (cv) { const saved = await saveCardToServer(cv, s, false); if (saved) return 'saved'; }
+      if (cv && await download()) return 'saved';
+    }
     else {
       try { if (cv && navigator.clipboard && window.ClipboardItem && window.isSecureContext) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': toBlob() })]); return 'copied'; } } catch (_) {}
       try { if (cv && await download()) return 'saved'; } catch (_) {}
@@ -23818,16 +23955,30 @@
       lcdHost.addEventListener('keydown', (e) => {
         if (e.target && e.target.id === 'virtuoso-lcd-bpm' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
       });
+      // LCD select cells (Key · Meter · Count-in) commit the same way the Tempo
+      // input does: write the (possibly Custom-only-hidden) Inspector field,
+      // dispatch change so dependent logic runs, regenerate — a live override in
+      // any mode. Map the LCD id → form field name.
+      const LCD_SELECT_FIELD = { 'virtuoso-lcd-key': 'key', 'virtuoso-lcd-meter': 'meter', 'virtuoso-lcd-countin': 'countIn' };
       lcdHost.addEventListener('change', (e) => {
-        if (!e.target || e.target.id !== 'virtuoso-lcd-bpm') return;
-        const v = Math.max(30, Math.min(260, parseInt(e.target.value, 10) || 0));
-        if (!v || !formBpm) { if (formBpm) e.target.value = formBpm.value; return; }
-        e.target.value = String(v);
-        if (String(formBpm.value) !== String(v)) {
-          formBpm.value = String(v);
-          formBpm.dispatchEvent(new Event('change', { bubbles: true }));
-          onGenerate();
+        const id = e.target && e.target.id;
+        if (id === 'virtuoso-lcd-bpm') {
+          const v = Math.max(30, Math.min(260, parseInt(e.target.value, 10) || 0));
+          if (!v || !formBpm) { if (formBpm) e.target.value = formBpm.value; return; }
+          e.target.value = String(v);
+          if (String(formBpm.value) !== String(v)) {
+            formBpm.value = String(v);
+            formBpm.dispatchEvent(new Event('change', { bubbles: true }));
+            onGenerate();
+          }
+          return;
         }
+        const name = LCD_SELECT_FIELD[id]; if (!name) return;
+        const field = document.querySelector('#virtuoso-controls [name="' + name + '"]');
+        if (!field || String(field.value) === String(e.target.value)) return;
+        field.value = e.target.value;
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        onGenerate();
       });
       // Mirror Inspector→LCD live, so the two boxes always agree between generates.
       formBpm?.addEventListener('input', () => {
@@ -24640,6 +24791,7 @@
     document.querySelectorAll('#virtuoso-xp-mode .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyXpModeDefault(b.dataset.xp)));
     $('virtuoso-countin-default')?.addEventListener('change', (e) => { try { localStorage.setItem('virtuoso.countInDefault', e.target.value); } catch (_) {} applyCountInDefault(e.target.value); });
     document.querySelectorAll('#virtuoso-countin-grid .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('virtuoso.countInGrid', b.dataset.grid); } catch (_) {} applyCountInGrid(b.dataset.grid); }));
+    document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyEnergy(b.dataset.energy)));
     loadSettingsPrefs();
     document.addEventListener('click', (e) => {
       const menu = $('virtuoso-settings-menu'); if (!menu || !menu.classList.contains('vir-open')) return;

@@ -37,20 +37,21 @@
     --vir-rail: var(--vir-card); --vir-rail-fg: var(--vir-card-fg); --vir-rail-border: var(--vir-border);
 
     /* ── primary (themeable accent) ── */
-    --vir-accent: #8b3de6;  --vir-accent-fg: #ffffff;
-    --vir-accent-hover: #a868f5;
-    --vir-accent-soft: rgba(139, 61, 230, 0.26);              /* (read in screen.js) */
-    --vir-accent-glow: rgba(139, 61, 230, 0.55);              /* lit-moment glow (the 3 beats) — brighter than -soft, themeable */
-    --vir-accent-grad: linear-gradient(180deg, #5e1fb8, #7a2bd8);
-    --vir-accent-edge: #b07cff;                               /* (read in screen.js) */
+    --vir-accent: #3b82f6;  --vir-accent-fg: #ffffff;
+    --vir-accent-hover: #60a5fa;
+    --vir-accent-soft: rgba(59, 130, 246, 0.26);             /* (read in screen.js) */
+    --vir-accent-glow: rgba(59, 130, 246, 0.55);             /* lit-moment glow (the 3 beats) — brighter than -soft, themeable */
+    --vir-accent-grad: linear-gradient(180deg, #1d4ed8, #2563eb);
+    --vir-accent-edge: #7cb0ff;                               /* (read in screen.js) */
     --vir-ring: var(--vir-accent);                             /* focus ring — follows accent */
-    --vir-glow: rgba(139, 61, 230, 0.16);                     /* ambient hero glow (restrained — the lit budget lives on the 3 beats) */
+    --vir-glow: rgba(59, 130, 246, 0.16);                     /* ambient hero glow (restrained — the lit budget lives on the 3 beats) */
 
     /* ── locked semantics (design-system §8 — never themed) ── */
     --vir-meter: #22c55e; --vir-meter-soft: rgba(34,197,94,0.12); --vir-meter-edge: rgba(34,197,94,0.45); /* progress/cleared — the ONLY green */
     --vir-playhead: #f43f5e;                                  /* "now" marker — distinct red, NEVER folded into destructive */
     --vir-destructive: #b91c1c;                               /* stop / danger — the other red */
     --vir-heat: #f0a050; --vir-heat-soft: rgba(240,160,80,0.14); /* coaching warmth — never error-red */
+    --vir-heat-strong: #ffb866; --vir-heat-glow: rgba(240,160,80,0.45); /* the "earning" bloom — amber building toward the green "earned" (Studio-energy Lit) */
 
     /* ── radius scale (one base → derived) ── */
     --vir-radius: 13px; --vir-radius-sm: 8px; --vir-radius-lg: 16px; --vir-radius-pill: 999px;
@@ -66,6 +67,7 @@
     --vir-plate-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 rgba(0,0,0,0.7), 0 6px 18px rgba(0,0,0,0.45);
     --vir-plate-edge: rgba(255,255,255,0.14);
     --vir-mono: ui-monospace, "SF Mono", Menlo, monospace;   /* (read in screen.js) */
+    --vir-font-display: 'VirtuosoDisplay', 'Orbitron', ui-sans-serif, system-ui, sans-serif; /* esports/lit display face (self-hosted Orbitron, OFL — assets/fonts) */
     --vir-sp-1: 4px; --vir-sp-2: 8px; --vir-sp-3: 12px; --vir-sp-4: 16px; --vir-sp-5: 24px;
 
     /* ── legacy aliases → canonical (retire per component as §10 migration lands) ── */
@@ -83,13 +85,131 @@
   /* Accent themes (settings → Accent). Remap the accent tokens via a root class —
      additive, default = the base tokens above. As more CSS moves to tokens these
      recolor more of the UI; today they cover the active-state accents. */
+  .virtuoso-root.vir-theme-violet {
+    --vir-accent: #8b3de6; --vir-accent-hover: #a868f5; --vir-accent-soft: rgba(139,61,230,0.26);
+    --vir-accent-glow: rgba(139,61,230,0.55); --vir-glow: rgba(139,61,230,0.16);
+    --vir-accent-grad: linear-gradient(180deg, #5e1fb8, #7a2bd8); --vir-accent-edge: #b07cff;
+  }
   .virtuoso-root.vir-theme-ember {
-    --vir-accent: #e0803a; --vir-accent-hover: #f0974f; --vir-accent-soft: rgba(224,128,58,0.20);
+    --vir-accent: #e0803a; --vir-accent-hover: #f0974f; --vir-accent-soft: rgba(224,128,58,0.22);
+    --vir-accent-glow: rgba(224,128,58,0.50); --vir-glow: rgba(224,128,58,0.16);
     --vir-accent-grad: linear-gradient(180deg, #9a4a12, #c2630f); --vir-accent-edge: #f0a050;
   }
-  .virtuoso-root.vir-theme-violet {
-    --vir-accent: #8b5cf6; --vir-accent-hover: #a78bfa; --vir-accent-soft: rgba(139,92,246,0.20);
-    --vir-accent-grad: linear-gradient(180deg, #5b21b6, #6d28d9); --vir-accent-edge: #a78bfa;
+  .virtuoso-root.vir-theme-teal {
+    --vir-accent: #14b8a6; --vir-accent-hover: #2dd4bf; --vir-accent-soft: rgba(20,184,166,0.22);
+    --vir-accent-glow: rgba(20,184,166,0.50); --vir-glow: rgba(20,184,166,0.16);
+    --vir-accent-grad: linear-gradient(180deg, #0d7d70, #109184); --vir-accent-edge: #5eead4;
+  }
+  .virtuoso-root.vir-theme-rose {
+    --vir-accent: #ec4899; --vir-accent-hover: #f472b6; --vir-accent-soft: rgba(236,72,153,0.22);
+    --vir-accent-glow: rgba(236,72,153,0.50); --vir-glow: rgba(236,72,153,0.16);
+    --vir-accent-grad: linear-gradient(180deg, #9d174d, #be185d); --vir-accent-edge: #f9a8d4;
+  }
+  .virtuoso-root.vir-theme-cyan {
+    --vir-accent: #06b6d4; --vir-accent-hover: #22d3ee; --vir-accent-soft: rgba(6,182,212,0.22);
+    --vir-accent-glow: rgba(6,182,212,0.50); --vir-glow: rgba(6,182,212,0.16);
+    --vir-accent-grad: linear-gradient(180deg, #0e7490, #0891b2); --vir-accent-edge: #67e8f9;
+  }
+  /* ── Studio energy: the "Lit" treatment (settings → Studio energy; default on) ──
+     Host-parity polish (charette 2026-06-28) + the earned-bloom, ALL gated on
+     .vir-lit so "Calm" is EXACTLY the restrained base look — the toggle-back
+     guarantee. Energetic CHROME, calm COCKPIT: nothing here touches the playing
+     surface / fretboard / judge. Reduced-motion degrades every motion to static.
+     Borrow the host's glow GRAMMAR (MIRRORed into our own --vir-* tokens), never
+     its heat-engine: no speed rainbow, no fill-and-drain meter, no failure-smoke. */
+  .virtuoso-root.vir-lit .virtuoso-mixer { background: rgba(9,15,30,0.82); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+  .virtuoso-root.vir-lit .virtuoso-progress-sheet,
+  .virtuoso-root.vir-lit .virtuoso-cheat-card,
+  .virtuoso-root.vir-lit .virtuoso-results-card { background: rgba(13,20,36,0.84); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  /* The LCD reads as a lit screen — a touch more rationed-accent inner glow + edge. */
+  .virtuoso-root.vir-lit .virtuoso-summary { box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), inset 0 0 22px var(--vir-accent-soft), inset 0 1px 0 rgba(255,255,255,0.03); border-top-color: var(--vir-accent-edge); }
+  /* "Next ▸" seam caption as the host's neon gradient-headline idiom (static). */
+  .virtuoso-root.vir-lit .virtuoso-seam-next { background: linear-gradient(90deg, var(--vir-accent-hover), var(--vir-accent-edge)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  /* ── Lit, dialed up: obvious at REST, still strictly CHROME (never the cockpit) ── */
+  /* Wordmark glows like a neon sign; a slow breathe is the ONE sanctioned motion. */
+  .virtuoso-root.vir-lit .virtuoso-header h1 { filter: drop-shadow(0 0 9px var(--vir-accent-glow)); animation: virtuoso-lit-breathe 4.6s ease-in-out infinite; }
+  @keyframes virtuoso-lit-breathe { 0%, 100% { filter: drop-shadow(0 0 6px var(--vir-accent-glow)); } 50% { filter: drop-shadow(0 0 14px var(--vir-accent-glow)); } }
+  /* Header trades its flat hairline for an accent edge + soft underglow. */
+  .virtuoso-root.vir-lit .virtuoso-header { border-bottom-color: var(--vir-accent-edge); box-shadow: 0 7px 22px -12px var(--vir-accent-glow); }
+  /* Active mode segment: a clearly-lit halo + edge (the switcher reads lit). */
+  .virtuoso-root.vir-lit .virtuoso-mode-btn.active { box-shadow: var(--vir-edge-top), 0 0 0 1px var(--vir-accent-edge), 0 0 18px 2px var(--vir-accent-glow), 0 1px 4px rgba(0,0,0,0.45); }
+  .virtuoso-root.vir-lit .virtuoso-mode-toggle { box-shadow: var(--vir-recess), inset 0 0 13px var(--vir-accent-soft); }
+  /* Progress chip + the primary action pick up a real accent glow-ring. */
+  .virtuoso-root.vir-lit .virtuoso-progress-chip { border-color: var(--vir-accent-edge); box-shadow: 0 0 11px -2px var(--vir-accent-glow); }
+  .virtuoso-root.vir-lit .virtuoso-actions button.primary { box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--vir-accent-edge), 0 0 24px 2px var(--vir-accent-glow), 0 2px 8px rgba(0,0,0,0.5); }
+  .virtuoso-root.vir-lit .virtuoso-tp-play { box-shadow: 0 0 0 1px var(--vir-accent-edge), 0 0 22px 3px var(--vir-accent-glow), 0 2px 10px rgba(0,0,0,0.55); }
+  @media (prefers-reduced-motion: reduce) {
+    .virtuoso-root.vir-lit .virtuoso-header h1 { animation: none; filter: drop-shadow(0 0 9px var(--vir-accent-glow)); }
+  }
+  /* Earned-bloom: a cleared rung blooms amber → settles into the green "earned" glow
+     (amber = earning, green = earned). One-shot on card entrance; fires only on the
+     EXISTING .vir-earned state, so it can never be farmed — it rides a proved clear. */
+  @keyframes virtuoso-earn-bloom {
+    0%   { box-shadow: 0 0 0 1px var(--vir-heat-soft), 0 0 6px 0 var(--vir-heat-glow); }
+    35%  { box-shadow: 0 0 0 1px var(--vir-heat-strong), 0 0 30px 7px var(--vir-heat-glow); }
+    100% { box-shadow: 0 0 0 1px var(--vir-meter-edge), 0 0 16px 2px var(--vir-meter-soft); }
+  }
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-earned.vir-enter { animation: virtuoso-results-enter 0.17s ease-out, virtuoso-earn-bloom 1.1s cubic-bezier(0.22,1,0.36,1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    .virtuoso-root.vir-lit .virtuoso-results-card.vir-earned.vir-enter { animation: none; box-shadow: 0 0 0 1px var(--vir-meter-edge), 0 0 16px 2px var(--vir-meter-soft); }
+  }
+  /* ── Results card: neon glow-ring + slam-in hero (Studio-energy Lit only) ──────
+     MIRRORed from a neon results-screen's animated conic glow-ring recipe into our
+     own --vir-* tokens (we did NOT consume its classes or its display webfont). A
+     registered angle property makes the conic start-angle interpolable, so a single
+     bright "comet" arc orbits the card border — drawn as a sharp ring (::after) plus
+     a blurred duplicate (::before). The ring rides ONLY .vir-lit (Calm stays the
+     restrained static card — the toggle-back guarantee); an EARNED card swaps the
+     comet to meter-green so it HARMONIZES with the earn-bloom instead of fighting it.
+     Reduced-motion freezes it to a static arc — no startle. */
+  /* Self-hosted display face — Orbitron 700 (SIL OFL 1.1; assets/fonts/OFL-orbitron.txt).
+     Data-URI so it is self-contained (no CDN, no extra route) and loads for BOTH the DOM
+     card CSS and the copy-card canvas. Used only in the Lit treatment. */
+  @font-face { font-family: 'VirtuosoDisplay'; font-style: normal; font-weight: 700; font-display: swap; src: url('data:font/woff2;base64,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') format('woff2'); }
+  @property --vir-ring-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  .virtuoso-root.vir-lit .virtuoso-results-card {
+    --vir-ring-w: 2px; --vir-ring-overhang: 2px;
+    --vir-ring-stops: var(--vir-accent-soft) 0deg, var(--vir-accent-soft) 248deg, var(--vir-accent-edge) 312deg, var(--vir-accent) 332deg, var(--vir-accent-soft) 360deg;
+  }
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-earned {
+    --vir-ring-stops: var(--vir-meter-edge) 0deg, var(--vir-meter-edge) 248deg, var(--vir-meter) 312deg, var(--vir-meter) 332deg, var(--vir-meter-edge) 360deg;
+  }
+  .virtuoso-root.vir-lit .virtuoso-results-card::before,
+  .virtuoso-root.vir-lit .virtuoso-results-card::after {
+    content: ''; position: absolute; inset: calc(-1 * var(--vir-ring-overhang)); border-radius: 14px; padding: var(--vir-ring-w);
+    background: conic-gradient(from var(--vir-ring-angle), var(--vir-ring-stops));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
+    pointer-events: none; animation: vir-ring-spin 6s linear infinite;
+  }
+  .virtuoso-root.vir-lit .virtuoso-results-card::before { filter: blur(10px); opacity: 0.7; }
+  @keyframes vir-ring-spin { to { --vir-ring-angle: 360deg; } }
+  /* The competency verdict is the HERO — it SLAMS in (Lit only): a cubic-bezier
+     overshoot that lands after the card settles. Calm shows it plainly (no motion). */
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-verdict,
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-felt,
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-session-title {
+    animation: vir-verdict-slam 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.12s both;
+  }
+  @keyframes vir-verdict-slam { from { opacity: 0; transform: scale(1.18); } to { opacity: 1; transform: scale(1); } }
+  /* Strip rows (ladder · deltas · recognizer) stagger in (Lit only). */
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-strip > * {
+    animation: vir-row-in 0.34s ease-out both; animation-delay: calc(0.3s + var(--vir-row-i, 0) * 0.08s);
+  }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-strip > *:nth-child(1) { --vir-row-i: 0; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-strip > *:nth-child(2) { --vir-row-i: 1; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-strip > *:nth-child(3) { --vir-row-i: 2; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-strip > *:nth-child(4) { --vir-row-i: 3; }
+  @keyframes vir-row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  /* In Lit, a cleared rung reads earned (a soft meter-green glow), not just outlined. */
+  .virtuoso-root.vir-lit .virtuoso-results-rung.cleared { box-shadow: 0 0 10px -1px var(--vir-meter-soft); }
+  @media (prefers-reduced-motion: reduce) {
+    .virtuoso-root.vir-lit .virtuoso-results-card::before,
+    .virtuoso-root.vir-lit .virtuoso-results-card::after { animation: none; }
+    .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-verdict,
+    .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-felt,
+    .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-session-title { animation: none; }
+    .virtuoso-root.vir-lit .virtuoso-results-card.vir-enter .virtuoso-results-strip > * { animation: none; opacity: 1; transform: none; }
   }
 
   .virtuoso-root {
@@ -177,10 +297,11 @@
   /* Mode dropdown fallback — hidden until the narrowest breakpoint. */
   .virtuoso-mode-select { display: none; padding: 6px 10px; font-size: 13px; font-weight: 600; border-radius: 8px; border: 1px solid var(--vir-border, #334155); background: var(--vir-inset, #0b1220); color: var(--vir-text, #e2e8f0); }
   /* Narrow-width header degrade (spec order): tagline drops FIRST → Setup label
-     shortens → view-bar secondary toggles hide → mode segments → Mode ▾ dropdown LAST
-     (primary nav protected longest). The masthead identity line is the first thing to
-     yield space because the 4-mode switcher already carries the "this is a studio"
-     signal once horizontal room gets tight. */
+     shortens → view-bar secondary toggles hide → mode segments go icon-only →
+     Mode ▾ dropdown LAST (primary nav protected longest). The masthead identity line
+     is the first thing to yield space because the 4-mode switcher already carries the
+     "this is a studio" signal once horizontal room gets tight. The mode glyphs let the
+     switcher stay legible icon-only before it finally collapses to the dropdown. */
   @media (max-width: 1200px) {
     .virtuoso-tagline { display: none; }
   }
@@ -190,6 +311,9 @@
   }
   @media (max-width: 1000px) {
     .virtuoso-view-label, .virtuoso-fb-toggle-label, #virtuoso-theme-toggle { display: none !important; }
+    /* Mode switcher goes icon-only here (aria-label keeps the accessible name). */
+    .virtuoso-mode-btn-label { display: none; }
+    .virtuoso-mode-btn { gap: 0; padding: 0; }
   }
   @media (max-width: 880px) {
     .virtuoso-header-modes .virtuoso-mode-bar { display: none; }
@@ -818,7 +942,13 @@
      COLLAPSED behind the disclosure. Same overlay pattern as the packs modal. */
   .virtuoso-results-modal { position: absolute; inset: 0; z-index: 23; display: none; align-items: center; justify-content: center; background: rgba(2,6,16,0.55); }
   .virtuoso-root.vir-results-open .virtuoso-results-modal { display: flex; }
-  .virtuoso-results-card { width: 400px; max-width: 92%; }
+  .virtuoso-results-card { position: relative; width: 400px; max-width: 92%; }
+  /* Accent hairline under the results header — fades to transparent at both edges
+     (a neon results-screen header rule, MIRRORed into --vir-accent). Shown in BOTH
+     energies: Calm gets the clean static line, Lit brightens it with a soft underglow. */
+  .virtuoso-results-card .virtuoso-sheet-head { position: relative; border-bottom: none; }
+  .virtuoso-results-card .virtuoso-sheet-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--vir-accent), transparent); opacity: 0.6; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-sheet-head::after { opacity: 0.9; box-shadow: 0 0 9px var(--vir-accent-glow); }
   /* Scorecard hero (panel 2026-06-12): the card widens only when a visual renders;
      the canvas is a calm static readout between the judgment and the progress strip. */
   .virtuoso-results-card.vir-has-hero { width: 520px; }
@@ -854,6 +984,41 @@
   .virtuoso-results-rung.cleared::after { content: ' ✓'; font-size: 9px; font-weight: 900; }
   .virtuoso-results-rung.rung-new { animation: virtuoso-tier-glow 1.8s ease-out forwards; }
   .virtuoso-results-deltas { font-size: 12px; color: #cbd5e1; }
+  /* ── Esports/lit typography parity — FULL parity for Lit (Calm keeps the system
+     face). Display font + tracking on the title/verdict/%/rungs, a tasteful headline
+     glow. The % digits stay un-glowed (note_detect's own legibility lesson). ── */
+  .virtuoso-root.vir-lit .virtuoso-results-card #virtuoso-results-title { font-family: var(--vir-font-display); text-transform: uppercase; letter-spacing: 0.24em; font-size: 12px; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-pct { font-family: var(--vir-font-display); letter-spacing: 0.03em; }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-verdict,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-felt { font-family: var(--vir-font-display); letter-spacing: 0.04em; text-shadow: 0 0 16px var(--vir-accent-glow); }
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-earned .virtuoso-results-verdict,
+  .virtuoso-root.vir-lit .virtuoso-results-card.vir-earned .virtuoso-results-felt { text-shadow: 0 0 16px var(--vir-meter-soft); }
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-rung { font-family: var(--vir-font-display); letter-spacing: 0.06em; }
+  /* Short stat-like lines also take the display face (the long descriptive transfer
+     sentence stays in the readable system face). */
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-head,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-deltas,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-practiced { font-family: var(--vir-font-display); letter-spacing: 0.02em; }
+  /* Buttons + the "How this run was judged" toggle take the display face too, so the
+     whole card's chrome reads esports in Lit (the expanded judged-detail SENTENCES
+     stay in the system face for legibility). */
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-vir-copy,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-progress-toggle,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-primary,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-quiet { font-family: var(--vir-font-display); letter-spacing: 0.03em; }
+  /* Workout recap — the session header + chapter list join the display face in Lit
+     (the per-block competency phrase stays system-face for readability). */
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-session-title,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-session-meta,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-chapter-role,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-chapter-name,
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-chapter-dur { font-family: var(--vir-font-display); letter-spacing: 0.03em; }
+  /* Heat rung — STRONG: a clean-pass PB (the recognizer line) gets the accent "new
+     best" glow + one-shot pulse — a notch below the earned-bloom. Named (the PB),
+     never raw speed. Reduced-motion drops the pulse (the static glow stays). */
+  .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-recog { font-family: var(--vir-font-display); letter-spacing: 0.05em; text-transform: uppercase; font-size: 11px; text-shadow: 0 0 13px var(--vir-accent-glow); animation: virtuoso-strong-pulse 1.6s ease-out 0.2s both; }
+  @keyframes virtuoso-strong-pulse { 0% { text-shadow: 0 0 4px var(--vir-accent-soft); } 40% { text-shadow: 0 0 18px var(--vir-accent-glow); } 100% { text-shadow: 0 0 13px var(--vir-accent-glow); } }
+  @media (prefers-reduced-motion: reduce) { .virtuoso-root.vir-lit .virtuoso-results-card .virtuoso-results-recog { animation: none; } }
   .virtuoso-results-recog { font-size: 12px; font-weight: 600; color: var(--vir-accent-edge, #60a5fa); }
   .virtuoso-results-practiced { text-align: center; font-size: 11.5px; color: #94a3b8; padding: 7px 16px 0; }
   /* Workout RECAP (Tier 3): the per-block chapter list REPLACES the aggregate % for a
@@ -975,6 +1140,12 @@
   .virtuoso-lcd-input { width: 4ch; background: transparent; border: none; border-bottom: 1px dashed transparent; color: inherit; font: inherit; padding: 0; text-align: right; appearance: textfield; -moz-appearance: textfield; }
   .virtuoso-lcd-input::-webkit-outer-spin-button, .virtuoso-lcd-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .virtuoso-lcd-cell:hover .virtuoso-lcd-input, .virtuoso-lcd-input:focus { border-bottom-color: var(--vir-accent-edge, #4080e0); outline: none; }
+  /* Editable LCD selects (Key · Meter · Count-in) — same in-place affordance as the
+     tempo input: reads like the readout value, a dashed-underline cue on hover/focus.
+     appearance:none drops the native chrome; the dark option list matches the LCD. */
+  .virtuoso-lcd-select { appearance: none; -webkit-appearance: none; -moz-appearance: none; background: transparent; border: none; border-bottom: 1px dashed transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; line-height: 1.15; }
+  .virtuoso-lcd-cell:hover .virtuoso-lcd-select, .virtuoso-lcd-select:focus { border-bottom-color: var(--vir-accent-edge, #4080e0); outline: none; }
+  .virtuoso-lcd-select option { background: #15151b; color: #e9e4f5; font-family: var(--vir-mono); }
   .virtuoso-pitch-meter { display: none; align-items: center; gap: 10px; padding: 7px 14px; background: rgba(2, 6, 23, 0.85); border-top: 1px solid rgba(75, 85, 99, 0.55); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: #94a3b8; }
   #virtuoso-pitch-note { font-size: 14px; font-weight: 700; color: #e2e8f0; min-width: 30px; }
   .virtuoso-cents-track { position: relative; width: 120px; height: 8px; background: #1e293b; border-radius: 4px; border: 1px solid #334155; overflow: hidden; flex-shrink: 0; }
@@ -1134,11 +1305,17 @@
   /* Segmented control: pill background with one filled "selected" segment
      and one bordered "deselected" segment. Both states need visible weight
      so the user can tell at a glance that this is a toggle, not a label. */
-  .virtuoso-mode-toggle { display: flex; gap: 4px; background: var(--vir-input); border: 1px solid var(--vir-hairline); box-shadow: var(--vir-recess); border-radius: 12px; padding: 4px; }
-  .virtuoso-mode-btn { flex: 1; min-height: 32px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #94a3b8; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
+  .virtuoso-mode-toggle { display: flex; gap: 5px; background: var(--vir-input); border: 1px solid var(--vir-hairline); box-shadow: var(--vir-recess); border-radius: 14px; padding: 5px; }
+  .virtuoso-mode-btn { flex: 1; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #94a3b8; font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
   .virtuoso-mode-btn:hover { color: #e2e8f0; border-color: #475569; }
   .virtuoso-mode-btn.active { background: var(--vir-accent-grad); color: var(--vir-accent-fg); border-color: var(--vir-accent-edge); box-shadow: var(--vir-edge-top), 0 1px 4px rgba(0,0,0,0.45); }
   .virtuoso-mode-btn.active:hover { border-color: var(--vir-accent-edge); }
+  /* Mode glyphs (header buttons) — currentColor so they inherit the deselected/
+     hover/active text color, i.e. they recolor with the persisted accent theme
+     exactly like the label. Slightly dimmed when deselected, full when active. */
+  .virtuoso-mode-ico { width: 19px; height: 19px; flex: 0 0 auto; pointer-events: none; opacity: 0.85; }
+  .virtuoso-mode-btn:hover .virtuoso-mode-ico,
+  .virtuoso-mode-btn.active .virtuoso-mode-ico { opacity: 1; }
 
   /* Session vs Single mode visibility */
   .virtuoso-root.virtuoso-session-mode .virtuoso-single-only { display: none !important; }
@@ -1504,10 +1681,10 @@
          session→Workout) so the existing selectMode/syncModeBar wiring is untouched. -->
     <div class="virtuoso-header-modes">
       <div class="virtuoso-mode-toggle virtuoso-mode-bar" role="tablist" aria-label="Practice mode">
-        <button type="button" id="virtuoso-mode-guided"  class="virtuoso-mode-btn active" data-mode="guided"  role="tab" aria-selected="true"  title="Follow a guided curriculum">Ladder</button>
-        <button type="button" id="virtuoso-mode-custom"  class="virtuoso-mode-btn" data-mode="custom"  role="tab" aria-selected="false" title="Drill the exact thing you're stuck on">Custom</button>
-        <button type="button" id="virtuoso-mode-session" class="virtuoso-mode-btn" data-mode="session" role="tab" aria-selected="false" title="Build a timed routine — and actually run it">Workout</button>
-        <button type="button" id="virtuoso-mode-jam"     class="virtuoso-mode-btn" data-mode="jam"     role="tab" aria-selected="false" title="Pick a style and play along on your instrument">Jam</button>
+        <button type="button" id="virtuoso-mode-guided"  class="virtuoso-mode-btn active" data-mode="guided"  role="tab" aria-selected="true"  aria-label="Ladder"  title="Follow a guided curriculum"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18v-3"/><path d="M12 18v-7"/><path d="M18 18v-11"/></svg><span class="virtuoso-mode-btn-label">Ladder</span></button>
+        <button type="button" id="virtuoso-mode-custom"  class="virtuoso-mode-btn" data-mode="custom"  role="tab" aria-selected="false" aria-label="Custom"  title="Drill the exact thing you're stuck on"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="16" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Custom</span></button>
+        <button type="button" id="virtuoso-mode-session" class="virtuoso-mode-btn" data-mode="session" role="tab" aria-selected="false" aria-label="Workout" title="Build a timed routine — and actually run it"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 20.5L9.6 5.5H14.4L18.2 20.5Z"/><path d="M5.8 20.5H18.2"/><path d="M11.2 3L14 16.5"/><path d="M11.3 10.9L14.3 10" stroke-width="2.4"/></svg><span class="virtuoso-mode-btn-label">Workout</span></button>
+        <button type="button" id="virtuoso-mode-jam"     class="virtuoso-mode-btn" data-mode="jam"     role="tab" aria-selected="false" aria-label="Jam"     title="Pick a style and play along on your instrument"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V5.5L18 3.5V15.5"/><ellipse cx="6.6" cy="17.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/><ellipse cx="15.6" cy="15.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Jam</span></button>
       </div>
       <!-- Narrowest-width fallback: the 4 segments collapse to one Mode dropdown
            (last in the degrade order — primary nav is protected longest). Synced by
@@ -1540,9 +1717,19 @@
         <div class="virtuoso-settings-group">
           <span class="virtuoso-settings-lbl">Accent</span>
           <div class="virtuoso-settings-row" id="virtuoso-theme-pick">
-            <button type="button" class="virtuoso-theme-swatch active" data-theme="" style="--sw:#1d4ed8" title="Blue" aria-label="Blue"></button>
+            <button type="button" class="virtuoso-theme-swatch active" data-theme="" style="--sw:#2563eb" title="Blue" aria-label="Blue"></button>
+            <button type="button" class="virtuoso-theme-swatch" data-theme="violet" style="--sw:#7a2bd8" title="Purple" aria-label="Purple"></button>
             <button type="button" class="virtuoso-theme-swatch" data-theme="ember" style="--sw:#c2630f" title="Ember" aria-label="Ember"></button>
-            <button type="button" class="virtuoso-theme-swatch" data-theme="violet" style="--sw:#6d28d9" title="Violet" aria-label="Violet"></button>
+            <button type="button" class="virtuoso-theme-swatch" data-theme="teal" style="--sw:#14b8a6" title="Teal" aria-label="Teal"></button>
+            <button type="button" class="virtuoso-theme-swatch" data-theme="rose" style="--sw:#ec4899" title="Rose" aria-label="Rose"></button>
+            <button type="button" class="virtuoso-theme-swatch" data-theme="cyan" style="--sw:#06b6d4" title="Cyan" aria-label="Cyan"></button>
+          </div>
+        </div>
+        <div class="virtuoso-settings-group">
+          <span class="virtuoso-settings-lbl">Studio energy</span>
+          <div class="virtuoso-settings-row" id="virtuoso-energy-pick" title="Lit: host-parity glow + earned-bloom celebrations (chrome only — the playing surface stays calm). Calm: the restrained base look.">
+            <button type="button" class="virtuoso-mini-btn active" data-energy="lit">Lit</button>
+            <button type="button" class="virtuoso-mini-btn" data-energy="calm">Calm</button>
           </div>
         </div>
         <div class="virtuoso-settings-group">

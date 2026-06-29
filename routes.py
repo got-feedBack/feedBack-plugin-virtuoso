@@ -11,6 +11,7 @@ import importlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,7 +21,7 @@ import wave
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -639,6 +640,45 @@ def _cleanup_temp_root(temp_root: Path) -> None:
         pass
 
 
+# ── Results / copy card saving (mirrors note_detect's save-card; the save FOLDER
+#    is SHARED via the `slopsmith_notedetect_save_dir` setting so both plugins write
+#    their cards to the same place) ──────────────────────────────────────────────
+_CARD_MAX_BYTES = 8 * 1024 * 1024  # generous cap for a 1200×630 results-card PNG
+_CARD_NAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def _default_pictures_dir() -> Path:
+    """The user's Pictures folder — the Save button's default destination."""
+    return Path.home() / "Pictures"
+
+
+def _resolve_card_dir(raw: str, auto: bool = False) -> Path:
+    """Target dir for a saved card: the user-configured folder (shared with
+    note_detect via `slopsmith_notedetect_save_dir`) when given, else the default
+    Pictures folder. Auto-save with no folder goes to a 'feedBack Cards' subfolder
+    so the per-run stream doesn't clutter Pictures. A supplied path must be
+    absolute — a relative path would resolve against the server CWD."""
+    raw = (raw or "").strip()
+    if not raw:
+        base = _default_pictures_dir()
+        return base / "feedBack Cards" if auto else base
+    p = Path(raw).expanduser()
+    if not p.is_absolute():
+        raise HTTPException(400, "save folder must be an absolute path")
+    return p
+
+
+def _sanitize_card_filename(name: str) -> str:
+    """Bare, filesystem-safe .png basename — never a path, so the client can't
+    write outside the resolved directory via the name."""
+    base = Path(str(name or "")).name
+    base = _CARD_NAME_RE.sub("-", base)
+    base = re.sub(r"\s+", " ", base).strip(" -_.") or "virtuoso-card"
+    if not base.lower().endswith(".png"):
+        base = re.sub(r"\.[^.]*$", "", base) + ".png"
+    return base[:120]
+
+
 def setup(app: FastAPI, context: dict) -> None:
     data_dir = _data_dir(context)
     presets_path = _presets_path(context)
@@ -653,6 +693,38 @@ def setup(app: FastAPI, context: dict) -> None:
         # not only after the next save.
         _snapshot_presets(meta_db, presets_path)
         _snapshot_tunings(meta_db, tunings_path)
+
+    @app.post(f"/api/plugins/{PLUGIN_ID}/save-card")
+    async def save_card(request: Request):
+        # Body: raw PNG bytes (the results/copy card rendered on a canvas). Query:
+        # ?dir=<absolute folder>&name=<filename>&auto=0|1. Writes the PNG to the
+        # configured folder (shared with note_detect's save setting; default: the
+        # user's Pictures folder) and returns the path. Works in the web testbed and
+        # the desktop bundle — both run this local server as the user.
+        body = await request.body()
+        if len(body) > _CARD_MAX_BYTES:
+            raise HTTPException(413, "card image too large")
+        if not body or body[:8] != b"\x89PNG\r\n\x1a\n":
+            raise HTTPException(400, "body is not a PNG image")
+        auto = request.query_params.get("auto", "") in ("1", "true", "yes")
+        target = _resolve_card_dir(request.query_params.get("dir", ""), auto=auto)
+        name = _sanitize_card_filename(request.query_params.get("name", "virtuoso-card.png"))
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            path = target / name
+            # Auto-save preserves every take: never overwrite — append " (2)", " (3)" …
+            if auto and path.exists():
+                stem, suffix = path.stem, path.suffix
+                i = 2
+                while (target / f"{stem} ({i}){suffix}").exists():
+                    i += 1
+                path = target / f"{stem} ({i}){suffix}"
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_bytes(body)
+            tmp.replace(path)
+        except OSError as e:
+            raise HTTPException(500, f"could not save card to {target}: {e}")
+        return {"ok": True, "path": str(path), "dir": str(target), "filename": path.name, "bytes": len(body)}
 
     @app.get(f"/api/plugins/{PLUGIN_ID}/status")
     def status():
