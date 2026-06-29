@@ -2,11 +2,11 @@
 
 > On-demand companion to `CLAUDE.md` Part 1 "Development workflow". The workflow summary, the `npm test` command, and the **per-system growth rule** stay in `CLAUDE.md` (always-loaded); this file holds the bulky per-suite reference so it isn't in the session context budget every time. **Read this before adding or changing a suite.**
 
-There is **no unit-test or lint suite**. Verification is behavioural, via **eighteen** Playwright smoke suites in the `run-virtuoso` skill, run against a live host — start it with `launch.ps1` first.
+There is **no unit-test or lint suite**. Verification is behavioural, via **nineteen** Playwright smoke suites in the `run-virtuoso` skill, run against a live host — start it with `launch.ps1` first.
 
 ## Running them
 
-- `npm test` (from `.claude/skills/run-virtuoso/`) runs **all eighteen** suites **in parallel via `run-all.mjs`** (~20s wall; dev-ops audit 2026-06-05: suites are independent chromium processes, host-read-only, so concurrency 4 is safe; suites are *discovered* by the `smoke-*.mjs` glob so a new one can't be silently missed; a failing suite's full output is replayed at the end).
+- `npm test` (from `.claude/skills/run-virtuoso/`) runs **all nineteen** suites **in parallel via `run-all.mjs`** (~20s wall; dev-ops audit 2026-06-05: suites are independent chromium processes, host-read-only, so concurrency 4 is safe; suites are *discovered* by the `smoke-*.mjs` glob so a new one can't be silently missed; a failing suite's full output is replayed at the end).
 - `npm run test:seq` keeps the old sequential chain for debugging suspected cross-suite interference.
 - Each suite also has an individual `npm run smoke:*` alias (listed per suite below).
 
@@ -16,7 +16,7 @@ These plus the startup regression guards baked into `screen.js` (e.g. the no-uni
 
 **Suites are PER-SYSTEM, never per-exercise/per-feature.** New content is covered for free by enumeration (`smoke-generators` drives every practice type + every `BUILT_IN_SESSIONS` entry, with a drawer⇄registry drift guard) and by the startup guards; a new **durable semantic assert** lands as a **row in the suite that owns the system** (e.g. the djent engine semantics live in `smoke-generators` Phase 5; the tuning/instAgnostic plumbing rows in `smoke-strings` §7) — NOT as a new suite file. A new suite file needs a new *system*. Merge the legacy per-rung suites (herta, over-barline, connect, meter-subdiv) only opportunistically when already touching them.
 
-## The eighteen suites
+## The nineteen suites
 
 - **`smoke-renderers.mjs`** (`npm run smoke`) — walks all four renderers; asserts each attaches, draws, advances the playback clock, and throws no errors. Also owns the **transport-split row** (2026-06-06: dedicated Stop + Play/Pause toggle — pause freezes the clock in place, resume re-anchors, Stop returns the playhead to the run start and is disabled when no run is alive) and the **jam-transport row** (2026-06-14: the A-B segment loop is GAPLESS — it loops via the rolling-window scheduler wrapping B→A on the same ctx clock + phase-carry, so `scheduledUntilCtx` stays ahead of the ctx clock at every frame incl. wraps, never the old stopAudio()+reschedule that made jams stutter; and a queued jam change lands at the wrap IN-PLACE via `jamHotSwapAtWrap` — the bundle is swapped without tearing down the renderer, so the canvas DOM node survives, the chart changes, and playback never stops).
 - **`smoke-generators.mjs`** (`npm run smoke:gen`) — drives `generateExercise()` across every practice type + scale, a bass pass, and all built-in sessions; validates chart structure.
@@ -36,6 +36,7 @@ These plus the startup regression guards baked into `screen.js` (e.g. the no-uni
 - **`smoke-scoring-e2e.mjs`** (`npm run smoke:scoring-e2e`) — the only REAL-audio test: a synthesized A2 WAV streamed as the mic via Chromium fake-media flags through the HOST's actual detector, with a wrong-key negative control; hard-FAILS on an SDK-less host by design.
 - **`smoke-contained-verifier.mjs`** (`npm run smoke:contained`) — the desktop contained-playback grading path: the engine harmonic-comb `NoteVerifier` / 3D-highway route, exercised via a MOCK `window.noteDetect` contained API since the native engine is desktop-only; guards Byron's #9.
 - **`smoke-level-gate-async.mjs`** (`npm run smoke:level-gate`) — the desktop DI false-positive: `getLevels()` is async, so the silence gate must stay active or an inaudible comb residual credits a hit with the guitar off; guards Byron's #8.
+- **`smoke-host-surface.mjs`** (`npm run smoke:host-surface`) — guards the §12 host-global accessors after the FeedBack re-chrome renamed `window.slopsmith*`→`feedBack*`: asserts `vizFactoryFor()` resolves the **new** `feedBackViz_<id>` name first (the v0.3.0 break that silently dropped the 3D highway to 2D and killed the green hit-flare — viz + desktop have NO legacy alias) and that `hostBus()`/`hostMinigames()`/`hostDesktop()`/`vizFactoryFor()` read new-name-first with legacy fallback. Fixed in 0.1.1; see the "FeedBack re-chrome globals" memory.
 
 ## Ad-hoc probes & shots
 
