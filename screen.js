@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.3';
+  const VIRTUOSO_VERSION = '0.1.6';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -16798,6 +16798,14 @@
     const earned = !!(s.proof || (ownTierFlip && !isFelt) || feltFlip || (s.depth && s.depth.travelRung));
     const rough = judged && pct < 65 && !earned && !isFelt;   // a felt run is never "rough" (no %)
     let xpOff = false; try { xpOff = (progressLoad().mode === 'off'); } catch (_) {}
+    // Mastery crest — the card's overall-standing seal (accent-family; stays accent even on an
+    // earned/green card, so a cleared run shows BOTH signals). Hidden at rank 0 / XP-Off.
+    const _crestEl = $('virtuoso-results-crest');
+    if (_crestEl) {
+      const _cst = crestState();
+      if (_cst.rank) { _crestEl.innerHTML = crestSvg(_cst.rank); _crestEl.title = _cst.label + ' — ' + _cst.desc; _crestEl.hidden = false; }
+      else { _crestEl.hidden = true; _crestEl.innerHTML = ''; }
+    }
     // Workout RECAP branch (Tier 3): a multi-block Workout has no single grade — the
     // chapter list REPLACES the aggregate % and the verdict slot becomes a
     // descriptive session header (no earned-green edge). Built from s.chapters
@@ -17118,7 +17126,7 @@
         if (showResultsModal._autoSig !== sig) {
           showResultsModal._autoSig = sig;
           (async () => {
-            try { if (document.fonts && document.fonts.load) await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } catch (_) {}
+            try { await loadCardFonts(); } catch (_) {}
             try { const cv = renderShareCardImage(s); if (cv) await saveCardToServer(cv, s, true); } catch (_) {}
           })();
         }
@@ -17352,7 +17360,12 @@
       const dots = (pw.tempoTiers || []).map((_, i) => `<span class="tree-tier-dot${i <= hi ? ' cleared' : ''}"></span>`).join('');
       return `<div class="virtuoso-pm-row"><span>${pw.label}</span><span class="virtuoso-pm-dots">${dots}</span></div>`;
     };
+    const _crest = crestState();
+    const crestHtml = _crest.rank
+      ? `<div class="virtuoso-pm-crest"><span class="virtuoso-crest cr-rank-${_crest.rank}">${crestSvg(_crest.rank)}</span><div><div class="virtuoso-pm-crest-label">${_crest.label}</div><div class="virtuoso-pm-crest-desc">${_crest.desc}</div></div></div>`
+      : '';
     body.innerHTML =
+      crestHtml +
       sessionSummaryCardHtml() +
       `<div class="virtuoso-progress-sheet-section"><h4>Streak</h4>${streakLine}</div>` +
       woodshedSectionHtml() +
@@ -17461,6 +17474,39 @@
     try { localStorage.setItem('virtuoso.energy', lit ? 'lit' : 'calm'); } catch (_) {}
     document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.energy === (lit ? 'lit' : 'calm')));
   }
+  // Card theme (settings → Card theme): stamps data-vir-cardskin on the root — read ONLY
+  // by the results-card CSS + the copy-card canvas (renderShareCardImage), so the cockpit
+  // stays calm. 'signature' = today's default look (no attribute; follows the Accent +
+  // Lit/Calm). neon/esports/metal are opt-in note_detect-parity skins. Persisted.
+  const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal', 'warm', 'focus'];
+  function applyCardSkin(name) {
+    const root = $('virtuoso-root'); if (!root) return;
+    const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
+    if (skin === 'signature') root.removeAttribute('data-vir-cardskin');
+    else root.setAttribute('data-vir-cardskin', skin);
+    try { localStorage.setItem('virtuoso.cardSkin', skin); } catch (_) {}
+    document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.cardskin || '') === skin));
+    try { syncSkinScopeAvail(); } catch (_) {}
+  }
+  // Card-theme REACH (settings → Apply theme): whether the chosen skin also skins the whole
+  // cockpit. Stamps data-vir-skincockpit on the root — read by the cockpit-extension CSS,
+  // which remaps the shell's --vir-accent* to the skin's --vir-card-* when ON. Default 'card'
+  // = calm cockpit (byte-identical). A no-op for Signature (no data-vir-cardskin → no bleed).
+  function applySkinScope(scope) {
+    const root = $('virtuoso-root'); if (!root) return;
+    const on = scope === 'cockpit';
+    if (on) root.setAttribute('data-vir-skincockpit', 'on');
+    else root.removeAttribute('data-vir-skincockpit');
+    try { localStorage.setItem('virtuoso.skinCockpit', on ? 'cockpit' : 'card'); } catch (_) {}
+    document.querySelectorAll('#virtuoso-skinscope-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.skinscope || '') === (on ? 'cockpit' : 'card')));
+  }
+  // Grey the "Apply theme" toggle when the active Card theme is Signature — nothing to extend
+  // (Signature already follows the Accent picker; the cockpit bleed only applies to a real skin).
+  function syncSkinScopeAvail() {
+    let skin = 'signature'; try { skin = localStorage.getItem('virtuoso.cardSkin') || 'signature'; } catch (_) {}
+    const grp = $('virtuoso-skinscope-group');
+    if (grp) grp.classList.toggle('is-disabled', skin === 'signature');
+  }
   function applyCountInDefault(val) {
     const bars = Math.max(1, Math.min(8, parseInt(val, 10) || 1));
     setFieldSilent('countIn', String(bars));   // the field is the source; syncTransport reflects the segments
@@ -17483,6 +17529,10 @@
     applyCountInGrid(countInGridOn() ? 'on' : 'off');
     let energy = 'lit'; try { energy = localStorage.getItem('virtuoso.energy') || 'lit'; } catch (_) {}
     applyEnergy(energy);
+    let cardSkin = 'signature'; try { cardSkin = localStorage.getItem('virtuoso.cardSkin') || 'signature'; } catch (_) {}
+    applyCardSkin(cardSkin);
+    let skinScope = 'card'; try { skinScope = localStorage.getItem('virtuoso.skinCockpit') || 'card'; } catch (_) {}
+    applySkinScope(skinScope);
   }
 
   function schedulePluckedString(ctx, when, freq, dur, instrument, gainScale, bendSemis) {
@@ -22505,49 +22555,122 @@
     let t = text; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
     return t + '…';
   }
+  // Ensure the ACTIVE card theme's display face is resident before the canvas rasterizes
+  // (the DOM card gets it via CSS font-display; the canvas needs it loaded, or it falls
+  // back to a system font). Signature/Neon use VirtuosoDisplay (Orbitron); Esports adds
+  // Rajdhani; Metal adds Russo One (both lazy-served from /font — first render fetches them).
+  async function loadCardFonts() {
+    if (!(document.fonts && document.fonts.load)) return;
+    let skin = 'signature'; try { skin = $('virtuoso-root')?.getAttribute('data-vir-cardskin') || 'signature'; } catch (_) {}
+    const faces = ["700 64px 'VirtuosoDisplay'", "700 18px 'VirtuosoDisplay'"];
+    // Load the exact weights the canvas draws (800 wordmark, 700 hero/labels) so the strict
+    // canvas font-match resolves to the skin face instead of dropping to VirtuosoDisplay.
+    if (skin === 'esports') faces.push("800 64px 'VirtuosoEsports'", "700 64px 'VirtuosoEsports'", "700 18px 'VirtuosoEsports'");
+    else if (skin === 'metal') faces.push("800 64px 'VirtuosoMetal'", "700 64px 'VirtuosoMetal'", "700 18px 'VirtuosoMetal'");
+    try { await Promise.all(faces.map(f => document.fonts.load(f))); } catch (_) {}
+    // Await full readiness — canvas font-matching drops a not-yet-ready face to the next
+    // family in the stack, so the skin font can otherwise lose the first paint after load.
+    try { if (document.fonts.ready) await document.fonts.ready; } catch (_) {}
+    // Warm the canvas font cache: the FIRST canvas draw with a just-readied face can still
+    // miss it (Chromium caches per 2d context), so prime a throwaway context with each face
+    // before renderShareCardImage draws for real. Cheap; makes the skin font deterministic.
+    try {
+      const wc = document.createElement('canvas').getContext('2d');
+      if (wc) faces.forEach(f => { wc.font = f; wc.fillText('Mg', -50, -50); });
+    } catch (_) {}
+  }
   // The card IMAGE — a canvas render of the SAME model (ux spec: 1200×630, verdict-led,
-  // green ✓ only on a true clear, theme accent read live, system fonts so no webfont
-  // race; same-origin → toBlob won't taint). Returns the canvas, or null.
+  // green ✓ only on a true clear, theme palette/font read live off --vir-card-*; same-origin
+  // → toBlob won't taint). Returns the canvas, or null.
   function renderShareCardImage(s) {
     const m = shareCardModel(s); if (!m) return null;
     const W = 1200, H = 630, P = 64;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); if (!ctx) return null;
-    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)';
-    try { const root = $('virtuoso-root'); if (root) { const cs = getComputedStyle(root);
-      const ae = cs.getPropertyValue('--vir-accent-edge').trim(); if (ae) accent = ae;
-      const as = cs.getPropertyValue('--vir-accent-soft').trim(); if (as) accentSoft = as; } } catch (_) {}
-    const GREEN = '#22c55e', TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
+    // Card THEME (settings → Card theme). Signature = today's look (the original path,
+    // reading --vir-accent-*); neon/esports/metal read the SAME --vir-card-* contract the
+    // DOM card uses, so the copy card matches the on-screen card. Green stays cleared-only.
+    const GREEN = '#22c55e';
+    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)', cardBg = null;
+    let skin = 'signature', glow = true, radius = 18;
+    let TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
     const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
     const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    const DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
-    // Full esports parity in LIT — the share card uses the display face for the
-    // wordmark/eyebrow/hero/labels; Calm keeps the system face (the toggle-back rule).
+    let DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
+    try {
+      const root = $('virtuoso-root');
+      if (root) {
+        const cs = getComputedStyle(root);
+        skin = root.getAttribute('data-vir-cardskin') || 'signature';
+        const gv = (n, f) => { const v = cs.getPropertyValue(n).trim(); return v || f; };
+        if (skin === 'signature') {
+          accent = gv('--vir-accent-edge', accent);
+          accentSoft = gv('--vir-accent-soft', accentSoft);
+        } else {
+          accent = gv('--vir-card-accent', accent);
+          accentSoft = gv('--vir-card-accent-soft', accentSoft);
+          cardBg = gv('--vir-card-bg', null);
+          TXT = gv('--vir-card-text', TXT);
+          DIM = gv('--vir-card-dim', DIM);
+          MUT = gv('--vir-card-faint', MUT); FAINT = MUT;
+          glow = gv('--vir-card-glow', '1') !== '0';
+          radius = parseInt(gv('--vir-card-radius', '18'), 10); if (!isFinite(radius)) radius = 18;
+          // Plain, NAMESPACED family names — the DOM font token nests a var() the canvas
+          // can't parse, and the namespaced names avoid colliding with note_detect's faces.
+          // NB: do NOT list VirtuosoDisplay as the fallback — canvas prefers the always-ready
+          // base64-inline face over a URL-loaded first font, so the skin face would lose.
+          // A plain sans fallback lets the (warmed) skin face win; it only shows if the
+          // skin font genuinely failed to load.
+          const CF = { neon: "'VirtuosoDisplay'", esports: "'VirtuosoEsports'", metal: "'VirtuosoMetal'", warm: "'Rockwell','Roboto Slab','Zilla Slab',Georgia,serif" };
+          DISP = CF[skin] ? `${CF[skin]}, ${SANS}` : SANS;   // focus has no display face → base sans
+        }
+      }
+    } catch (_) {}
+    // A skin forces its display face on the whole card (identity); Signature keeps the
+    // toggle-back rule (display face in Lit only, system face in Calm).
     let lit = false; try { lit = !!$('virtuoso-root')?.classList.contains('vir-lit'); } catch (_) {}
-    const HEAD = lit ? 'disp' : false;
+    const HEAD = (skin !== 'signature' || lit) ? 'disp' : false;
     const font = (px, w, m) => ctx.font = `${w} ${px}px ${m === 'disp' ? DISP : m ? MONO : SANS}`;
     const pill = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    // Neon frame — the live card's glow-ring recipe MIRRORed onto the canvas: an
-    // earned card frames in meter-green (the cleared-only color), otherwise the live
-    // theme accent. A soft top-left corner bloom adds depth; the big readouts stay
+    // Background: Signature keeps its subtle gradient; Metal paints a brushed-steel
+    // gradient (the feTurbulence grunge is DOM-only); other skins paint an opaque base
+    // then their panel color (the skin bg tokens are translucent → no see-through PNG).
+    if (skin === 'metal') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3a3f46'); g.addColorStop(0.55, '#24272c'); g.addColorStop(1, '#1a1c20');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin === 'warm') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#34241a'); g.addColorStop(0.55, '#2a1d16'); g.addColorStop(1, '#201510');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin !== 'signature') {
+      ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, W, H);
+      if (cardBg) { ctx.fillStyle = cardBg; ctx.fillRect(0, 0, W, H); }
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    }
+    // Frame — the live card's glow-ring recipe MIRRORed onto the canvas: an earned card
+    // frames in meter-green (the cleared-only color), otherwise the theme accent. A soft
+    // corner bloom adds depth (skipped for the glow-less esports skin); big readouts stay
     // crisp (no glow on the text itself — legibility over spectacle).
     const frameC = m.heroGreen ? GREEN : accent;
-    const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
-    cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    if (glow) {
+      const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
+      cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    }
     ctx.fillStyle = frameC; ctx.fillRect(0, 0, W, 5);                                   // accent spine (earned → green)
     ctx.save();
-    ctx.shadowColor = frameC; ctx.shadowBlur = 26; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
-    pill(26, 26, W - 52, H - 52, 18); ctx.stroke();                                     // glowing accent frame
+    ctx.shadowColor = frameC; ctx.shadowBlur = glow ? 26 : 0; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
+    pill(26, 26, W - 52, H - 52, radius); ctx.stroke();                                 // frame (glowing unless the skin is glow-less; square when radius 0)
     ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    pill(29, 29, W - 58, H - 58, 16); ctx.stroke();                                     // inner bevel hairline
+    pill(29, 29, W - 58, H - 58, Math.max(0, radius - 2)); ctx.stroke();                // inner bevel hairline
     ctx.restore();
     ctx.textBaseline = 'alphabetic';
     // Brand strip
     ctx.fillStyle = accent; pill(P, 70, 6, 40, 3); ctx.fill();
     ctx.fillStyle = TXT; font(40, 800, HEAD); ctx.fillText('Virtuoso', P + 22, 104);
+    // Mastery crest — a small accent seal after the wordmark (never green; omitted at rank 0 / XP-Off).
+    try { const _cr = crestState(); if (_cr.rank) drawCrestCanvas(ctx, P + 22 + ctx.measureText('Virtuoso').width + 26, 90, 30, accent, _cr.rank); } catch (_) {}
     font(15, 700, HEAD); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
     ctx.fillStyle = accentSoft; pill(pX, 72, pW, 34, 17); ctx.fill();
     ctx.strokeStyle = accent; ctx.lineWidth = 1.5; pill(pX, 72, pW, 34, 17); ctx.stroke();
@@ -22605,9 +22728,9 @@
   // Save → server-folder save → browser download; Copy → image→clipboard → download → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
-    // Ensure the self-hosted display face is loaded before the canvas rasterizes
+    // Ensure the active theme's display face is loaded before the canvas rasterizes
     // (the DOM card gets it via CSS font-display; the canvas needs it resident).
-    try { if (document.fonts && document.fonts.load) { await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } } catch (_) {}
+    await loadCardFonts();
     const cv = renderShareCardImage(s);
     const toBlob = () => new Promise(r => cv.toBlob(r, 'image/png'));
     const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = shareCardFilename(s); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
@@ -22931,6 +23054,109 @@
     for (const id of computeBadges()) if (!store.badges[id]) { store.badges[id] = Date.now(); fresh.push(id); }
     if (fresh.length) progressSave(store);
     return { newBadges: fresh.map(badgeMeta), all: Object.keys(store.badges).map(badgeMeta) };
+  }
+
+  // ── Mastery CREST — earned-standing emblem (Proven → Versed → Fluent) ──────────
+  // Gamification-ratified: a DERIVED, additive view of competency already earned — never a
+  // new grind currency, never a count shown, never gated, never expiring. Rank is monotonic
+  // (latched high-water — a downgradeable crest in the always-visible chip would be
+  // loss-aversion, forbidden). XP-Off → rank 0 (no crest). The descriptor names the SKILL
+  // built, never the tally. The three routes to each rank (badges / depth rungs / breadth)
+  // are parallel by design — no per-badge weighting (that would smuggle in a hidden score).
+  const CREST_META = {
+    1: { label: 'Proven', desc: 'You’ve proven your first real skill.' },
+    2: { label: 'Versed', desc: 'You’re versed across several skills.' },
+    3: { label: 'Fluent', desc: 'Broad command across the map.' },
+  };
+  function crestRankCompute() {
+    const store = progressLoad();
+    if (store.mode === 'off') return 0;
+    const bc = badgeContext();
+    const badgeCount = Object.keys(store.badges || {}).length;
+    let masteredRungs = 0;
+    const byNode = store.byNode || {};
+    for (const id of Object.keys(byNode)) {
+      const n = byNode[id] || {}, d = n.depth || {};
+      if (d.travel || d.clean || d.eyesOff || n.masteredAt) masteredRungs++;
+    }
+    let rank = 0;
+    if (badgeCount >= 1 || masteredRungs >= 1) rank = 1;
+    if (badgeCount >= 3 || bc.pushPathways >= 1 || masteredRungs >= 3) rank = 2;
+    if (bc.clearedPathways >= 5 || badgeCount >= 6 || bc.pushPathways >= 3) rank = 3;
+    return rank;
+  }
+  // Displayed rank = monotonic high-water of the derived rank.
+  function crestState() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, label: '', desc: '' };
+    const rank = Math.max(crestRankCompute(), store.crestRank || 0);
+    return Object.assign({ rank }, rank ? CREST_META[rank] : { label: '', desc: '' });
+  }
+  // Persist the high-water AFTER the run's competency is credited; return whether it ROSE
+  // (the earn-moment trigger). Called from sessionEnd after creditBadges/advanceDepthLadder.
+  function crestCommit() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, rose: false };
+    const prev = store.crestRank || 0;
+    const rank = Math.max(crestRankCompute(), prev);
+    if (rank > prev) { store.crestRank = rank; progressSave(store); return { rank, rose: true }; }
+    return { rank, rose: false };
+  }
+  // The emblem — an aegis/laurel that elaborates by rank (accent-family via currentColor;
+  // NEVER --vir-meter). Rank 1 hollow aegis + spark · 2 filled + laurel sprigs · 3 full wreath.
+  const CREST_STAR = '<path d="M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z" fill="currentColor"/>';
+  const CREST_SHIELD = 'M12 2.4l7 2.5v5.3c0 4.6-2.9 8.1-7 10.4-4.1-2.3-7-5.8-7-10.4V4.9z';
+  function crestSvg(rank) {
+    if (!rank) return '';
+    let inner = '';
+    if (rank === 1) {
+      inner = `<path d="${CREST_SHIELD}" fill="none" stroke="currentColor" stroke-width="1.5"/>` + CREST_STAR;
+    } else if (rank === 2) {
+      inner = `<path d="${CREST_SHIELD}" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="1.5"/>`
+        + CREST_STAR
+        + '<g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M5.5 17.6c1.7.2 3 1.1 3.7 2.6"/><path d="M18.5 17.6c-1.7.2-3 1.1-3.7 2.6"/></g>';
+    } else {
+      inner = '<g fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6"/>'
+        + '<path d="M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6"/>'
+        + '<path d="M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8"/><path d="M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8"/></g>'
+        + CREST_STAR;
+    }
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+  }
+  // Canvas twin for the copy-card PNG (same paths → same emblem). color = accent (never green).
+  function drawCrestCanvas(ctx, cx, cy, size, color, rank) {
+    if (!rank || typeof Path2D === 'undefined') return;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(size / 24, size / 24); ctx.translate(-12, -12);
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const shield = new Path2D(CREST_SHIELD);
+    if (rank >= 2) { ctx.globalAlpha = 0.20; ctx.fill(shield); ctx.globalAlpha = 1; }
+    if (rank <= 2) { ctx.lineWidth = 1.5; ctx.stroke(shield); }
+    if (rank >= 3) {
+      ctx.lineWidth = 1.35;
+      ['M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6',
+       'M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6',
+       'M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8', 'M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8'].forEach(d => ctx.stroke(new Path2D(d)));
+    } else if (rank >= 2) {
+      ctx.lineWidth = 1.3;
+      ctx.stroke(new Path2D('M5.5 17.6c1.7.2 3 1.1 3.7 2.6'));
+      ctx.stroke(new Path2D('M18.5 17.6c-1.7.2-3 1.1-3.7 2.6'));
+    }
+    ctx.fill(new Path2D('M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z'));
+    ctx.restore();
+  }
+  // Paint the header-chip crest (leading child of #virtuoso-progress-strip). rose=true adds
+  // the one-shot earn-bloom (Lit only; RM/Calm just show the new rank). Hidden at rank 0.
+  function syncCrest(rose) {
+    const el = $('virtuoso-crest'); if (!el) return;
+    const st = crestState();
+    if (!st.rank) { el.hidden = true; el.innerHTML = ''; el.className = 'virtuoso-crest'; el.removeAttribute('title'); return; }
+    el.innerHTML = crestSvg(st.rank);
+    el.className = 'virtuoso-crest cr-rank-' + st.rank + (rose ? ' cr-earned' : '');
+    el.title = st.label + ' — ' + st.desc;
+    el.hidden = false;
+    if (rose) { try { el.addEventListener('animationend', () => el.classList.remove('cr-earned'), { once: true }); } catch (_) {} }
   }
 
   function sessionBegin() {
@@ -23305,6 +23531,7 @@
     // have written the ledger, so a badge earned via a Workout block fires the same
     // run. Null in Off mode. Gained-only diff.
     const badgeGain = creditBadges();
+    const crestGain = crestCommit();   // monotonic high-water; rose === this run lifted the crest rank
     _lastEndedSession = {
       mode: _activeSession.mode, scale: _activeSession.scale, key: _activeSession.key,
       bpm: _activeSession.bpm, bpm_tier: _activeSession.bpm_tier,
@@ -23346,6 +23573,7 @@
     _activeSession = null;
     if (unlock) { _newlyUnlockedTier = unlock.tier; syncTempoTierButtons(); renderSkillTree(); _newlyUnlockedTier = null; }
     syncProgressStrip();
+    if (crestGain && crestGain.rose) syncCrest(true);   // earn-moment: bloom the chip crest (Lit/RM-aware in CSS)
     presentSessionSummary();
   }
 
@@ -23386,6 +23614,7 @@
   }
 
   function syncProgressStrip() {
+    try { syncCrest(); } catch (_) {}
     const sessions = sessionsLoad();
     const streak = streakCount(sessions);
     const numEl = $('virtuoso-streak-num');
@@ -24792,6 +25021,8 @@
     $('virtuoso-countin-default')?.addEventListener('change', (e) => { try { localStorage.setItem('virtuoso.countInDefault', e.target.value); } catch (_) {} applyCountInDefault(e.target.value); });
     document.querySelectorAll('#virtuoso-countin-grid .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('virtuoso.countInGrid', b.dataset.grid); } catch (_) {} applyCountInGrid(b.dataset.grid); }));
     document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyEnergy(b.dataset.energy)));
+    document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyCardSkin(b.dataset.cardskin)));
+    document.querySelectorAll('#virtuoso-skinscope-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applySkinScope(b.dataset.skinscope)));
     loadSettingsPrefs();
     document.addEventListener('click', (e) => {
       const menu = $('virtuoso-settings-menu'); if (!menu || !menu.classList.contains('vir-open')) return;
