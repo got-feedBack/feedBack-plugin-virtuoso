@@ -291,6 +291,32 @@
     --vir-card-ring-stops: #ffb347, #ff6b35 108deg, #8a3c1a 180deg, #ff6b35 252deg, #ffb347;
     --vir-card-ring-anim: vir-card-ring-pulse 2.8s ease-in-out infinite alternate;
   }
+  /* WARM / ANALOG — vintage-amp: pilot-lamp amber + oxblood tolex, cream SLAB-SERIF (the
+     only serif in the set → instantly "analog studio, not gamer"), warm tweed grain
+     (feTurbulence, no binary), slow lamp/VU breathe. System serif = no new font asset. */
+  .virtuoso-root[data-vir-cardskin="warm"] {
+    --vir-card-accent: #e8a13c; --vir-card-accent-soft: rgba(232,161,60,0.18); --vir-card-accent2: #8a3324; --vir-card-warn: #d4772a;
+    --vir-card-text: #f5ecd8; --vir-card-dim: #c9b79a; --vir-card-faint: #93826a;
+    --vir-card-bg: #2a1d16; --vir-card-frame: rgba(232,161,60,0.45);
+    --vir-card-font-display: 'Rockwell', 'Roboto Slab', 'Zilla Slab', Georgia, 'Times New Roman', serif; --vir-card-force-display: 1;
+    --vir-card-radius: 10px; --vir-card-glow: 1; --vir-card-text-glow: 0 0 12px rgba(232,161,60,0.32);
+    --vir-card-bevel: inset 0 1px 0 rgba(245,236,216,0.10), inset 0 -2px 6px rgba(0,0,0,0.5), 0 0 0 1px #16100b, 0 2px 8px rgba(0,0,0,0.45);
+    --vir-card-texture: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>"), linear-gradient(180deg, #34241a, #2a1d16 55%, #201510);
+    --vir-card-ring-stops: #e8a13c, #c2662a 120deg, #8a3324 200deg, #c2662a 280deg, #e8a13c;
+    --vir-card-ring-anim: vir-card-ring-pulse 4s ease-in-out infinite alternate;
+  }
+  /* FOCUS / MINIMAL — high-contrast + low-stim (the accessibility pole, the ONE skin more
+     restrained than default): calm slate-blue on near-black, BASE UI font, NO glow / motion
+     / texture; the hero device is a crisp solid neutral frame. Dim/faint kept ≥4.5:1. */
+  .virtuoso-root[data-vir-cardskin="focus"] {
+    --vir-card-accent: #93b7de; --vir-card-accent-soft: rgba(147,183,222,0.16); --vir-card-accent2: #e8edf2; --vir-card-warn: #e0a838;
+    --vir-card-text: #f4f7fa; --vir-card-dim: #c2ccd6; --vir-card-faint: #98a3ae;
+    --vir-card-bg: #0d1013; --vir-card-frame: #4a555f;
+    --vir-card-font-display: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --vir-card-force-display: 0;
+    --vir-card-radius: 8px; --vir-card-glow: 0; --vir-card-text-glow: none;
+    --vir-card-bevel: none; --vir-card-texture: none;
+    --vir-card-ring-anim: none;
+  }
   /* Skins restyle the card SURFACE. [data-vir-cardskin] matches only a chosen skin, so
      Signature keeps its existing cheat-card/Lit rules (today's look is byte-for-byte). */
   .virtuoso-root[data-vir-cardskin] .virtuoso-results-card {
@@ -311,9 +337,11 @@
   .virtuoso-root[data-vir-cardskin].vir-lit .virtuoso-results-card:not(.vir-earned)::after {
     --vir-ring-stops: var(--vir-card-ring-stops); animation: var(--vir-card-ring-anim);
   }
-  /* Esports has no ring — its device is the solid amber border. Kill the pseudo-ring. */
+  /* Esports + Focus have no ring — their device is the solid border. Kill the pseudo-ring. */
   .virtuoso-root[data-vir-cardskin="esports"] .virtuoso-results-card::before,
-  .virtuoso-root[data-vir-cardskin="esports"] .virtuoso-results-card::after { content: none; }
+  .virtuoso-root[data-vir-cardskin="esports"] .virtuoso-results-card::after,
+  .virtuoso-root[data-vir-cardskin="focus"] .virtuoso-results-card::before,
+  .virtuoso-root[data-vir-cardskin="focus"] .virtuoso-results-card::after { content: none; }
   @keyframes vir-card-ring-pulse { from { opacity: 0.3; } to { opacity: 0.85; } }
   @media (prefers-reduced-motion: reduce) {
     .virtuoso-root[data-vir-cardskin].vir-lit .virtuoso-results-card::before,
@@ -361,8 +389,11 @@
   .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-header h1 {
     font-family: var(--vir-card-font-display);
   }
-  /* ESPORTS is flat BY IDENTITY — no glow even in Lit, solid (not gradient) accent fill. */
-  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] {
+  /* ESPORTS + FOCUS are flat BY IDENTITY — no glow even in Lit, solid (not gradient) accent
+     fill. For Focus this ALSO flattens the whole .vir-lit chrome to calm without touching the
+     energy system (the Lit glow is all --vir-accent-glow-driven → transparent = calm cockpit). */
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"],
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] {
     --vir-accent-glow: transparent;
     --vir-glow: transparent;
     --vir-accent-grad: var(--vir-card-accent);
@@ -381,6 +412,10 @@
   /* Esports = a static solid amber edge (its ring-anim is none; give it a solid, not a frozen conic). */
   .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
     background: var(--vir-card-accent);
+  }
+  /* Focus is the minimal pole — no stage-frame ring at all (calm/low-stim; Esports keeps its edge). */
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
+    content: none;
   }
   @media (prefers-reduced-motion: reduce) {
     .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after { animation: none; }
@@ -493,6 +528,9 @@
   /* Greyed when the active Card theme is Signature (nothing to extend — it already follows Accent). */
   .virtuoso-settings-group.is-disabled { opacity: 0.42; }
   .virtuoso-settings-group.is-disabled .virtuoso-settings-row { pointer-events: none; }
+  /* Card-theme picker holds 6 skins — wrap to a 3-wide grid so the labels stay legible. */
+  #virtuoso-cardskin-pick { flex-wrap: wrap; }
+  #virtuoso-cardskin-pick .virtuoso-mini-btn { flex: 1 1 30%; }
   .virtuoso-settings-select { width: 100%; padding: 5px 8px; font-size: 12px; border-radius: 6px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0; }
   .virtuoso-settings-divider { height: 1px; background: var(--vir-hairline, rgba(148,163,184,0.14)); margin: 4px 6px; }
   /* Mode dropdown fallback — hidden until the narrowest breakpoint. */
@@ -1967,6 +2005,8 @@
             <button type="button" class="virtuoso-mini-btn" data-cardskin="neon">Neon</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="esports">Esports</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="metal">Metal</button>
+            <button type="button" class="virtuoso-mini-btn" data-cardskin="warm">Warm</button>
+            <button type="button" class="virtuoso-mini-btn" data-cardskin="focus">Focus</button>
           </div>
         </div>
         <div class="virtuoso-settings-group" id="virtuoso-skinscope-group">

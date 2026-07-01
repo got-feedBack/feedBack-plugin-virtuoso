@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.5';
+  const VIRTUOSO_VERSION = '0.1.6';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17478,7 +17478,7 @@
   // by the results-card CSS + the copy-card canvas (renderShareCardImage), so the cockpit
   // stays calm. 'signature' = today's default look (no attribute; follows the Accent +
   // Lit/Calm). neon/esports/metal are opt-in note_detect-parity skins. Persisted.
-  const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal'];
+  const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal', 'warm', 'focus'];
   function applyCardSkin(name) {
     const root = $('virtuoso-root'); if (!root) return;
     const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
@@ -22621,8 +22621,8 @@
           // base64-inline face over a URL-loaded first font, so the skin face would lose.
           // A plain sans fallback lets the (warmed) skin face win; it only shows if the
           // skin font genuinely failed to load.
-          const CF = { neon: "'VirtuosoDisplay'", esports: "'VirtuosoEsports'", metal: "'VirtuosoMetal'" };
-          DISP = `${CF[skin] || "'VirtuosoDisplay'"}, ${SANS}`;
+          const CF = { neon: "'VirtuosoDisplay'", esports: "'VirtuosoEsports'", metal: "'VirtuosoMetal'", warm: "'Rockwell','Roboto Slab','Zilla Slab',Georgia,serif" };
+          DISP = CF[skin] ? `${CF[skin]}, ${SANS}` : SANS;   // focus has no display face → base sans
         }
       }
     } catch (_) {}
@@ -22637,6 +22637,9 @@
     // then their panel color (the skin bg tokens are translucent → no see-through PNG).
     if (skin === 'metal') {
       const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3a3f46'); g.addColorStop(0.55, '#24272c'); g.addColorStop(1, '#1a1c20');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin === 'warm') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#34241a'); g.addColorStop(0.55, '#2a1d16'); g.addColorStop(1, '#201510');
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     } else if (skin !== 'signature') {
       ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, W, H);
