@@ -320,6 +320,96 @@
     .virtuoso-root[data-vir-cardskin].vir-lit .virtuoso-results-card::after { animation: none; }
   }
 
+  /* ══ Cockpit skin EXTENSION (settings → Card theme → "Apply theme: Whole studio") ═══
+     OPT-IN bleed of the active card skin OUT into the whole cockpit. Default OFF
+     (data-vir-skincockpit absent = "Card only" = calm cockpit, byte-identical). When ON
+     with a non-Signature skin, the cockpit's --vir-accent* tokens are REMAPPED to that
+     skin's already-declared --vir-card-* palette — and because the shell already reads
+     --vir-accent* everywhere, the whole studio recolors with ~no per-control restyle. Four
+     identity levers reach the cockpit: PALETTE (this remap), CORNER (--vir-r-control +
+     scoped control overrides below), MOTION/GLOW (rides the existing .vir-lit chrome), and
+     DISPLAY FONT (masthead only). Texture + bevel stay CARD-ONLY (they fight host-harmony at
+     cockpit scale — Warm/Analog + Focus poles slot into these same levers later). Signature
+     has no [data-vir-cardskin] attribute, so it never matches → the cockpit keeps following
+     the Accent picker. Invariants: cleared-green --vir-meter is NEVER remapped; motion stays
+     Lit-gated + reduced-motion frozen. */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] {
+    --vir-accent: var(--vir-card-accent);
+    --vir-accent-hover: var(--vir-card-accent2);
+    --vir-accent-edge: var(--vir-card-accent);
+    --vir-accent-soft: var(--vir-card-accent-soft);
+    --vir-accent-glow: var(--vir-card-accent-soft);
+    --vir-accent-fg: #0b0f17;                 /* every skin accent is bright → dark text reads */
+    --vir-accent-grad: linear-gradient(180deg, var(--vir-card-accent), var(--vir-card-accent2));
+    --vir-ring: var(--vir-card-accent);
+    --vir-glow: var(--vir-card-accent-soft);
+    --vir-r-control: var(--vir-card-radius);
+  }
+  /* CORNER lever — the shell's hardcoded control radii (mini-btn 6 / view-tabs 9 / actions
+     10px) don't read --vir-r-control, so the remap alone can't reach them. Scope the skin
+     radius onto them ONLY when opted in — base declarations (hence Signature) stay
+     byte-identical. The round transport ▶ is deliberately excluded (host-parity, rule 1). */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-mini-btn,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-actions button,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-mode-btn,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-view-tabs {
+    border-radius: var(--vir-card-radius);
+  }
+  /* DISPLAY-FONT lever — the skin's display face on the masthead WORDMARK only (identity, not
+     body — legibility). Reads --vir-card-font-display directly (no cycle: we never remap
+     --vir-font-display itself, which the skin token nests as its fallback). */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-header h1 {
+    font-family: var(--vir-card-font-display);
+  }
+  /* ESPORTS is flat BY IDENTITY — no glow even in Lit, solid (not gradient) accent fill. */
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] {
+    --vir-accent-glow: transparent;
+    --vir-glow: transparent;
+    --vir-accent-grad: var(--vir-card-accent);
+  }
+  /* STAGE-FRAME animated border (Q2) — the ONE hero surface a skin's ring reaches in the
+     cockpit (the frame around the render surface, NEVER the surface itself). Mirrors the
+     results-card conic ring but INSET (render-host clips), so it hugs the frame. Lit-only;
+     frozen under Calm (no .vir-lit rule) and reduced-motion (below). */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px;
+    background: conic-gradient(from var(--vir-ring-angle), var(--vir-card-ring-stops, var(--vir-card-accent-soft) 0deg, var(--vir-card-accent) 180deg, var(--vir-card-accent-soft) 360deg));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
+    pointer-events: none; z-index: 6; animation: var(--vir-card-ring-anim, vir-ring-spin 6s linear infinite);
+  }
+  /* Esports = a static solid amber edge (its ring-anim is none; give it a solid, not a frozen conic). */
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
+    background: var(--vir-card-accent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after { animation: none; }
+  }
+
+  /* ══ Mastery CREST — earned-standing emblem (gamification: derived, additive, never a
+     tally — Proven → Versed → Fluent; UX: a laurel/aegis that elaborates by rank). Accent-
+     family ONLY, NEVER --vir-meter/green — so a CLEARED run shows BOTH the green cleared
+     state AND the accent crest (two meanings, two colors). Rides the live accent (or the skin
+     accent when the cockpit is skinned). Hidden entirely under XP-Off. */
+  .virtuoso-crest { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 auto; margin-right: 9px; color: var(--vir-accent-edge); line-height: 0; }
+  .virtuoso-crest[hidden] { display: none; }
+  .virtuoso-crest svg { width: 100%; height: 100%; display: block; }
+  .virtuoso-crest.cr-rank-3 { color: var(--vir-accent); }
+  .virtuoso-root.vir-lit .virtuoso-crest { filter: drop-shadow(0 0 5px var(--vir-accent-glow)); }
+  /* Earn-moment: reuse the calm earn-bloom on a rank-UP (Lit only; RM/Calm → just appear). */
+  .virtuoso-root.vir-lit .virtuoso-crest.cr-earned { animation: virtuoso-earn-bloom 1.1s cubic-bezier(0.22,1,0.36,1) both; }
+  @media (prefers-reduced-motion: reduce) { .virtuoso-crest.cr-earned { animation: none; } }
+  /* P-sheet crest — larger, with a plain-English descriptor (names the competency, not a count). */
+  .virtuoso-pm-crest { display: flex; align-items: center; gap: 11px; padding: 2px 2px 12px; }
+  .virtuoso-pm-crest .virtuoso-crest { width: 36px; height: 36px; margin: 0; }
+  .virtuoso-pm-crest-label { font-size: 13.5px; font-weight: 700; color: var(--vir-text, #e2e8f0); }
+  .virtuoso-pm-crest-desc { font-size: 11.5px; color: var(--vir-text-muted, #94a3b8); margin-top: 1px; }
+  /* Results-card crest — top-right of the card header, left of the ✕. Stays ACCENT even on an
+     earned (green) card: reads the card token family so it follows the skin, never green. */
+  .virtuoso-results-crest { position: absolute; top: 12px; right: 42px; width: 22px; height: 22px; color: var(--vir-card-accent, var(--vir-accent-edge)); z-index: 2; }
+  .virtuoso-results-crest[hidden] { display: none; }
+  .virtuoso-results-crest svg { width: 100%; height: 100%; display: block; }
+
   .virtuoso-root {
     /* Virtuoso opts into the host's FULL-SCREEN plugin mode (plugin.json
        "fullscreen": true; FeedBack with the #590 capability). The host then
@@ -400,6 +490,9 @@
   .virtuoso-mini-btn { flex: 1; padding: 5px 0; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #334155; background: #0b1220; color: #94a3b8; cursor: pointer; }
   .virtuoso-mini-btn:hover { background: #1e293b; color: #e2e8f0; }
   .virtuoso-mini-btn.active { background: var(--vir-accent-grad); border-color: var(--vir-accent-edge); color: #f8fafc; }
+  /* Greyed when the active Card theme is Signature (nothing to extend — it already follows Accent). */
+  .virtuoso-settings-group.is-disabled { opacity: 0.42; }
+  .virtuoso-settings-group.is-disabled .virtuoso-settings-row { pointer-events: none; }
   .virtuoso-settings-select { width: 100%; padding: 5px 8px; font-size: 12px; border-radius: 6px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0; }
   .virtuoso-settings-divider { height: 1px; background: var(--vir-hairline, rgba(148,163,184,0.14)); margin: 4px 6px; }
   /* Mode dropdown fallback — hidden until the narrowest breakpoint. */
@@ -1836,6 +1929,7 @@
          gamification-content refinement on the same element. -->
     <div class="virtuoso-progress-strip virtuoso-progress-chip" id="virtuoso-progress-strip"
          role="button" tabindex="0" aria-label="Open progress" title="Progress (P)">
+      <span class="virtuoso-crest" id="virtuoso-crest" hidden><!-- syncCrest() --></span>
       <div class="virtuoso-streak-block">
         <span class="virtuoso-streak-num" id="virtuoso-streak-num">0</span>
         <span class="virtuoso-streak-word">day streak</span>
@@ -1873,6 +1967,13 @@
             <button type="button" class="virtuoso-mini-btn" data-cardskin="neon">Neon</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="esports">Esports</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="metal">Metal</button>
+          </div>
+        </div>
+        <div class="virtuoso-settings-group" id="virtuoso-skinscope-group">
+          <span class="virtuoso-settings-lbl">Apply theme</span>
+          <div class="virtuoso-settings-row" id="virtuoso-skinscope-pick" title="Card only: the theme styles just your results + copy card — the cockpit stays calm (default). Whole studio: the theme also skins the whole Virtuoso cockpit. Only Neon / Esports / Metal extend; Signature always follows your Accent.">
+            <button type="button" class="virtuoso-mini-btn active" data-skinscope="card">Card only</button>
+            <button type="button" class="virtuoso-mini-btn" data-skinscope="cockpit">Whole studio</button>
           </div>
         </div>
         <div class="virtuoso-settings-group">
@@ -3084,6 +3185,7 @@
              finite-run completion); Jam is a mirror and never judges. -->
         <div id="virtuoso-results-modal" class="virtuoso-results-modal" role="dialog" aria-modal="true" aria-labelledby="virtuoso-results-title" aria-hidden="true">
           <div class="virtuoso-cheat-card virtuoso-results-card">
+            <span class="virtuoso-results-crest" id="virtuoso-results-crest" hidden><!-- showResultsModal() --></span>
             <div class="virtuoso-sheet-head"><span id="virtuoso-results-title">Results</span><button type="button" id="virtuoso-results-close" class="virtuoso-sheet-close" aria-label="Close">✕</button></div>
             <div id="virtuoso-results-body"></div>
           </div>

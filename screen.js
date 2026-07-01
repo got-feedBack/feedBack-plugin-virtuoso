@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.4';
+  const VIRTUOSO_VERSION = '0.1.5';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -16798,6 +16798,14 @@
     const earned = !!(s.proof || (ownTierFlip && !isFelt) || feltFlip || (s.depth && s.depth.travelRung));
     const rough = judged && pct < 65 && !earned && !isFelt;   // a felt run is never "rough" (no %)
     let xpOff = false; try { xpOff = (progressLoad().mode === 'off'); } catch (_) {}
+    // Mastery crest — the card's overall-standing seal (accent-family; stays accent even on an
+    // earned/green card, so a cleared run shows BOTH signals). Hidden at rank 0 / XP-Off.
+    const _crestEl = $('virtuoso-results-crest');
+    if (_crestEl) {
+      const _cst = crestState();
+      if (_cst.rank) { _crestEl.innerHTML = crestSvg(_cst.rank); _crestEl.title = _cst.label + ' — ' + _cst.desc; _crestEl.hidden = false; }
+      else { _crestEl.hidden = true; _crestEl.innerHTML = ''; }
+    }
     // Workout RECAP branch (Tier 3): a multi-block Workout has no single grade — the
     // chapter list REPLACES the aggregate % and the verdict slot becomes a
     // descriptive session header (no earned-green edge). Built from s.chapters
@@ -17352,7 +17360,12 @@
       const dots = (pw.tempoTiers || []).map((_, i) => `<span class="tree-tier-dot${i <= hi ? ' cleared' : ''}"></span>`).join('');
       return `<div class="virtuoso-pm-row"><span>${pw.label}</span><span class="virtuoso-pm-dots">${dots}</span></div>`;
     };
+    const _crest = crestState();
+    const crestHtml = _crest.rank
+      ? `<div class="virtuoso-pm-crest"><span class="virtuoso-crest cr-rank-${_crest.rank}">${crestSvg(_crest.rank)}</span><div><div class="virtuoso-pm-crest-label">${_crest.label}</div><div class="virtuoso-pm-crest-desc">${_crest.desc}</div></div></div>`
+      : '';
     body.innerHTML =
+      crestHtml +
       sessionSummaryCardHtml() +
       `<div class="virtuoso-progress-sheet-section"><h4>Streak</h4>${streakLine}</div>` +
       woodshedSectionHtml() +
@@ -17473,6 +17486,26 @@
     else root.setAttribute('data-vir-cardskin', skin);
     try { localStorage.setItem('virtuoso.cardSkin', skin); } catch (_) {}
     document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.cardskin || '') === skin));
+    try { syncSkinScopeAvail(); } catch (_) {}
+  }
+  // Card-theme REACH (settings → Apply theme): whether the chosen skin also skins the whole
+  // cockpit. Stamps data-vir-skincockpit on the root — read by the cockpit-extension CSS,
+  // which remaps the shell's --vir-accent* to the skin's --vir-card-* when ON. Default 'card'
+  // = calm cockpit (byte-identical). A no-op for Signature (no data-vir-cardskin → no bleed).
+  function applySkinScope(scope) {
+    const root = $('virtuoso-root'); if (!root) return;
+    const on = scope === 'cockpit';
+    if (on) root.setAttribute('data-vir-skincockpit', 'on');
+    else root.removeAttribute('data-vir-skincockpit');
+    try { localStorage.setItem('virtuoso.skinCockpit', on ? 'cockpit' : 'card'); } catch (_) {}
+    document.querySelectorAll('#virtuoso-skinscope-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.skinscope || '') === (on ? 'cockpit' : 'card')));
+  }
+  // Grey the "Apply theme" toggle when the active Card theme is Signature — nothing to extend
+  // (Signature already follows the Accent picker; the cockpit bleed only applies to a real skin).
+  function syncSkinScopeAvail() {
+    let skin = 'signature'; try { skin = localStorage.getItem('virtuoso.cardSkin') || 'signature'; } catch (_) {}
+    const grp = $('virtuoso-skinscope-group');
+    if (grp) grp.classList.toggle('is-disabled', skin === 'signature');
   }
   function applyCountInDefault(val) {
     const bars = Math.max(1, Math.min(8, parseInt(val, 10) || 1));
@@ -17498,6 +17531,8 @@
     applyEnergy(energy);
     let cardSkin = 'signature'; try { cardSkin = localStorage.getItem('virtuoso.cardSkin') || 'signature'; } catch (_) {}
     applyCardSkin(cardSkin);
+    let skinScope = 'card'; try { skinScope = localStorage.getItem('virtuoso.skinCockpit') || 'card'; } catch (_) {}
+    applySkinScope(skinScope);
   }
 
   function schedulePluckedString(ctx, when, freq, dur, instrument, gainScale, bendSemis) {
@@ -22631,6 +22666,8 @@
     // Brand strip
     ctx.fillStyle = accent; pill(P, 70, 6, 40, 3); ctx.fill();
     ctx.fillStyle = TXT; font(40, 800, HEAD); ctx.fillText('Virtuoso', P + 22, 104);
+    // Mastery crest — a small accent seal after the wordmark (never green; omitted at rank 0 / XP-Off).
+    try { const _cr = crestState(); if (_cr.rank) drawCrestCanvas(ctx, P + 22 + ctx.measureText('Virtuoso').width + 26, 90, 30, accent, _cr.rank); } catch (_) {}
     font(15, 700, HEAD); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
     ctx.fillStyle = accentSoft; pill(pX, 72, pW, 34, 17); ctx.fill();
     ctx.strokeStyle = accent; ctx.lineWidth = 1.5; pill(pX, 72, pW, 34, 17); ctx.stroke();
@@ -23016,6 +23053,109 @@
     return { newBadges: fresh.map(badgeMeta), all: Object.keys(store.badges).map(badgeMeta) };
   }
 
+  // ── Mastery CREST — earned-standing emblem (Proven → Versed → Fluent) ──────────
+  // Gamification-ratified: a DERIVED, additive view of competency already earned — never a
+  // new grind currency, never a count shown, never gated, never expiring. Rank is monotonic
+  // (latched high-water — a downgradeable crest in the always-visible chip would be
+  // loss-aversion, forbidden). XP-Off → rank 0 (no crest). The descriptor names the SKILL
+  // built, never the tally. The three routes to each rank (badges / depth rungs / breadth)
+  // are parallel by design — no per-badge weighting (that would smuggle in a hidden score).
+  const CREST_META = {
+    1: { label: 'Proven', desc: 'You’ve proven your first real skill.' },
+    2: { label: 'Versed', desc: 'You’re versed across several skills.' },
+    3: { label: 'Fluent', desc: 'Broad command across the map.' },
+  };
+  function crestRankCompute() {
+    const store = progressLoad();
+    if (store.mode === 'off') return 0;
+    const bc = badgeContext();
+    const badgeCount = Object.keys(store.badges || {}).length;
+    let masteredRungs = 0;
+    const byNode = store.byNode || {};
+    for (const id of Object.keys(byNode)) {
+      const n = byNode[id] || {}, d = n.depth || {};
+      if (d.travel || d.clean || d.eyesOff || n.masteredAt) masteredRungs++;
+    }
+    let rank = 0;
+    if (badgeCount >= 1 || masteredRungs >= 1) rank = 1;
+    if (badgeCount >= 3 || bc.pushPathways >= 1 || masteredRungs >= 3) rank = 2;
+    if (bc.clearedPathways >= 5 || badgeCount >= 6 || bc.pushPathways >= 3) rank = 3;
+    return rank;
+  }
+  // Displayed rank = monotonic high-water of the derived rank.
+  function crestState() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, label: '', desc: '' };
+    const rank = Math.max(crestRankCompute(), store.crestRank || 0);
+    return Object.assign({ rank }, rank ? CREST_META[rank] : { label: '', desc: '' });
+  }
+  // Persist the high-water AFTER the run's competency is credited; return whether it ROSE
+  // (the earn-moment trigger). Called from sessionEnd after creditBadges/advanceDepthLadder.
+  function crestCommit() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, rose: false };
+    const prev = store.crestRank || 0;
+    const rank = Math.max(crestRankCompute(), prev);
+    if (rank > prev) { store.crestRank = rank; progressSave(store); return { rank, rose: true }; }
+    return { rank, rose: false };
+  }
+  // The emblem — an aegis/laurel that elaborates by rank (accent-family via currentColor;
+  // NEVER --vir-meter). Rank 1 hollow aegis + spark · 2 filled + laurel sprigs · 3 full wreath.
+  const CREST_STAR = '<path d="M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z" fill="currentColor"/>';
+  const CREST_SHIELD = 'M12 2.4l7 2.5v5.3c0 4.6-2.9 8.1-7 10.4-4.1-2.3-7-5.8-7-10.4V4.9z';
+  function crestSvg(rank) {
+    if (!rank) return '';
+    let inner = '';
+    if (rank === 1) {
+      inner = `<path d="${CREST_SHIELD}" fill="none" stroke="currentColor" stroke-width="1.5"/>` + CREST_STAR;
+    } else if (rank === 2) {
+      inner = `<path d="${CREST_SHIELD}" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="1.5"/>`
+        + CREST_STAR
+        + '<g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M5.5 17.6c1.7.2 3 1.1 3.7 2.6"/><path d="M18.5 17.6c-1.7.2-3 1.1-3.7 2.6"/></g>';
+    } else {
+      inner = '<g fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6"/>'
+        + '<path d="M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6"/>'
+        + '<path d="M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8"/><path d="M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8"/></g>'
+        + CREST_STAR;
+    }
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+  }
+  // Canvas twin for the copy-card PNG (same paths → same emblem). color = accent (never green).
+  function drawCrestCanvas(ctx, cx, cy, size, color, rank) {
+    if (!rank || typeof Path2D === 'undefined') return;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(size / 24, size / 24); ctx.translate(-12, -12);
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const shield = new Path2D(CREST_SHIELD);
+    if (rank >= 2) { ctx.globalAlpha = 0.20; ctx.fill(shield); ctx.globalAlpha = 1; }
+    if (rank <= 2) { ctx.lineWidth = 1.5; ctx.stroke(shield); }
+    if (rank >= 3) {
+      ctx.lineWidth = 1.35;
+      ['M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6',
+       'M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6',
+       'M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8', 'M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8'].forEach(d => ctx.stroke(new Path2D(d)));
+    } else if (rank >= 2) {
+      ctx.lineWidth = 1.3;
+      ctx.stroke(new Path2D('M5.5 17.6c1.7.2 3 1.1 3.7 2.6'));
+      ctx.stroke(new Path2D('M18.5 17.6c-1.7.2-3 1.1-3.7 2.6'));
+    }
+    ctx.fill(new Path2D('M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z'));
+    ctx.restore();
+  }
+  // Paint the header-chip crest (leading child of #virtuoso-progress-strip). rose=true adds
+  // the one-shot earn-bloom (Lit only; RM/Calm just show the new rank). Hidden at rank 0.
+  function syncCrest(rose) {
+    const el = $('virtuoso-crest'); if (!el) return;
+    const st = crestState();
+    if (!st.rank) { el.hidden = true; el.innerHTML = ''; el.className = 'virtuoso-crest'; el.removeAttribute('title'); return; }
+    el.innerHTML = crestSvg(st.rank);
+    el.className = 'virtuoso-crest cr-rank-' + st.rank + (rose ? ' cr-earned' : '');
+    el.title = st.label + ' — ' + st.desc;
+    el.hidden = false;
+    if (rose) { try { el.addEventListener('animationend', () => el.classList.remove('cr-earned'), { once: true }); } catch (_) {} }
+  }
+
   function sessionBegin() {
     const isSessionMode = $('virtuoso-root')?.classList.contains('virtuoso-session-mode');
     let mode, pathway_id, bpm, bpm_tier, scale, key, practice_type;
@@ -23388,6 +23528,7 @@
     // have written the ledger, so a badge earned via a Workout block fires the same
     // run. Null in Off mode. Gained-only diff.
     const badgeGain = creditBadges();
+    const crestGain = crestCommit();   // monotonic high-water; rose === this run lifted the crest rank
     _lastEndedSession = {
       mode: _activeSession.mode, scale: _activeSession.scale, key: _activeSession.key,
       bpm: _activeSession.bpm, bpm_tier: _activeSession.bpm_tier,
@@ -23429,6 +23570,7 @@
     _activeSession = null;
     if (unlock) { _newlyUnlockedTier = unlock.tier; syncTempoTierButtons(); renderSkillTree(); _newlyUnlockedTier = null; }
     syncProgressStrip();
+    if (crestGain && crestGain.rose) syncCrest(true);   // earn-moment: bloom the chip crest (Lit/RM-aware in CSS)
     presentSessionSummary();
   }
 
@@ -23469,6 +23611,7 @@
   }
 
   function syncProgressStrip() {
+    try { syncCrest(); } catch (_) {}
     const sessions = sessionsLoad();
     const streak = streakCount(sessions);
     const numEl = $('virtuoso-streak-num');
@@ -24876,6 +25019,7 @@
     document.querySelectorAll('#virtuoso-countin-grid .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('virtuoso.countInGrid', b.dataset.grid); } catch (_) {} applyCountInGrid(b.dataset.grid); }));
     document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyEnergy(b.dataset.energy)));
     document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyCardSkin(b.dataset.cardskin)));
+    document.querySelectorAll('#virtuoso-skinscope-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applySkinScope(b.dataset.skinscope)));
     loadSettingsPrefs();
     document.addEventListener('click', (e) => {
       const menu = $('virtuoso-settings-menu'); if (!menu || !menu.classList.contains('vir-open')) return;
