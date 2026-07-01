@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.3';
+  const VIRTUOSO_VERSION = '0.1.4';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17118,7 +17118,7 @@
         if (showResultsModal._autoSig !== sig) {
           showResultsModal._autoSig = sig;
           (async () => {
-            try { if (document.fonts && document.fonts.load) await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } catch (_) {}
+            try { await loadCardFonts(); } catch (_) {}
             try { const cv = renderShareCardImage(s); if (cv) await saveCardToServer(cv, s, true); } catch (_) {}
           })();
         }
@@ -17461,6 +17461,19 @@
     try { localStorage.setItem('virtuoso.energy', lit ? 'lit' : 'calm'); } catch (_) {}
     document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.energy === (lit ? 'lit' : 'calm')));
   }
+  // Card theme (settings → Card theme): stamps data-vir-cardskin on the root — read ONLY
+  // by the results-card CSS + the copy-card canvas (renderShareCardImage), so the cockpit
+  // stays calm. 'signature' = today's default look (no attribute; follows the Accent +
+  // Lit/Calm). neon/esports/metal are opt-in note_detect-parity skins. Persisted.
+  const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal'];
+  function applyCardSkin(name) {
+    const root = $('virtuoso-root'); if (!root) return;
+    const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
+    if (skin === 'signature') root.removeAttribute('data-vir-cardskin');
+    else root.setAttribute('data-vir-cardskin', skin);
+    try { localStorage.setItem('virtuoso.cardSkin', skin); } catch (_) {}
+    document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.cardskin || '') === skin));
+  }
   function applyCountInDefault(val) {
     const bars = Math.max(1, Math.min(8, parseInt(val, 10) || 1));
     setFieldSilent('countIn', String(bars));   // the field is the source; syncTransport reflects the segments
@@ -17483,6 +17496,8 @@
     applyCountInGrid(countInGridOn() ? 'on' : 'off');
     let energy = 'lit'; try { energy = localStorage.getItem('virtuoso.energy') || 'lit'; } catch (_) {}
     applyEnergy(energy);
+    let cardSkin = 'signature'; try { cardSkin = localStorage.getItem('virtuoso.cardSkin') || 'signature'; } catch (_) {}
+    applyCardSkin(cardSkin);
   }
 
   function schedulePluckedString(ctx, when, freq, dur, instrument, gainScale, bendSemis) {
@@ -22505,44 +22520,112 @@
     let t = text; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
     return t + '…';
   }
+  // Ensure the ACTIVE card theme's display face is resident before the canvas rasterizes
+  // (the DOM card gets it via CSS font-display; the canvas needs it loaded, or it falls
+  // back to a system font). Signature/Neon use VirtuosoDisplay (Orbitron); Esports adds
+  // Rajdhani; Metal adds Russo One (both lazy-served from /font — first render fetches them).
+  async function loadCardFonts() {
+    if (!(document.fonts && document.fonts.load)) return;
+    let skin = 'signature'; try { skin = $('virtuoso-root')?.getAttribute('data-vir-cardskin') || 'signature'; } catch (_) {}
+    const faces = ["700 64px 'VirtuosoDisplay'", "700 18px 'VirtuosoDisplay'"];
+    // Load the exact weights the canvas draws (800 wordmark, 700 hero/labels) so the strict
+    // canvas font-match resolves to the skin face instead of dropping to VirtuosoDisplay.
+    if (skin === 'esports') faces.push("800 64px 'VirtuosoEsports'", "700 64px 'VirtuosoEsports'", "700 18px 'VirtuosoEsports'");
+    else if (skin === 'metal') faces.push("800 64px 'VirtuosoMetal'", "700 64px 'VirtuosoMetal'", "700 18px 'VirtuosoMetal'");
+    try { await Promise.all(faces.map(f => document.fonts.load(f))); } catch (_) {}
+    // Await full readiness — canvas font-matching drops a not-yet-ready face to the next
+    // family in the stack, so the skin font can otherwise lose the first paint after load.
+    try { if (document.fonts.ready) await document.fonts.ready; } catch (_) {}
+    // Warm the canvas font cache: the FIRST canvas draw with a just-readied face can still
+    // miss it (Chromium caches per 2d context), so prime a throwaway context with each face
+    // before renderShareCardImage draws for real. Cheap; makes the skin font deterministic.
+    try {
+      const wc = document.createElement('canvas').getContext('2d');
+      if (wc) faces.forEach(f => { wc.font = f; wc.fillText('Mg', -50, -50); });
+    } catch (_) {}
+  }
   // The card IMAGE — a canvas render of the SAME model (ux spec: 1200×630, verdict-led,
-  // green ✓ only on a true clear, theme accent read live, system fonts so no webfont
-  // race; same-origin → toBlob won't taint). Returns the canvas, or null.
+  // green ✓ only on a true clear, theme palette/font read live off --vir-card-*; same-origin
+  // → toBlob won't taint). Returns the canvas, or null.
   function renderShareCardImage(s) {
     const m = shareCardModel(s); if (!m) return null;
     const W = 1200, H = 630, P = 64;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); if (!ctx) return null;
-    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)';
-    try { const root = $('virtuoso-root'); if (root) { const cs = getComputedStyle(root);
-      const ae = cs.getPropertyValue('--vir-accent-edge').trim(); if (ae) accent = ae;
-      const as = cs.getPropertyValue('--vir-accent-soft').trim(); if (as) accentSoft = as; } } catch (_) {}
-    const GREEN = '#22c55e', TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
+    // Card THEME (settings → Card theme). Signature = today's look (the original path,
+    // reading --vir-accent-*); neon/esports/metal read the SAME --vir-card-* contract the
+    // DOM card uses, so the copy card matches the on-screen card. Green stays cleared-only.
+    const GREEN = '#22c55e';
+    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)', cardBg = null;
+    let skin = 'signature', glow = true, radius = 18;
+    let TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
     const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
     const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    const DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
-    // Full esports parity in LIT — the share card uses the display face for the
-    // wordmark/eyebrow/hero/labels; Calm keeps the system face (the toggle-back rule).
+    let DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
+    try {
+      const root = $('virtuoso-root');
+      if (root) {
+        const cs = getComputedStyle(root);
+        skin = root.getAttribute('data-vir-cardskin') || 'signature';
+        const gv = (n, f) => { const v = cs.getPropertyValue(n).trim(); return v || f; };
+        if (skin === 'signature') {
+          accent = gv('--vir-accent-edge', accent);
+          accentSoft = gv('--vir-accent-soft', accentSoft);
+        } else {
+          accent = gv('--vir-card-accent', accent);
+          accentSoft = gv('--vir-card-accent-soft', accentSoft);
+          cardBg = gv('--vir-card-bg', null);
+          TXT = gv('--vir-card-text', TXT);
+          DIM = gv('--vir-card-dim', DIM);
+          MUT = gv('--vir-card-faint', MUT); FAINT = MUT;
+          glow = gv('--vir-card-glow', '1') !== '0';
+          radius = parseInt(gv('--vir-card-radius', '18'), 10); if (!isFinite(radius)) radius = 18;
+          // Plain, NAMESPACED family names — the DOM font token nests a var() the canvas
+          // can't parse, and the namespaced names avoid colliding with note_detect's faces.
+          // NB: do NOT list VirtuosoDisplay as the fallback — canvas prefers the always-ready
+          // base64-inline face over a URL-loaded first font, so the skin face would lose.
+          // A plain sans fallback lets the (warmed) skin face win; it only shows if the
+          // skin font genuinely failed to load.
+          const CF = { neon: "'VirtuosoDisplay'", esports: "'VirtuosoEsports'", metal: "'VirtuosoMetal'" };
+          DISP = `${CF[skin] || "'VirtuosoDisplay'"}, ${SANS}`;
+        }
+      }
+    } catch (_) {}
+    // A skin forces its display face on the whole card (identity); Signature keeps the
+    // toggle-back rule (display face in Lit only, system face in Calm).
     let lit = false; try { lit = !!$('virtuoso-root')?.classList.contains('vir-lit'); } catch (_) {}
-    const HEAD = lit ? 'disp' : false;
+    const HEAD = (skin !== 'signature' || lit) ? 'disp' : false;
     const font = (px, w, m) => ctx.font = `${w} ${px}px ${m === 'disp' ? DISP : m ? MONO : SANS}`;
     const pill = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    // Neon frame — the live card's glow-ring recipe MIRRORed onto the canvas: an
-    // earned card frames in meter-green (the cleared-only color), otherwise the live
-    // theme accent. A soft top-left corner bloom adds depth; the big readouts stay
+    // Background: Signature keeps its subtle gradient; Metal paints a brushed-steel
+    // gradient (the feTurbulence grunge is DOM-only); other skins paint an opaque base
+    // then their panel color (the skin bg tokens are translucent → no see-through PNG).
+    if (skin === 'metal') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3a3f46'); g.addColorStop(0.55, '#24272c'); g.addColorStop(1, '#1a1c20');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin !== 'signature') {
+      ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, W, H);
+      if (cardBg) { ctx.fillStyle = cardBg; ctx.fillRect(0, 0, W, H); }
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    }
+    // Frame — the live card's glow-ring recipe MIRRORed onto the canvas: an earned card
+    // frames in meter-green (the cleared-only color), otherwise the theme accent. A soft
+    // corner bloom adds depth (skipped for the glow-less esports skin); big readouts stay
     // crisp (no glow on the text itself — legibility over spectacle).
     const frameC = m.heroGreen ? GREEN : accent;
-    const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
-    cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    if (glow) {
+      const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
+      cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    }
     ctx.fillStyle = frameC; ctx.fillRect(0, 0, W, 5);                                   // accent spine (earned → green)
     ctx.save();
-    ctx.shadowColor = frameC; ctx.shadowBlur = 26; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
-    pill(26, 26, W - 52, H - 52, 18); ctx.stroke();                                     // glowing accent frame
+    ctx.shadowColor = frameC; ctx.shadowBlur = glow ? 26 : 0; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
+    pill(26, 26, W - 52, H - 52, radius); ctx.stroke();                                 // frame (glowing unless the skin is glow-less; square when radius 0)
     ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    pill(29, 29, W - 58, H - 58, 16); ctx.stroke();                                     // inner bevel hairline
+    pill(29, 29, W - 58, H - 58, Math.max(0, radius - 2)); ctx.stroke();                // inner bevel hairline
     ctx.restore();
     ctx.textBaseline = 'alphabetic';
     // Brand strip
@@ -22605,9 +22688,9 @@
   // Save → server-folder save → browser download; Copy → image→clipboard → download → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
-    // Ensure the self-hosted display face is loaded before the canvas rasterizes
+    // Ensure the active theme's display face is loaded before the canvas rasterizes
     // (the DOM card gets it via CSS font-display; the canvas needs it resident).
-    try { if (document.fonts && document.fonts.load) { await Promise.all([document.fonts.load("700 64px 'VirtuosoDisplay'"), document.fonts.load("700 18px 'VirtuosoDisplay'")]); } } catch (_) {}
+    await loadCardFonts();
     const cv = renderShareCardImage(s);
     const toBlob = () => new Promise(r => cv.toBlob(r, 'image/png'));
     const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = shareCardFilename(s); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
@@ -24792,6 +24875,7 @@
     $('virtuoso-countin-default')?.addEventListener('change', (e) => { try { localStorage.setItem('virtuoso.countInDefault', e.target.value); } catch (_) {} applyCountInDefault(e.target.value); });
     document.querySelectorAll('#virtuoso-countin-grid .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('virtuoso.countInGrid', b.dataset.grid); } catch (_) {} applyCountInGrid(b.dataset.grid); }));
     document.querySelectorAll('#virtuoso-energy-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyEnergy(b.dataset.energy)));
+    document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.addEventListener('click', () => applyCardSkin(b.dataset.cardskin)));
     loadSettingsPrefs();
     document.addEventListener('click', (e) => {
       const menu = $('virtuoso-settings-menu'); if (!menu || !menu.classList.contains('vir-open')) return;

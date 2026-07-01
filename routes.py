@@ -796,6 +796,24 @@ def setup(app: FastAPI, context: dict) -> None:
             raise HTTPException(404, "Not found.")
         return FileResponse(str(path), media_type="audio/ogg")
 
+    # Self-hosted display faces for the results-card themes (settings → Card style).
+    # Neon reuses Orbitron (also inlined for the wordmark); Esports = Rajdhani;
+    # Metal = Russo One + Black Ops One. Bundled under assets/fonts/ (all SIL OFL 1.1
+    # — the OFL-*.txt ships beside each, AGPL-compatible). Served here so a @font-face
+    # by URL lazily loads them: the 79KB Rajdhani only downloads when a themed card
+    # actually renders, keeping the always-loaded screen.html lean. Only .woff2 is
+    # served + path traversal rejected.
+    _fonts_dir = Path(__file__).resolve().parent / "assets" / "fonts"
+
+    @app.get(f"/api/plugins/{PLUGIN_ID}/font/{{name}}")
+    def card_font(name: str):
+        if not name.endswith(".woff2") or "/" in name or "\\" in name or ".." in name:
+            raise HTTPException(404, "Not found.")
+        path = _fonts_dir / name
+        if not path.is_file():
+            raise HTTPException(404, "Not found.")
+        return FileResponse(str(path), media_type="font/woff2")
+
     @app.get(f"/api/plugins/{PLUGIN_ID}/presets")
     def list_presets():
         if meta_db is None:
