@@ -463,24 +463,51 @@
     --vir-glow: transparent;
     --vir-accent-grad: var(--vir-card-accent);
   }
-  /* STAGE-FRAME animated border (Q2) — the ONE hero surface a skin's ring reaches in the
-     cockpit (the frame around the render surface, NEVER the surface itself). Mirrors the
-     results-card conic ring but INSET (render-host clips), so it hugs the frame. Lit-only;
-     frozen under Calm (no .vir-lit rule) and reduced-motion (below). */
+  /* STAGE-FRAME adapter (theme-framework Phase 1.5): the recipe stamps
+     data-vir-stageframe; CSS maps that platform-agnostic style into the one safe
+     expressive surface around the renderer. Card-only and Signature never match. */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 2px;
+    --vir-stage-frame-bg: conic-gradient(from var(--vir-ring-angle), var(--vir-card-ring-stops, var(--vir-card-accent-soft) 0deg, var(--vir-card-accent) 180deg, var(--vir-card-accent-soft) 360deg));
+    --vir-stage-frame-shadow: none;
+    --vir-stage-frame-anim: var(--vir-card-ring-anim, vir-ring-spin 6s linear infinite);
+  }
+  .virtuoso-root[data-vir-stageframe="chromatic-ring"][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 2px;
+    --vir-stage-frame-bg: conic-gradient(from var(--vir-ring-angle), var(--vir-card-ring-stops));
+    --vir-stage-frame-shadow: 0 0 18px -8px var(--vir-card-accent);
+    --vir-stage-frame-anim: var(--vir-card-ring-anim);
+  }
+  .virtuoso-root[data-vir-stageframe="solid-frame"][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 2px;
+    --vir-stage-frame-bg: var(--vir-card-accent);
+    --vir-stage-frame-shadow: none;
+    --vir-stage-frame-anim: none;
+  }
+  .virtuoso-root[data-vir-stageframe="inset-ring"][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 3px;
+    --vir-stage-frame-bg: linear-gradient(135deg, var(--vir-card-bg), var(--vir-card-accent), color-mix(in srgb, var(--vir-card-frame) 70%, var(--vir-card-bg)) 54%, var(--vir-card-accent2));
+    --vir-stage-frame-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), 0 0 20px -13px var(--vir-card-accent);
+    --vir-stage-frame-anim: var(--vir-card-ring-anim);
+  }
+  .virtuoso-root[data-vir-stageframe="warm-edge-light"][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 2px;
+    --vir-stage-frame-bg: linear-gradient(90deg, rgba(232,161,60,0.18), var(--vir-card-accent), rgba(138,51,36,0.62), var(--vir-card-accent));
+    --vir-stage-frame-shadow: 0 0 18px -11px var(--vir-card-accent);
+    --vir-stage-frame-anim: vir-card-ring-pulse 4s ease-in-out infinite alternate;
+  }
+  .virtuoso-root[data-vir-stageframe="quiet-solid"][data-vir-skincockpit="on"] {
+    --vir-stage-frame-size: 1px;
+    --vir-stage-frame-bg: var(--vir-card-frame);
+    --vir-stage-frame-shadow: none;
+    --vir-stage-frame-anim: none;
+  }
   .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
-    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px;
-    background: conic-gradient(from var(--vir-ring-angle), var(--vir-card-ring-stops, var(--vir-card-accent-soft) 0deg, var(--vir-card-accent) 180deg, var(--vir-card-accent-soft) 360deg));
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: var(--vir-stage-frame-size);
+    background: var(--vir-stage-frame-bg); box-shadow: var(--vir-stage-frame-shadow);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
-    pointer-events: none; z-index: 6; animation: var(--vir-card-ring-anim, vir-ring-spin 6s linear infinite);
-  }
-  /* Esports = a static solid amber edge (its ring-anim is none; give it a solid, not a frozen conic). */
-  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
-    background: var(--vir-card-accent);
-  }
-  /* Focus is the minimal pole — no stage-frame ring at all (calm/low-stim; Esports keeps its edge). */
-  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after {
-    content: none;
+    pointer-events: none; z-index: 6; animation: var(--vir-stage-frame-anim);
   }
   @media (prefers-reduced-motion: reduce) {
     .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after { animation: none; }

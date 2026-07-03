@@ -17850,8 +17850,13 @@
   function applyCardSkin(name) {
     const root = $('virtuoso-root'); if (!root) return;
     const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
-    if (skin === 'signature') { root.removeAttribute('data-vir-cardskin'); root.removeAttribute('data-vir-cardtone'); }
-    else root.setAttribute('data-vir-cardskin', skin);
+    const recipe = themeRecipeForSkin(skin);
+    if (skin === 'signature') {
+      root.removeAttribute('data-vir-cardskin'); root.removeAttribute('data-vir-cardtone'); root.removeAttribute('data-vir-stageframe');
+    } else {
+      root.setAttribute('data-vir-cardskin', skin);
+      root.setAttribute('data-vir-stageframe', recipe.stageFrame?.style || skin);
+    }
     try { localStorage.setItem('virtuoso.cardSkin', skin); } catch (_) {}
     renderCardSkinPicker(skin);
     if (skin === 'signature') renderCardTonePicker(skin, 'default');

@@ -227,9 +227,10 @@ As of the first implementation slice, Virtuoso has started Phase 3 inside the ex
 - The registry carries each theme's label, role, axes, palette preview, typography, shape, material, motion, stage-frame, and colorway list.
 - The Settings theme picker renders live preview cards from that registry instead of hardcoded buttons.
 - Existing CSS selectors remain the web adapter for now. This keeps launch risk low while giving future Codex/Claude sessions a single data source to migrate into formal `--vir-theme-*` tokens.
-- Renderer smoke verifies the preview cards, per-theme colorways, persistence, root attributes, and distinct Whole-studio cockpit treatments.
+- `applyCardSkin()` stamps the recipe's `stageFrame.style` as `data-vir-stageframe`, so the renderer frame now consumes registry data instead of only skin-specific selectors.
+- Renderer smoke verifies the preview cards, per-theme colorways, persistence, root attributes, distinct Whole-studio cockpit treatments, and distinct stage-frame computed styles.
 
-Next migration target: generate or stamp formal theme tokens from `VIR_THEME_RECIPES`, then progressively replace skin-specific cockpit selectors with token-consuming component rules.
+Next migration target: generate or stamp formal theme tokens from `VIR_THEME_RECIPES`, then progressively replace remaining skin-specific cockpit selectors with token-consuming component rules.
 
 ## Immediate Virtuoso Slice
 
