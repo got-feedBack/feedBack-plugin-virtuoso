@@ -317,6 +317,71 @@
     --vir-card-bevel: none; --vir-card-texture: none;
     --vir-card-ring-anim: none;
   }
+  /* Per-skin colorways. These override only palette tokens; typography, radius,
+     texture, motion, and flat/glow identity stay owned by the selected skin. */
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-cardtone="violet"] {
+    --vir-card-accent: #8b5cf6; --vir-card-accent-soft: rgba(139,92,246,0.18); --vir-card-accent2: #22d3ee; --vir-card-warn: #f0abfc;
+    --vir-card-frame: rgba(139,92,246,0.52); --vir-card-text-glow: 0 0 16px rgba(139,92,246,0.48);
+    --vir-card-ring-stops: #8b5cf6, #22d3ee 90deg, #f472b6 180deg, #22d3ee 270deg, #8b5cf6;
+  }
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-cardtone="acid"] {
+    --vir-card-accent: #39ff14; --vir-card-accent-soft: rgba(57,255,20,0.16); --vir-card-accent2: #00f0ff; --vir-card-warn: #f7ff00;
+    --vir-card-frame: rgba(57,255,20,0.48); --vir-card-text-glow: 0 0 16px rgba(57,255,20,0.38);
+    --vir-card-ring-stops: #39ff14, #00f0ff 120deg, #ff2ec4 220deg, #39ff14;
+  }
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-cardtone="sunset"] {
+    --vir-card-accent: #fb7185; --vir-card-accent-soft: rgba(251,113,133,0.18); --vir-card-accent2: #facc15; --vir-card-warn: #f97316;
+    --vir-card-frame: rgba(251,113,133,0.50); --vir-card-text-glow: 0 0 16px rgba(251,113,133,0.42);
+    --vir-card-ring-stops: #fb7185, #facc15 120deg, #a78bfa 250deg, #fb7185;
+  }
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-cardtone="cobalt"] {
+    --vir-card-accent: #38bdf8; --vir-card-accent-soft: rgba(56,189,248,0.14); --vir-card-accent2: #f5f5f4; --vir-card-warn: #38bdf8;
+    --vir-card-frame: #38bdf8;
+  }
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-cardtone="crimson"] {
+    --vir-card-accent: #f43f5e; --vir-card-accent-soft: rgba(244,63,94,0.14); --vir-card-accent2: #f5f5f4; --vir-card-warn: #f43f5e;
+    --vir-card-frame: #f43f5e;
+  }
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-cardtone="lime"] {
+    --vir-card-accent: #a3e635; --vir-card-accent-soft: rgba(163,230,53,0.13); --vir-card-accent2: #f5f5f4; --vir-card-warn: #a3e635;
+    --vir-card-frame: #a3e635;
+  }
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-cardtone="blood"] {
+    --vir-card-accent: #ef4444; --vir-card-accent-soft: rgba(239,68,68,0.15); --vir-card-accent2: #f97316; --vir-card-warn: #f59e0b;
+    --vir-card-frame: rgba(239,68,68,0.44); --vir-card-ring-stops: #ef4444, #f97316 120deg, #7f1d1d 230deg, #ef4444;
+  }
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-cardtone="steel"] {
+    --vir-card-accent: #93c5fd; --vir-card-accent-soft: rgba(147,197,253,0.14); --vir-card-accent2: #cbd5e1; --vir-card-warn: #fbbf24;
+    --vir-card-frame: rgba(147,197,253,0.38); --vir-card-ring-stops: #93c5fd, #cbd5e1 130deg, #334155 240deg, #93c5fd;
+  }
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-cardtone="toxic"] {
+    --vir-card-accent: #bef264; --vir-card-accent-soft: rgba(190,242,100,0.14); --vir-card-accent2: #84cc16; --vir-card-warn: #eab308;
+    --vir-card-frame: rgba(190,242,100,0.40); --vir-card-ring-stops: #bef264, #84cc16 130deg, #3f6212 230deg, #bef264;
+  }
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-cardtone="ruby"] {
+    --vir-card-accent: #d86b4f; --vir-card-accent-soft: rgba(216,107,79,0.18); --vir-card-accent2: #8f2f2f; --vir-card-warn: #e8a13c;
+    --vir-card-frame: rgba(216,107,79,0.44); --vir-card-text-glow: 0 0 12px rgba(216,107,79,0.30);
+    --vir-card-ring-stops: #d86b4f, #a44735 120deg, #6f2724 220deg, #d86b4f;
+  }
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-cardtone="honey"] {
+    --vir-card-accent: #f2c56b; --vir-card-accent-soft: rgba(242,197,107,0.17); --vir-card-accent2: #b7791f; --vir-card-warn: #d69e2e;
+    --vir-card-frame: rgba(242,197,107,0.44); --vir-card-text-glow: 0 0 12px rgba(242,197,107,0.28);
+    --vir-card-ring-stops: #f2c56b, #d69e2e 125deg, #7c4a16 220deg, #f2c56b;
+  }
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-cardtone="olive"] {
+    --vir-card-accent: #a3a85c; --vir-card-accent-soft: rgba(163,168,92,0.17); --vir-card-accent2: #6f6f38; --vir-card-warn: #d4a24a;
+    --vir-card-frame: rgba(163,168,92,0.42); --vir-card-text-glow: 0 0 12px rgba(163,168,92,0.24);
+    --vir-card-ring-stops: #a3a85c, #6f6f38 130deg, #3b301c 230deg, #a3a85c;
+  }
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-cardtone="blue"] {
+    --vir-card-accent: #7fb3d5; --vir-card-accent-soft: rgba(127,179,213,0.15); --vir-card-accent2: #d6e7f2; --vir-card-frame: #445a68;
+  }
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-cardtone="sage"] {
+    --vir-card-accent: #9ab7a0; --vir-card-accent-soft: rgba(154,183,160,0.14); --vir-card-accent2: #e0eadf; --vir-card-frame: #4b5b50;
+  }
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-cardtone="amber"] {
+    --vir-card-accent: #d6b66d; --vir-card-accent-soft: rgba(214,182,109,0.14); --vir-card-accent2: #efe4c8; --vir-card-frame: #615744;
+  }
   /* Skins restyle the card SURFACE. [data-vir-cardskin] matches only a chosen skin, so
      Signature keeps its existing cheat-card/Lit rules (today's look is byte-for-byte). */
   .virtuoso-root[data-vir-cardskin] .virtuoso-results-card {
@@ -522,6 +587,9 @@
   .virtuoso-settings-row { display: flex; gap: 5px; }
   .virtuoso-theme-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #334155; background: var(--sw); cursor: pointer; padding: 0; }
   .virtuoso-theme-swatch.active { border-color: #f8fafc; box-shadow: 0 0 0 2px rgba(248,250,252,0.2); }
+  .virtuoso-cardtone-row { flex-wrap: wrap; }
+  .virtuoso-cardtone-swatch { width: 28px; height: 22px; border-radius: 7px; border: 1px solid #334155; background: linear-gradient(135deg, var(--sw-a), var(--sw-b)); cursor: pointer; padding: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
+  .virtuoso-cardtone-swatch.active { border-color: #f8fafc; box-shadow: 0 0 0 2px rgba(248,250,252,0.18), inset 0 1px 0 rgba(255,255,255,0.14); }
   .virtuoso-mini-btn { flex: 1; padding: 5px 0; font-size: 11px; font-weight: 600; border-radius: 6px; border: 1px solid #334155; background: #0b1220; color: #94a3b8; cursor: pointer; }
   .virtuoso-mini-btn:hover { background: #1e293b; color: #e2e8f0; }
   .virtuoso-mini-btn.active { background: var(--vir-accent-grad); border-color: var(--vir-accent-edge); color: #f8fafc; }
@@ -2009,9 +2077,13 @@
             <button type="button" class="virtuoso-mini-btn" data-cardskin="focus">Focus</button>
           </div>
         </div>
+        <div class="virtuoso-settings-group is-disabled" id="virtuoso-cardtone-group">
+          <span class="virtuoso-settings-lbl" id="virtuoso-cardtone-label">Theme color</span>
+          <div class="virtuoso-settings-row virtuoso-cardtone-row" id="virtuoso-cardtone-pick"></div>
+        </div>
         <div class="virtuoso-settings-group" id="virtuoso-skinscope-group">
           <span class="virtuoso-settings-lbl">Apply theme</span>
-          <div class="virtuoso-settings-row" id="virtuoso-skinscope-pick" title="Card only: the theme styles just your results + copy card — the cockpit stays calm (default). Whole studio: the theme also skins the whole Virtuoso cockpit. Only Neon / Esports / Metal extend; Signature always follows your Accent.">
+          <div class="virtuoso-settings-row" id="virtuoso-skinscope-pick" title="Card only: the theme styles just your results + copy card — the cockpit stays calm (default). Whole studio: the theme also skins the whole Virtuoso cockpit. Non-Signature themes extend; Signature always follows your Accent.">
             <button type="button" class="virtuoso-mini-btn active" data-skinscope="card">Card only</button>
             <button type="button" class="virtuoso-mini-btn" data-skinscope="cockpit">Whole studio</button>
           </div>

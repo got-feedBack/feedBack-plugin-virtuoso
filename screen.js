@@ -17681,15 +17681,88 @@
   // Card theme (settings → Card theme): stamps data-vir-cardskin on the root — read ONLY
   // by the results-card CSS + the copy-card canvas (renderShareCardImage), so the cockpit
   // stays calm. 'signature' = today's default look (no attribute; follows the Accent +
-  // Lit/Calm). neon/esports/metal are opt-in note_detect-parity skins. Persisted.
+  // Lit/Calm). neon/esports/metal/warm/focus are opt-in note_detect-parity skins.
+  // Each non-Signature skin also owns its own colorway set; colorways change palette
+  // tokens only, never the skin's typography/shape/motion identity.
   const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal', 'warm', 'focus'];
+  const VIR_CARD_TONES = {
+    neon: [
+      { id:'default', label:'Arcade', a:'#00f0ff', b:'#ff2ec4' },
+      { id:'violet', label:'Violet', a:'#8b5cf6', b:'#22d3ee' },
+      { id:'acid', label:'Acid', a:'#39ff14', b:'#00f0ff' },
+      { id:'sunset', label:'Sunset', a:'#fb7185', b:'#facc15' },
+    ],
+    esports: [
+      { id:'default', label:'Amber', a:'#e8b43a', b:'#f5f5f4' },
+      { id:'cobalt', label:'Cobalt', a:'#38bdf8', b:'#f5f5f4' },
+      { id:'crimson', label:'Crimson', a:'#f43f5e', b:'#f5f5f4' },
+      { id:'lime', label:'Lime', a:'#a3e635', b:'#f5f5f4' },
+    ],
+    metal: [
+      { id:'default', label:'Ember', a:'#ffb347', b:'#ff6b35' },
+      { id:'blood', label:'Blood', a:'#ef4444', b:'#f97316' },
+      { id:'steel', label:'Steel', a:'#93c5fd', b:'#cbd5e1' },
+      { id:'toxic', label:'Toxic', a:'#bef264', b:'#84cc16' },
+    ],
+    warm: [
+      { id:'default', label:'Amp', a:'#e8a13c', b:'#8a3324' },
+      { id:'ruby', label:'Ruby', a:'#d86b4f', b:'#8f2f2f' },
+      { id:'honey', label:'Honey', a:'#f2c56b', b:'#b7791f' },
+      { id:'olive', label:'Olive', a:'#a3a85c', b:'#6f6f38' },
+    ],
+    focus: [
+      { id:'default', label:'Slate', a:'#93b7de', b:'#e8edf2' },
+      { id:'blue', label:'Blue', a:'#7fb3d5', b:'#d6e7f2' },
+      { id:'sage', label:'Sage', a:'#9ab7a0', b:'#e0eadf' },
+      { id:'amber', label:'Amber', a:'#d6b66d', b:'#efe4c8' },
+    ],
+  };
+  function cardToneForSkin(skin) {
+    if (!VIR_CARD_TONES[skin]) return 'default';
+    try {
+      const t = localStorage.getItem('virtuoso.cardTone.' + skin) || 'default';
+      return VIR_CARD_TONES[skin].some(x => x.id === t) ? t : 'default';
+    } catch (_) { return 'default'; }
+  }
+  function renderCardTonePicker(skin, tone) {
+    const group = $('virtuoso-cardtone-group'), host = $('virtuoso-cardtone-pick'), label = $('virtuoso-cardtone-label');
+    if (!group || !host) return;
+    const tones = VIR_CARD_TONES[skin] || [];
+    group.hidden = !tones.length;
+    group.classList.toggle('is-disabled', !tones.length);
+    if (label) label.textContent = tones.length ? `${skin[0].toUpperCase() + skin.slice(1)} color` : 'Theme color';
+    host.innerHTML = '';
+    tones.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'virtuoso-cardtone-swatch' + (t.id === tone ? ' active' : '');
+      b.dataset.cardtone = t.id;
+      b.style.setProperty('--sw-a', t.a);
+      b.style.setProperty('--sw-b', t.b);
+      b.title = t.label;
+      b.setAttribute('aria-label', t.label);
+      b.addEventListener('click', () => applyCardTone(skin, t.id));
+      host.appendChild(b);
+    });
+  }
+  function applyCardTone(skin, tone) {
+    const root = $('virtuoso-root'); if (!root) return;
+    const tones = VIR_CARD_TONES[skin] || [];
+    const id = tones.some(t => t.id === tone) ? tone : 'default';
+    if (tones.length && id !== 'default') root.setAttribute('data-vir-cardtone', id);
+    else root.removeAttribute('data-vir-cardtone');
+    if (tones.length) { try { localStorage.setItem('virtuoso.cardTone.' + skin, id); } catch (_) {} }
+    renderCardTonePicker(skin, id);
+  }
   function applyCardSkin(name) {
     const root = $('virtuoso-root'); if (!root) return;
     const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
-    if (skin === 'signature') root.removeAttribute('data-vir-cardskin');
+    if (skin === 'signature') { root.removeAttribute('data-vir-cardskin'); root.removeAttribute('data-vir-cardtone'); }
     else root.setAttribute('data-vir-cardskin', skin);
     try { localStorage.setItem('virtuoso.cardSkin', skin); } catch (_) {}
     document.querySelectorAll('#virtuoso-cardskin-pick .virtuoso-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.cardskin || '') === skin));
+    if (skin === 'signature') renderCardTonePicker(skin, 'default');
+    else applyCardTone(skin, cardToneForSkin(skin));
     try { syncSkinScopeAvail(); } catch (_) {}
   }
   // Card-theme REACH (settings → Apply theme): whether the chosen skin also skins the whole
