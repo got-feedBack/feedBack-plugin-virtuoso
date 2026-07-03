@@ -864,8 +864,32 @@ try {
   ok(c6g.sockN > 0 && c6g.sockExempt, "noSwing FIX: sock_rhythm comp hits carry noSwing:true under a swing genre (exempt from the warp)", `n=${c6g.sockN} exempt=${c6g.sockExempt}`);
   ok(c6g.charlN > 0 && c6g.charlNotExempt, "contrast: a normal swing comp (charleston) is NOT flagged noSwing (cell-driven, not blanket)", `n=${c6g.charlN}`);
 
+  step("mix recipes jam wave");
+  const c6h = await page.evaluate(() => {
+    const D = globalThis.__ss_debug;
+    const styles = ["blues", "funk", "reggae", "disco", "pop", "soul", "synthwave"];
+    const base = D.resolveMix({ audio: { profile: "__no_such_style__" } });
+    const sig = (m) => JSON.stringify(m);
+    const out = {};
+    for (const id of styles) {
+      const mix = D.resolveMix({ audio: { profile: id } });
+      out[id] = {
+        nonDefault: sig(mix) !== sig(base),
+        hasShape: !!((mix.drumkit && (mix.drumkit.hiShelf || mix.drumkit.loShelf))
+          || Object.keys(mix.level || {}).length
+          || Object.keys(mix.pan || {}).length
+          || Object.keys(mix.carve || {}).length
+          || Object.keys(mix.send || {}).length),
+      };
+    }
+    return out;
+  });
+  for (const id of ["blues", "funk", "reggae", "disco", "pop", "soul", "synthwave"]) {
+    ok(c6h[id] && c6h[id].nonDefault && c6h[id].hasShape, `mix recipe: ${id} no longer falls back to the flat house mix`);
+  }
+
   if (errs.length) { fail++; console.log(`  FAIL page errors: ${errs.join(" | ")}`); }
 } finally { await browser.close(); }
 
 if (fail) { console.log(`FAIL  backing-engine: ${fail} failure(s) (${pass} passed)`); process.exit(1); }
-console.log(`PASS  backing-engine: ${pass} checks passed (timeline validity x styles, 2/bar, push, determinism, key-cycle + session assembly, drum grooves + fills, metal lead-over-backing comp, arrangement recipes B1, western-swing/synthwave bands + noSwing comp exemption)`);
+console.log(`PASS  backing-engine: ${pass} checks passed (timeline validity x styles, 2/bar, push, determinism, key-cycle + session assembly, drum grooves + fills, metal lead-over-backing comp, arrangement recipes B1, western-swing/synthwave bands + noSwing comp exemption, Jam mix recipes)`);

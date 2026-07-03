@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.6';
+  const VIRTUOSO_VERSION = '0.1.7';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -247,7 +247,9 @@
     diatonic:[1,2,3,4,5,6,7,1],
     diatonic_7ths:[1,2,3,4,5,6,7],   // the harmonized-key lap (Chords ladder): one diatonic 7th per degree, no wrap. With chordDepth:'seventh' + chordOverride:'auto' → Imaj7 ii7 iii7 IVmaj7 V7 vi7 vii7♭5 (modal over dorian/mixo).
     static_i:[1],                 // one-chord vamp — Beginner Core "static vamp" (Pulse & Muting); roots stay on the tonic
+    'I-IV':[1,4,1,4],
     'I-IV-V':[1,4,5,1],
+    'I-IV-I-V':[1,4,1,5],
     'I-V-vi-IV':[1,5,6,4],
     'I-vi-IV-V':[1,6,4,5],
     'I-vi-ii-V':[1,6,2,5],
@@ -314,6 +316,7 @@
     modal_mixture:[1,4,{ deg:4, q:'min7' },5],               // I–IV–iv–V : borrowed-minor-iv modal mixture (the iv is the colour)
     // ── World / genre vamps (band-intel genre batch, 2026-06-13) ──────────────
     'i-iv':[1,4],                                             // i–iv minor vamp (reggae / minor soul) — pair with natural_minor so the iv stays MINOR (Am→Dm); distinct from dorian_vamp's major IV
+    'I-II7-V':[1, { semis:2, q:'dom7', rn:'II7' }, 5, 1],     // I–II7–V : bright secondary-dominant country / western-swing pull
     soul_turnaround:[1, { semis:9, q:'dom7', rn:'VI7' }, 2, 5], // I–VI7–ii–V : the soul/Motown turnaround — the VI is a SECONDARY DOMINANT (the soul colour), not the diatonic vi
     // Ragtime secondary-dominant chain (III7–VI7–II7–V7–I) — every link a dom7 (the
     // bright forward-leaning ragtime motion); same {semis,q:'dom7'} chromatic form as
@@ -4172,6 +4175,7 @@
   let jamGuideLine = false;       // audible generated line: OFF by default
   let jamBandMode = 'no_bass';    // bass players: 'no_bass' | 'drums_only' | 'full' (guitar always full)
   let _jamPending = false;        // J-2 (D-J3): a live panel change is queued for the next loop wrap
+  let _jamPendingParts = [];      // the queued-change summary currently shown in the Jam pending chip
   let _jamSnapshot = null;        // the panel state the CURRENT jam pass was built from (delta source)
   let _jamApplyToken = 0;         // Jam-UX reliability: monotonic guard so a stale async voice-swap apply can't win (the out-of-order race)
   let jamIntent = '';             // J-2 (D-J8): the picked intent — self-checked, shown, NEVER judged
@@ -4628,7 +4632,7 @@
   //   feel            { swing, backingStyle } — the backing feel
   //   audioProfile    AUDIO_PROFILES key (the sound), or null → clean family inferred
   const STYLE_PALETTES = {
-    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
+    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues','jazz_blues','blues_turnaround'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
     // J-2 (D-J5b) modal-vamp wiring: the dormant bright-modal tokens join the
     // styles whose leadScales already speak the mode (rock/funk ride mixolydian's
     // ♭VII; metal's phrygian i–♭II is its signature semitone move). lydian_vamp
@@ -4637,21 +4641,21 @@
     rock:    { label:'Rock',       defaultKey:'E', progressions:['i-VII-VI-VII','I-V-vi-IV','I-IV-V','mixolydian_rock','mixolydian_vamp'], leadScales:['minor_pentatonic','natural_minor','mixolydian'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'rock' },
     metal:   { label:'Metal',      defaultKey:'E', progressions:['metal_i_bVI_bVII','metal_pedal_chromatic','metal_i_bVII_bVI_V','phrygian_vamp'], leadScales:['phrygian','natural_minor','harmonic_minor'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'metal' },
     djent:   { label:'Djent',      defaultKey:'E', progressions:['metal_pedal_chromatic'], leadScales:['phrygian','natural_minor'], chordDepth:'triad', chordOverride:'5oct', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'djent' },
-    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
+    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what','jazz_blues','tritone_sub_ii_V_I','backdoor_ii_V','tadd_dameron'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
     // Funk goes Dorian (modal-M1 ride-along, approved 2026-06-05): dorian_vamp's
     // dom7 IV carries the ♮6 — the James Brown sound — so chordOverride must be
     // 'auto' (a min7 override would silence the vamp's major/dom IV).
     funk:    { label:'Funk / R&B', defaultKey:'A', progressions:['dorian_vamp','static_i','i-VII-VI-VII','mixolydian_vamp'], leadScales:['dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'funk' },
     pop:     { label:'Pop',        defaultKey:'C', progressions:['I-V-vi-IV','vi-IV-I-V','I-vi-IV-V'], leadScales:['major','major_pentatonic'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'pop' },
-    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-V-vi-IV'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
+    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-IV-I-V','I-II7-V','I-V-vi-IV','mixolydian_rock'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
     gospel:  { label:'Gospel',     defaultKey:'C', progressions:['ii-V-I','I-vi-ii-V'], leadScales:['major','dorian'], chordDepth:'ninth', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'gospel' },
     // ── World / genre batch (band-intel, panel 2026-06-13) — each genre vetted by
     // its idiom agent; the band each one declares lives in ARRANGEMENT_RECIPES.
     reggae:   { label:'Reggae',       defaultKey:'A', progressions:['static_i','i-iv','i-VII-VI-VII','I-IV-V','I-V-vi-IV'], leadScales:['minor_pentatonic','natural_minor','dorian'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'reggae' },
     disco:    { label:'Disco',        defaultKey:'A', progressions:['i-VII-VI-VII','dorian_vamp','vi-IV-I-V','static_i'], leadScales:['minor_pentatonic','dorian','natural_minor'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'disco' },
     latin:    { label:'Latin / Bossa', defaultKey:'A', progressions:['ii-V-I','minor_ii_V_i','I-vi-ii-V'], leadScales:['major','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'latin' },
-    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
-    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
+    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','modal_mixture','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
+    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','I-IV','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
     // ── World / genre Wave 2 (band-intel, panel 2026-06-13) — feel is straight/pad
     // for ALL so the genre's ARRANGEMENT_RECIPE drives (backingStyle:'boogie' or a
     // non-straight swing pre-empt the recipe; the recipe cells carry each feel).
@@ -4721,6 +4725,7 @@
   // D-J5a: the palettes already carry progressions[] plural — name them so the
   // picker speaks the player's vocabulary). Fallback = prettified token.
   const JAM_PROG_LABELS = {
+    'I-IV':'I–IV vamp', 'I-IV-I-V':'I–IV–I–V train-beat', 'I-II7-V':'I–II7–V secondary dominant',
     '12_bar_blues':'12-Bar Blues', quick_change_blues:'Quick-Change Blues',
     'i-VII-VI-VII':'i–♭VII–♭VI–♭VII', 'I-V-vi-IV':'I–V–vi–IV', 'I-IV-V':'I–IV–V',
     'I-vi-IV-V':'I–vi–IV–V', 'vi-IV-I-V':'vi–IV–I–V', 'I-vi-ii-V':'I–vi–ii–V',
@@ -4732,6 +4737,8 @@
     mixolydian_vamp:'Mixolydian vamp (I–♭VII–IV)', phrygian_vamp:'Phrygian vamp (i–♭II)',
     'i-iv':'i–iv minor vamp', soul_turnaround:'Soul turnaround (I–VI7–ii–V)',
     andalusian:'Andalusian (i–♭VII–♭VI–V)', blues_turnaround:'Blues turnaround',
+    jazz_blues:'Jazz blues', tritone_sub_ii_V_I:'Tritone-sub ii–V–I', backdoor_ii_V:'Backdoor ii–V', tadd_dameron:'Tadd Dameron turn',
+    modal_mixture:'Borrowed iv (I–IV–iv–V)',
     pachelbel:'Pachelbel (I–V–vi–iii–IV…)', circle_diatonic:'Circle of 5ths', 'i-VI-III-VII':'i–♭VI–♭III–♭VII',
     ragtime_circle:'Ragtime chain (III7–VI7–II7–V7–I)', 'I-vi-ii-V':'I–vi–ii–V',
     lydian_vamp:'Lydian vamp (I–II)',
@@ -4740,6 +4747,13 @@
   function jamProgressionLabel(token) {
     return JAM_PROG_LABELS[token] || String(token || '').replace(/_/g, ' ');
   }
+  (function validateJamProgressionLabels() {
+    for (const id of Object.keys(STYLE_PALETTES)) {
+      for (const pr of STYLE_PALETTES[id].progressions || []) {
+        if (!JAM_PROG_LABELS[pr]) throw new Error(`[Virtuoso jam] ${id} progression "${pr}" needs a JAM_PROG_LABELS label`);
+      }
+    }
+  })();
   // One per-style "try this" line (slice J-1 — the intent SEED, goal-card grammar:
   // a constraint to jam against, never a score). Draft prompts pending the
   // genre-idiom refinement sweep (logged in ROADMAP).
@@ -13891,9 +13905,13 @@
     if (hi - lo < MIN_SPAN) lo = Math.max(0, hi - MIN_SPAN);
     fbFretLo = lo; fbFretHi = hi;
   }
-  // Jam target-highlight: which pitch classes to light on the strip right now, given
-  // the Highlight mode (chord tones / guide tones / scale / off) and the chord at the
-  // playhead (from the enriched backing events). The teaching mirror.
+  // Jam target-highlight: the current teaching mirror on the strip. Guitar =
+  // chord / guide / scale / off; bass reuses the SAME 4-step ladder but teaches the
+  // bassist's job: roots / next root / approach / off. One control path, two jobs.
+  const JAM_HL_LABELS = {
+    guitar: { chord:'Chord tones — most support', guide:'Guide tones (3rd & 7th)', scale:'Scale', off:'Off — bare neck' },
+    bass:   { chord:'Roots — most support', guide:'Next root — see the change coming', scale:'Approach tones', off:'Off — bare neck' },
+  };
   let jamHighlightMode = 'chord';   // chord | guide | scale | off
   try { const m = localStorage.getItem('virtuoso.jamHighlight'); if (m) jamHighlightMode = m; } catch (_) {}
   // Spotlight (J-3): which turn the playhead is in — even pass = you solo, odd =
@@ -13907,16 +13925,80 @@
     for (let i = 0; i < secs.length; i++) { if (secs[i].time <= t + 1e-6) idx = i; else break; }
     return (idx % 2 === 0) ? 'you' : 'band';
   }
+  function jamCurrentCfg() { return (activeBundle && activeBundle.config) || readConfig(); }
+  function jamInstrumentKind() {
+    const cfg = jamCurrentCfg() || {};
+    return ((STRING_SETUPS[cfg.stringSetup] || {}).instrument || cfg.instrument || 'guitar');
+  }
+  function jamIsBassContext() { return jamInstrumentKind() === 'bass'; }
+  function jamFretboardEligible() { const inst = jamInstrumentKind(); return inst === 'guitar' || inst === 'bass'; }
   // The fretboard highlight in effect right now: Spotlight OVERRIDES per turn (your
-  // solo → SCALE sandbox; band solo → CHORD tones to comp behind), else the user's pick.
+  // solo → SCALE sandbox / bass approaches; band solo → CHORD roots or chord tones),
+  // else the user's pick.
   function jamEffectiveHighlight(t) {
     const turn = jamSpotlightTurn(t);
     if (turn) return turn === 'band' ? 'chord' : 'scale';
     return jamHighlightMode;
   }
+  function jamCarrierInfo(t) {
+    if (!activeBundle) return null;
+    const beatSec = chartBeatSeconds(activeBundle) || 0.5;
+    const lead = activeBundle.leadIn || 0;
+    const tl = activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline) || [];
+    if (tl.length) {
+      let curIdx = -1;
+      for (let i = 0; i < tl.length; i++) {
+        const at = lead + (tl[i].startSec != null ? tl[i].startSec : (tl[i].t || 0));
+        if (at > t + 1e-6) break;
+        curIdx = i;
+      }
+      if (curIdx >= 0) {
+        const cur = tl[curIdx];
+        const next = tl[curIdx + 1] || tl[0] || null;
+        const nextAt = next
+          ? (next === tl[0] && curIdx === tl.length - 1
+            ? (activeBundle.songInfo?.duration || lead)
+            : lead + (next.startSec != null ? next.startSec : (next.t || 0)))
+          : (activeBundle.songInfo?.duration || lead);
+        const sameChord = !!(next && cur.cpcs && next.cpcs
+          && next.cpcs.length === cur.cpcs.length && next.cpcs.every(pc => cur.cpcs.includes(pc)));
+        return { cur, next, beatSec, timeToNext: Math.max(0, nextAt - t), sameChord };
+      }
+    }
+    const evs = activeBundle.backingEvents || [];
+    if (!evs.length) return null;
+    let curIdx = -1, firstCar = -1;
+    for (let i = 0; i < evs.length; i++) {
+      if (!evs[i].cpcs) continue;
+      if (firstCar < 0) firstCar = i;
+      if (evs[i].t > t + 1e-6) break;
+      curIdx = i;
+    }
+    if (curIdx < 0) return null;
+    let nextIdx = -1;
+    for (let i = curIdx + 1; i < evs.length; i++) { if (evs[i].cpcs) { nextIdx = i; break; } }
+    const cur = evs[curIdx];
+    const next = nextIdx >= 0 ? evs[nextIdx] : (firstCar != curIdx ? evs[firstCar] : null);
+    const timeToNext = nextIdx >= 0 ? evs[nextIdx].t - t : Math.max(0, (activeBundle.songInfo?.duration || 0) - t);
+    const sameChord = !!(next && cur.cpcs && next.cpcs
+      && next.cpcs.length === cur.cpcs.length && next.cpcs.every(pc => cur.cpcs.includes(pc)));
+    return { cur, next, beatSec, timeToNext, sameChord };
+  }
+  function bassApproachPcs(rootPc) {
+    const pc = ((rootPc % 12) + 12) % 12;
+    return [pc, (pc + 11) % 12, (pc + 1) % 12];
+  }
   function jamTargetPcs(t) {
     const mode = jamEffectiveHighlight(t);
     if (mode === 'off' || !activeBundle) return null;
+    if (jamIsBassContext()) {
+      const info = jamCarrierInfo(t);
+      if (!info || !info.cur) return null;
+      const rootPc = (mode === 'guide' || mode === 'scale') && info.next && !info.sameChord
+        ? info.next.rootPc : info.cur.rootPc;
+      if (rootPc == null) return null;
+      return mode === 'scale' ? new Set(bassApproachPcs(rootPc)) : new Set([((rootPc % 12) + 12) % 12]);
+    }
     if (mode === 'scale') {
       const cfg = activeBundle.config; if (!cfg) return null;
       const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
@@ -13930,12 +14012,9 @@
       }
       return ivs.length ? new Set(ivs.map(i => (keyPc + i) % 12)) : null;
     }
-    // chord / guide — the most recent backing chord at or before the playhead.
-    const evs = activeBundle.backingEvents || [];
-    let cur = null;
-    for (const e of evs) { if (e.t > t + 1e-6) break; if (e.cpcs) cur = e; }
-    if (!cur) return null;
-    const pcs = mode === 'guide' ? cur.gpcs : cur.cpcs;
+    const info = jamCarrierInfo(t);
+    if (!info || !info.cur) return null;
+    const pcs = mode === 'guide' ? info.cur.gpcs : info.cur.cpcs;
     return (pcs && pcs.length) ? new Set(pcs) : null;
   }
   // Shift telegraph (hand-marks Slice 2; UX ruling): when the run is about to
@@ -13967,35 +14046,21 @@
     return out.length ? { ghosts: out, lead } : null;
   }
   // Play-the-changes ANTICIPATION: within ~1.5 beats of the next chord, the NEXT
-  // chord's guide tones (3rd/7th) — drawn as a distinct amber "ghost" on the strip
-  // so the player preps the change before it lands. Wraps to the top of the loop.
+  // target is ghosted amber on the strip so the player preps the change before it
+  // lands. Guitar = next guide tones; bass = next root / approach pocket. Wraps to
+  // the top of the loop.
   function jamNextGuidePcs(t) {
-    if (jamHighlightMode === 'off' || !activeBundle) return null;
-    const evs = activeBundle.backingEvents || []; if (!evs.length) return null;
-    // Walk the chord-change CARRIERS only (the one cpcs-tagged event per
-    // change) — the dense comp/bass lanes (step 3–4) interleave nameless hits
-    // between changes, so "the next array element" is no longer "the next
-    // chord". For the legacy pad (every event a carrier) this is identical.
-    let curIdx = -1, firstCar = -1;
-    for (let i = 0; i < evs.length; i++) {
-      if (!evs[i].cpcs) continue;
-      if (firstCar < 0) firstCar = i;
-      if (evs[i].t > t + 1e-6) break;
-      curIdx = i;
+    const mode = jamEffectiveHighlight(t);
+    if (mode === 'off' || !activeBundle) return null;
+    const info = jamCarrierInfo(t);
+    if (!info || !info.cur) return null;
+    if (info.timeToNext > 1.6 * info.beatSec) return null;
+    if (jamIsBassContext()) {
+      const rootPc = info.next && !info.sameChord ? info.next.rootPc : info.cur.rootPc;
+      if (rootPc == null) return null;
+      return mode === 'scale' ? new Set(bassApproachPcs(rootPc)) : new Set([((rootPc % 12) + 12) % 12]);
     }
-    if (curIdx < 0) return null;
-    let nextIdx = -1;
-    for (let i = curIdx + 1; i < evs.length; i++) { if (evs[i].cpcs) { nextIdx = i; break; } }
-    const next = nextIdx >= 0 ? evs[nextIdx] : (firstCar !== curIdx ? evs[firstCar] : null);
-    // only as the change approaches (wrap: time to the loop's top)
-    const timeToNext = nextIdx >= 0 ? evs[nextIdx].t - t : Math.max(0, (activeBundle.songInfo?.duration || 0) - t);
-    if (timeToNext > 1.6 * chartBeatSeconds(activeBundle)) return null;
-    // "Static" = no next carrier OR the next carrier is the SAME chord (sub-bar
-    // harmonic rhythm re-slots an unchanged vamp chord every half bar, so a
-    // one-chord vamp still has "next" events — compare identity, not existence).
-    const sameChord = next && evs[curIdx].cpcs && next.cpcs
-      && next.cpcs.length === evs[curIdx].cpcs.length && next.cpcs.every(pc => evs[curIdx].cpcs.includes(pc));
-    if (!next || sameChord) {
+    if (!info.next || info.sameChord) {
       // D-J6 (J-2): a STATIC one-chord vamp has no "next chord" — instead of
       // going dark, pre-light the tonality's COLOR note near the wrap (Dorian
       // ♮6, Mixo ♭7, Lydian ♯4…): the note that says the mode, the thing worth
@@ -14006,7 +14071,7 @@
       const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
       return new Set([(keyPc + colorIv) % 12]);
     }
-    const pcs = next.gpcs || [];
+    const pcs = info.next.gpcs || [];
     return pcs.length ? new Set(pcs) : null;
   }
   // Notes sounding within ~80ms of the playhead, with a sustain-based fade.
@@ -14026,9 +14091,35 @@
   // Reflect the toggle state onto the root class (drives strip visibility) and
   // the toggle button. The strip only actually appears when the active renderer
   // is also fretboard-capable (see syncViewSwitcher's .virtuoso-fb-capable).
+  function syncJamHighlightUI() {
+    const labels = jamIsBassContext() ? JAM_HL_LABELS.bass : JAM_HL_LABELS.guitar;
+    $('virtuoso-jam-hl')?.setAttribute('aria-label', jamIsBassContext() ? 'Bass target map' : 'Fretboard highlight');
+    document.querySelectorAll('#virtuoso-jam-hl .virtuoso-jam-hl-btn').forEach(b => {
+      const mode = b.dataset.hl || 'off';
+      if (labels[mode]) b.textContent = labels[mode];
+      b.classList.toggle('active', mode === jamHighlightMode);
+    });
+  }
   function syncFretboardUI() {
     $('virtuoso-root')?.classList.toggle('virtuoso-fb-on', fretboardOn);
-    $('virtuoso-fretboard-toggle')?.setAttribute('aria-checked', String(fretboardOn));
+    const toggle = $('virtuoso-fretboard-toggle');
+    toggle?.setAttribute('aria-checked', String(fretboardOn));
+    const jam = isJamMode();
+    const label = $('virtuoso-fretboard-toggle-label');
+    if (label) label.textContent = jam ? (fretboardOn ? 'Target map' : 'Target map off') : 'Fretboard view';
+    toggle?.setAttribute('aria-label', jam ? (fretboardOn ? 'Toggle target map' : 'Turn target map on') : 'Toggle fretboard view');
+    const wrap = $('virtuoso-fretboard-toggle-wrap');
+    if (wrap) wrap.title = jam
+      ? (fretboardOn ? 'Chord and target tones light on the neck while you jam.' : 'Turn the target map on to light the changes on the neck while you jam.')
+      : '';
+  }
+  function maybePrimeJamFretboardMap() {
+    let hasPref = false;
+    try { hasPref = localStorage.getItem('virtuoso.fretboard') != null; } catch (_) {}
+    if (hasPref || !jamFretboardEligible()) return false;
+    if (!fretboardOn) fretboardOn = true;
+    syncFretboardUI();
+    return true;
   }
   // Reflect the keep-looping state onto its toggle (visibility is CSS, per mode).
   function syncKeepLoopUI() {
@@ -14843,6 +14934,7 @@
         ? Math.max(0, (audioCtx.currentTime - playAnchorCtx) * 1000)
         : Math.max(0, nowMs - playAnchorMs);
       currentPracticeTime = playAnchorChartTime + elapsedMs / 1000;
+      if (_jamPending && isJamMode()) syncJamPendingChip();
       if (currentPracticeTime > _runMaxChartTime) _runMaxChartTime = currentPracticeTime;   // recap reached-tracking (furthest this pass)
       if (_preRollUntil > 0 && currentPracticeTime >= _preRollUntil) _preRollUntil = 0;   // resume pre-roll done → normal play (notes audible, judge live)
       if (_preRollUntil === 0) maybeOfferDownshift();   // beginner mid-run offer (cheap: gated flags first, evaluates once per run)
@@ -14878,7 +14970,11 @@
           }
           _loopWraps++;
           const lc = $('virtuoso-loop-count');
-          if (lc) { lc.hidden = false; lc.textContent = 'Loop ' + _loopWraps; }
+          if (lc) {
+            const showLoopCount = !isJamMode();
+            lc.hidden = !showLoopCount;
+            if (showLoopCount) lc.textContent = 'Loop ' + _loopWraps;
+          }
         }
       } else if (finiteRunActive()) {
         // Finite drill (Depth Ladder slice 1): the right-sized run plays ONCE, then
@@ -15498,6 +15594,9 @@
   // masterTrim. Full matrix + the other genres are the P1 roll-out; P0 ships the 3 exemplars.
   const MIX_BASE = { level: {}, pan: {}, carve: {}, send: {}, drumkit: null, masterTrim: 1 };
   const MIX_RECIPES = {
+    blues:   { level: { bass: 1.08, drums: 0.92, pad: 0.88 }, pan: { harmony: 0.18, pad: -0.14 },
+               carve: { harmonyHP: 145, bassLP: 2100 }, send: { harmony: 0.24, pad: 0.22, bass: 0.06, drums: 0.16 },
+               drumkit: { loShelf: { f: 105, dB: 1.5 }, hiShelf: { dB: -3 }, compRatio: 2.4, compThr: -16 }, masterTrim: 0.96 },
     country: { level: { bass: 1.12, drums: 0.9, pad: 0.9 }, pan: { harmony: 0.25, pad: -0.22 },
                carve: { harmonyHP: 150 }, send: { harmony: 0.24, pad: 0.26, drums: 0.16 },
                drumkit: { loShelf: { f: 120, dB: 2 }, hiShelf: { dB: -4 }, compRatio: 2.5, compThr: -16 }, masterTrim: 1 },
@@ -15507,6 +15606,24 @@
     jazz:    { level: { drums: 0.8, bass: 1.12, pad: 0.95 }, pan: { harmony: 0.2, pad: -0.18, drums: 0.1 },
                carve: { harmonyHP: 150 }, send: { harmony: 0.26, pad: 0.28, drums: 0.2 },
                drumkit: { loShelf: { f: 110, dB: 0 }, hiShelf: { dB: -2 }, compRatio: 2, compThr: -14 }, masterTrim: 1 },
+    funk:    { level: { bass: 1.12, drums: 1.02, pad: 0.82 }, pan: { harmony: 0.16, pad: -0.2, drums: 0.08 },
+               carve: { harmonyHP: 220, padHP: 260, bassLP: 1700 }, send: { harmony: 0.1, pad: 0.08, bass: 0.04, drums: 0.07 },
+               drumkit: { loShelf: { f: 95, dB: 1 }, hiShelf: { dB: 1.5 }, compRatio: 3.2, compThr: -18 }, masterTrim: 0.92 },
+    reggae:  { level: { bass: 1.2, drums: 0.82, pad: 0.84 }, pan: { harmony: 0.22, pad: -0.2 },
+               carve: { harmonyHP: 240, padHP: 220, bassLP: 1500 }, send: { harmony: 0.18, pad: 0.16, bass: 0.05, drums: 0.12 },
+               drumkit: { loShelf: { f: 90, dB: 1.2 }, hiShelf: { dB: -5 }, compRatio: 2.2, compThr: -15 }, masterTrim: 0.95 },
+    disco:   { level: { bass: 1.12, drums: 1.04, pad: 0.96 }, pan: { harmony: 0.22, pad: -0.24, drums: 0.1 },
+               carve: { harmonyHP: 190, padHP: 210, bassLP: 2200 }, send: { harmony: 0.14, pad: 0.16, bass: 0.05, drums: 0.08 },
+               drumkit: { loShelf: { f: 85, dB: 0.8 }, hiShelf: { dB: 3 }, compRatio: 3.4, compThr: -18 }, masterTrim: 0.9 },
+    pop:     { level: { bass: 1.02, drums: 0.98, pad: 1.0 }, pan: { harmony: 0.18, pad: -0.18, drums: 0.06 },
+               carve: { harmonyHP: 170, padHP: 190, bassLP: 2100 }, send: { harmony: 0.18, pad: 0.2, bass: 0.04, drums: 0.1 },
+               drumkit: { loShelf: { f: 95, dB: 0.5 }, hiShelf: { dB: 1 }, compRatio: 2.8, compThr: -17 }, masterTrim: 0.96 },
+    soul:    { level: { bass: 1.1, drums: 0.94, pad: 0.94 }, pan: { harmony: 0.16, pad: -0.14, drums: 0.06 },
+               carve: { harmonyHP: 180, padHP: 210, bassLP: 1850 }, send: { harmony: 0.22, pad: 0.24, bass: 0.05, drums: 0.14 },
+               drumkit: { loShelf: { f: 105, dB: 1 }, hiShelf: { dB: -2 }, compRatio: 2.6, compThr: -16 }, masterTrim: 0.96 },
+    synthwave: { level: { bass: 1.08, drums: 0.96, pad: 1.06 }, pan: { harmony: 0.28, pad: -0.3, drums: 0.12 },
+                 carve: { harmonyHP: 210, padHP: 240, bassLP: 2400 }, send: { harmony: 0.12, pad: 0.18, bass: 0.05, drums: 0.07 },
+                 drumkit: { loShelf: { f: 80, dB: 0.5 }, hiShelf: { dB: 4 }, compRatio: 3.2, compThr: -18 }, masterTrim: 0.88 },
   };
   function resolveMix(cfg) {
     const style = cfgAudioProfile(cfg || {});
@@ -16749,22 +16866,27 @@
     const root = $('virtuoso-root'), body = $('virtuoso-results-body'), title = $('virtuoso-results-title');
     if (!root || !body) return;
     const m = _jamMirror;
-    if (!m || m.noteCount <= 0) return;   // nothing played → stop quietly, no recap
     const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const ms = (s && s.duration_ms) || 0;
     const mins = Math.floor(ms / 60000), secs = Math.round((ms % 60000) / 1000);
     const dur = ms >= 1000 ? `${mins}:${String(secs).padStart(2, '0')}` : 'a moment';
     const style = (s && s.style) || (STYLE_PALETTES[currentJamStyleId()] || {}).label || 'your style';
     const key = (($('virtuoso-jam-key') || {}).value) || 'A';
-    const pcs = [...m.pcs].sort((a, b) => a - b).map(pcName);
-    const toneList = pcs.length ? pcs.join(' · ') : '—';
-    if (title) title.textContent = 'Nice jam.';
+    const prog = (s && s.progression) ? jamProgressionLabel(s.progression) : jamProgressionLabel((($('virtuoso-jam-prog') || {}).value) || '');
+    const noteCount = m ? m.noteCount : 0;
+    const pcs = m ? [...m.pcs].sort((a, b) => a - b).map(pcName) : [];
+    const toneList = pcs.length ? pcs.join(' · ') : 'No pitch was detected.';
+    const intentLine = jamIntent ? `<div class="virtuoso-jam-recap-line">Intent: <b>${esc(jamIntent)}</b></div>` : '';
+    if (title) title.textContent = 'Jam mirror';
     body.innerHTML =
       `<div class="virtuoso-jam-recap">` +
-        `<div class="virtuoso-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>.</div>` +
-        `<div class="virtuoso-jam-recap-line">${m.noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>` +
+        `<div class="virtuoso-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>${prog ? ` · <b>${esc(prog)}</b>` : ''}.</div>` +
+        intentLine +
+        (noteCount > 0
+          ? `<div class="virtuoso-jam-recap-line">${noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>`
+          : `<div class="virtuoso-jam-recap-line">No pitch was detected, so this stays a form-and-intent recap.</div>`) +
         `<div class="virtuoso-jam-recap-tones">${esc(toneList)}</div>` +
-        `<div class="virtuoso-jam-recap-sub">A mirror of what you played — no score, just what came out. Take any of those into the next one.</div>` +
+        `<div class="virtuoso-jam-recap-sub">A mirror, never a score. Use the form, intent, and tones as a prompt for the next pass.</div>` +
         `<div class="virtuoso-jam-recap-cta">` +
           `<button type="button" class="virtuoso-results-primary" data-act="jam-again">Jam again</button>` +
           `<button type="button" class="virtuoso-results-quiet" data-act="jam-done">Done</button>` +
@@ -18878,7 +19000,11 @@
     $('virtuoso-loop-a')?.classList.toggle('active', tpA != null);
     $('virtuoso-loop-b')?.classList.toggle('active', tpB != null);
     const lc = $('virtuoso-loop-count');
-    if (lc) { const active = segmentLoopA != null && segmentLoopB != null; lc.hidden = !active || _loopWraps < 1; lc.textContent = 'Loop ' + _loopWraps; }
+    if (lc) {
+      const active = segmentLoopA != null && segmentLoopB != null && !isJamMode();
+      lc.hidden = !active || _loopWraps < 1;
+      if (active) lc.textContent = 'Loop ' + _loopWraps;
+    }
     const lr = $('virtuoso-loop-range');
     if (lr) { const txt = loopReadoutText(); lr.hidden = !txt; lr.textContent = txt || ''; }
     syncFeelControl();
@@ -19169,6 +19295,8 @@
       summary.innerHTML = summarize(exercise);
       await attachRenderer(exercise);
       prewarmVoices(activeBundle);  // start the sampled-voice load now so Play starts on WAF, not the oscillator
+      syncJamHighlightUI();
+      syncFretboardUI();
       refreshStatusFromState();
     } catch (e) {
       showStatus(`Error: ${e.message || e}`);
@@ -19967,10 +20095,12 @@
     const activeId = currentJamStyleId();
     const q = _jamPickerQuery.trim().toLowerCase();
     const pickStyle = (id) => {
+      if (!STYLE_PALETTES[id] || id === activeId) return;
       setJamStyleId(id);
-      syncJamStyleDetails(id);                 // Changes picker + Band strip + intents
-      if (playing && isJamMode()) jamPlay();   // a genre change = a NEW band → switch now (its count-in is the entrance)
+      syncJamStyleDetails(id);                 // Updates picker + Band strip + intents immediately
+      if (playing && isJamMode()) jamQueueChange();   // Jam live-edits land at the wrap, style included
       renderJamStyles();
+    syncJamHighlightUI();
     };
     const mkChip = (id) => {
       const btn = document.createElement('button');
@@ -20148,6 +20278,23 @@
       spotlight: jamSpotlight,
     };
   }
+  function jamPendingCountdownText() {
+    if (!playing || !isJamMode() || segmentLoopA == null || segmentLoopB == null || !activeBundle) return '';
+    const beatSec = chartBeatSeconds(activeBundle) || 0;
+    if (!(beatSec > 0.02)) return '';
+    const remain = Math.max(0, segmentLoopB - currentPracticeTime);
+    const beatsLeft = Math.max(1, Math.ceil(remain / beatSec - 1e-3));
+    return beatsLeft <= 1 ? 'next beat' : ('in ' + beatsLeft + ' beats');
+  }
+  function syncJamPendingChip() {
+    const chip = $('virtuoso-jam-pending');
+    if (!chip) return;
+    chip.hidden = !_jamPending;
+    if (_jamPending) {
+      const when = jamPendingCountdownText();
+      chip.textContent = '↻ At the wrap' + (when ? ' ' + when : '') + ': ' + _jamPendingParts.join(' · ');
+    }
+  }
   // Called by every jam-panel control while a jam is running: diff against the
   // pass's snapshot, show/refresh (or clear) the pending chip. Changing a value
   // back before the wrap cancels cleanly — nothing rebuilds.
@@ -20165,14 +20312,12 @@
     if (now.energy !== was.energy) parts.push(now.energy === 'auto' ? 'auto-energy' : now.energy + ' energy');
     if (now.spotlight !== was.spotlight) parts.push(now.spotlight ? 'spotlight: trade solos' : 'spotlight off');
     _jamPending = parts.length > 0;
-    const chip = $('virtuoso-jam-pending');
-    if (chip) {
-      chip.hidden = !_jamPending;
-      if (_jamPending) chip.textContent = '↻ At the wrap: ' + parts.join(' · ');
-    }
+    _jamPendingParts = parts;
+    syncJamPendingChip();
   }
   function jamPendingClear() {
     _jamPending = false;
+    _jamPendingParts = [];
     const chip = $('virtuoso-jam-pending'); if (chip) chip.hidden = true;
   }
 
@@ -20347,6 +20492,10 @@
       syncSessionMode('single');
       setPathwayModeClass(false);          // clears pathway-mode (calls syncModeBar)
       if (root) root.classList.add('virtuoso-jam-mode');
+      const primedMap = maybePrimeJamFretboardMap();
+      syncJamHighlightUI();
+      syncFretboardUI();
+      if (primedMap) refitStageDuring(340);
       syncModeBar();                       // re-derive now that jam-mode is set
       return;
     }
@@ -22582,6 +22731,8 @@
   // The card IMAGE — a canvas render of the SAME model (ux spec: 1200×630, verdict-led,
   // green ✓ only on a true clear, theme palette/font read live off --vir-card-*; same-origin
   // → toBlob won't taint). Returns the canvas, or null.
+  // LOCAL FALLBACK ONLY: shareCardAction prefers note_detect's canonical card
+  // (window.noteDetect.renderResultsCard) and uses this when it's absent.
   function renderShareCardImage(s) {
     const m = shareCardModel(s); if (!m) return null;
     const W = 1200, H = 630, P = 64;
@@ -22724,10 +22875,67 @@
       return (j && j.ok) ? j : null;
     } catch (_) { return null; }
   }
-  // Copy/download with the host-checked fallback ladder (feedback-compatibility):
-  // Save → server-folder save → browser download; Copy → image→clipboard → download → text.
+  // ── Consume note_detect's ONE canonical results card when present (don't
+  // duplicate it). note_detect (PR #43, ≥1.18) exposes window.noteDetect.
+  // renderResultsCard / copyResultsCard / saveResultsCard so plugins reuse a
+  // single card implementation; we FEED Virtuoso's data + its --vir palette
+  // (via a passed overlay element) and FEATURE-DETECT — renderShareCardImage
+  // above stays a thin local fallback so Virtuoso still runs with note_detect
+  // absent (must not hard-depend).
+  function _ndCardApi() {
+    const nd = (typeof window !== 'undefined') ? window.noteDetect : null;
+    return (nd && typeof nd.renderResultsCard === 'function'
+      && typeof nd.copyResultsCard === 'function'
+      && typeof nd.saveResultsCard === 'function') ? nd : null;
+  }
+  // Map Virtuoso's share-card model → note_detect's card `data`. The stats[]
+  // override drives our non-note_detect layout; eyebrow/hero/sub/brand are all
+  // overridden so the shared renderer reproduces Virtuoso's card from its data.
+  function _resultsCardData(s) {
+    const m = shareCardModel(s); if (!m) return null;
+    return {
+      eyebrow: m.eyebrow,
+      hero: (m.heroGreen ? '✓ ' : '') + m.hero,
+      artist: m.sub || undefined,        // descriptive line → the card's sub
+      instrument: m.lane,                // LADDER / CUSTOM / JAM / WORKOUT
+      stats: (m.stats || []).slice(0, 4),
+      brand: 'virtuoso · practice studio for guitar & bass',
+    };
+  }
+  // A detached element carrying Virtuoso's palette as the --nd-* vars the shared
+  // renderer reads off opts.overlayEl. Attached under #virtuoso-root so
+  // getComputedStyle resolves; the caller removes it after the render.
+  function _virCardOverlay() {
+    let accent = '#60a5fa';
+    try { const root = $('virtuoso-root'); if (root) { const v = getComputedStyle(root).getPropertyValue('--vir-accent-edge').trim(); if (v) accent = v; } } catch (_) {}
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:0;height:0;pointer-events:none;';
+    const set = (k, v) => el.style.setProperty(k, v);
+    set('--nd-accent', accent); set('--nd-accent2', accent);
+    set('--nd-hit', '#22c55e'); set('--nd-miss', '#ef4444');
+    set('--nd-text', '#f8fafc'); set('--nd-dim', '#94a3b8'); set('--nd-warn', '#fbbf24');
+    set('--nd-bg', 'rgba(8,8,18,0.96)');
+    set('--nd-font-display', 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+    ($('virtuoso-root') || document.body).appendChild(el);
+    return el;
+  }
+  // Copy/download. PREFER note_detect's canonical card+ladder; else the local
+  // host-checked fallback ladder (feedback-compatibility): image→clipboard
+  // (Promise to keep the click activation) → download PNG → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
+    const nd = _ndCardApi();
+    if (nd) {
+      const data = _resultsCardData(s);
+      if (data) {
+        const overlay = _virCardOverlay();
+        try {
+          if (action === 'download') { const r = await nd.saveResultsCard(data, { overlayEl: overlay }); return (r && r.ok) ? 'saved' : 'failed'; }
+          return (await nd.copyResultsCard(data, { overlayEl: overlay })) || 'failed';
+        } catch (_) { /* fall through to the local fallback below */ }
+        finally { try { overlay.remove(); } catch (_) {} }
+      }
+    }
     // Ensure the active theme's display face is loaded before the canvas rasterizes
     // (the DOM card gets it via CSS font-display; the canvas needs it resident).
     await loadCardFonts();
@@ -24656,6 +24864,7 @@
     $('virtuoso-fretboard-system')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
     $('virtuoso-controls')?.querySelector('[name="key"]')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
     $('virtuoso-controls')?.querySelector('[name="scale"]')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
+    $('virtuoso-controls')?.querySelector('[name="stringSetup"]')?.addEventListener('change', () => { syncJamHighlightUI(); syncFretboardUI(); });
     const pathwaySelect = $('virtuoso-pathway');
     pathwaySelect?.addEventListener('change', () => {
       applyPathwayById(pathwaySelect.value);
@@ -24752,10 +24961,9 @@
     document.querySelectorAll('#virtuoso-jam-hl .virtuoso-jam-hl-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.hl === jamHighlightMode);
       b.addEventListener('click', () => {
-        document.querySelectorAll('#virtuoso-jam-hl .virtuoso-jam-hl-btn').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
         jamHighlightMode = b.dataset.hl || 'chord';
         try { localStorage.setItem('virtuoso.jamHighlight', jamHighlightMode); } catch (_) {}
+        syncJamHighlightUI();
         drawOnce();
       });
     });

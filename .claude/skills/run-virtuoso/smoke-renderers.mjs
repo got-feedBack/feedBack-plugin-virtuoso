@@ -284,13 +284,79 @@ async function run() {
     {
       const jFails = [];
       const errBase = pageErrors.length;
-      await page.evaluate(() => document.querySelector('[data-mode="jam"]')?.click());
+      const discover = await page.evaluate(() => {
+        const fb = document.getElementById("virtuoso-fretboard-toggle");
+        if (fb && fb.getAttribute("aria-checked") === "true") fb.click();
+        try { localStorage.removeItem("virtuoso.fretboard"); } catch (_) {}
+        const setup = document.querySelector('[name="stringSetup"]');
+        if (setup) { setup.value = "guitar_6_standard"; setup.dispatchEvent(new Event("change", { bubbles: true })); }
+        document.querySelector('[data-mode="guided"]')?.click();
+        document.querySelector('[data-mode="jam"]')?.click();
+        const label = document.getElementById("virtuoso-fretboard-toggle-label");
+        return {
+          on: fb ? fb.getAttribute("aria-checked") === "true" : false,
+          label: label ? label.textContent.trim() : "",
+        };
+      });
+      if (!discover.on) jFails.push("Jam did not auto-enable the target map on first entry");
+      if (!/Target map/i.test(discover.label || "")) jFails.push(`Jam map label did not switch to target-map language (\"${discover.label}\")`);
+
+      const bassUi = await page.evaluate(() => {
+        const setup = document.querySelector('[name="stringSetup"]');
+        if (setup) { setup.value = "bass_4_standard"; setup.dispatchEvent(new Event("change", { bubbles: true })); }
+        document.querySelector('[data-mode="jam"]')?.click();
+        return [...document.querySelectorAll('#virtuoso-jam-hl .virtuoso-jam-hl-btn')].map((b) => b.textContent.trim());
+      });
+      if (!/Roots/i.test(bassUi[0] || "")) jFails.push(`bass Jam highlight 1 should teach roots (got \"${bassUi[0] || ""}\")`);
+      if (!/Next root/i.test(bassUi[1] || "")) jFails.push(`bass Jam highlight 2 should teach next roots (got \"${bassUi[1] || ""}\")`);
+      if (!/Approach/i.test(bassUi[2] || "")) jFails.push(`bass Jam highlight 3 should teach approaches (got \"${bassUi[2] || ""}\")`);
+
       await page.waitForTimeout(300);
-      await page.evaluate(() => { const t = document.getElementById("virtuoso-jam-tempo"); if (t) t.value = "90"; });
+      await page.evaluate(() => {
+        const search = document.querySelector("#virtuoso-jam-styles .virtuoso-jam-search");
+        if (search) { search.value = "jazz"; search.dispatchEvent(new Event("input", { bubbles: true })); }
+        document.querySelector('#virtuoso-jam-styles [data-style="jazz"]')?.click();
+        const prog = document.getElementById("virtuoso-jam-prog");
+        if (prog && [...prog.options].some((o) => o.value === "ii-V-I")) { prog.value = "ii-V-I"; prog.dispatchEvent(new Event("change", { bubbles: true })); }
+        const t = document.getElementById("virtuoso-jam-tempo");
+        if (t) t.value = "90";
+      });
       await page.evaluate(() => document.getElementById("virtuoso-jam-go")?.click());
       const ready = await page.waitForFunction(() => { const a = globalThis.__ss_debug?.avSync?.(); return a && a.playing && a.scheduledUntilCtx > 0; }, { timeout: 8000 }).then(() => true).catch(() => false);
       if (!ready) jFails.push("jam did not start (no anchored ctx clock)");
       if (ready) {
+        const bassMirror = await page.evaluate(() => {
+          const cfg = globalThis.__ss_debug.activeBundleCfg();
+          const bundle = window.Virtuoso.getActiveBundleInfo() || {};
+          const lead = bundle.leadIn || 0;
+          const beatSec = (60 / cfg.bpm) * (4 / ((cfg.meter && cfg.meter.denominator) || 4));
+          const musicDur = Math.max(0, (bundle.duration || 0) - lead);
+          const timeline = globalThis.__ss_debug.compileChordTimeline(cfg, musicDur);
+          const curRoot = timeline[0] ? timeline[0].rootPc : null;
+          const nextEvent = timeline.find((e) => e.rootPc !== curRoot) || timeline[1] || null;
+          const nextRoot = nextEvent ? nextEvent.rootPc : null;
+          const nextTime = lead + (nextEvent ? nextEvent.startSec : beatSec);
+          const target = window.Virtuoso.jamTargetPcs(lead + Math.min(0.2, beatSec * 0.5));
+          const ghost = window.Virtuoso.jamNextGuidePcs(Math.max(lead + 0.05, nextTime - beatSec * 0.75));
+          document.querySelector('#virtuoso-jam-hl [data-hl="scale"]')?.click();
+          const approach = window.Virtuoso.jamTargetPcs(Math.max(lead + 0.05, nextTime - beatSec * 0.75));
+          return {
+            curRoot, nextRoot,
+            target: [...(target || [])],
+            ghost: [...(ghost || [])],
+            approach: [...(approach || [])],
+          };
+        });
+        if (!(bassMirror.target.length === 1 && bassMirror.curRoot != null && bassMirror.target[0] === bassMirror.curRoot)) {
+          jFails.push(`bass root map should isolate the current root (target=${bassMirror.target.join(",")} root=${bassMirror.curRoot})`);
+        }
+        if (!(bassMirror.nextRoot != null && bassMirror.ghost.includes(bassMirror.nextRoot))) {
+          jFails.push(`bass next-root ghost should include the incoming root (ghost=${bassMirror.ghost.join(",")} next=${bassMirror.nextRoot})`);
+        }
+        if (!(bassMirror.nextRoot != null && bassMirror.approach.includes(bassMirror.nextRoot) && bassMirror.approach.length >= 3)) {
+          jFails.push(`bass approach map should include the landing root plus neighbors (pcs=${bassMirror.approach.join(",")} next=${bassMirror.nextRoot})`);
+        }
+
         // Force a SHORT loop so it wraps several times within the sample window.
         const loop = await page.evaluate(() => { const info = window.Virtuoso.getActiveBundleInfo(); const lead = info.leadIn || 0; window.Virtuoso.setSegmentLoop(lead, lead + 1.2); return { a: lead, b: lead + 1.2, dur: info.duration }; });
         const samples = [];
@@ -315,6 +381,69 @@ async function run() {
         if (after && after.tag !== "SWAP") jFails.push("canvas was rebuilt on the swap (renderer torn down — NOT in-place)");
         if (after && !after.playing) jFails.push("playback stopped during the hot-swap");
         if (after && !(after.la != null && Math.abs(after.la - after.lead) < 0.06 && after.lb != null && Math.abs(after.lb - after.dur) < 0.06)) jFails.push(`loop did not re-anchor to the new chart ([${after.la},${after.lb}] vs new [${after.lead},${after.dur}])`);
+
+        // Style changes use the same wrap-quantized path: queue immediately, keep
+        // the live canvas/transport running, and only land on the next loop top.
+        const styleQueued = await page.evaluate(() => {
+          const palettes = window.Virtuoso.STYLE_PALETTES || {};
+          const ids = Object.keys(palettes);
+          const current = localStorage.getItem("virtuoso.jamStyle") || ids[0];
+          const currentProfile = palettes[current]?.audioProfile || "";
+          const target = ids.find((id) => id !== current && (palettes[id]?.audioProfile || "") !== currentProfile);
+          if (!target) return { ok: false, reason: "no alternate jam style with a distinct audio profile" };
+          const info = window.Virtuoso.getActiveBundleInfo();
+          const c = document.getElementById("virtuoso-canvas");
+          if (c) c.__probeTag = "STYLE";
+          window.Virtuoso.setSegmentLoop(info.leadIn || 0, (info.leadIn || 0) + 1.0);
+          const search = document.querySelector("#virtuoso-jam-styles .virtuoso-jam-search");
+          if (!search) return { ok: false, reason: "jam style search missing" };
+          search.value = target;
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+          const btn = document.querySelector(`#virtuoso-jam-styles [data-style="${target}"]`);
+          if (!btn) return { ok: false, reason: `style chip missing for ${target}` };
+          const before = window.Virtuoso.getActiveBundleInfo();
+          btn.click();
+          const chip = document.getElementById("virtuoso-jam-pending");
+          const av = globalThis.__ss_debug.avSync();
+          const live = window.Virtuoso.getActiveBundleInfo();
+          return {
+            ok: true,
+            target,
+            beforeProfile: before.config?.audio?.profile || "",
+            immediateProfile: live.config?.audio?.profile || "",
+            pendingHidden: chip ? chip.hidden : true,
+            chipText: chip ? chip.textContent : "",
+            playing: av ? av.playing : false,
+            practiceTime: av ? av.practiceTime : null,
+          };
+        });
+        if (!styleQueued.ok) jFails.push(`style queue setup failed (${styleQueued.reason})`);
+        else {
+          if (styleQueued.pendingHidden) jFails.push("style change did not queue a pending chip");
+          if (!/At the wrap/.test(styleQueued.chipText || "")) jFails.push(`style pending copy missing wrap cue (\"${styleQueued.chipText}\")`);
+          if (styleQueued.immediateProfile !== styleQueued.beforeProfile) jFails.push("style change rebuilt immediately instead of waiting for the wrap");
+          if (!styleQueued.playing) jFails.push("playback stopped immediately after style queue");
+          let styleAfter = null, styleApplied = false;
+          for (let i = 0; i < 50; i++) {
+            styleAfter = await page.evaluate(() => {
+              const chip = document.getElementById("virtuoso-jam-pending");
+              const c = document.getElementById("virtuoso-canvas");
+              const av = globalThis.__ss_debug.avSync();
+              const info = window.Virtuoso.getActiveBundleInfo();
+              return {
+                tag: c ? c.__probeTag : null,
+                pendingHidden: chip ? chip.hidden : true,
+                profile: info.config?.audio?.profile || "",
+                playing: av ? av.playing : false,
+              };
+            });
+            if (styleAfter.profile !== styleQueued.beforeProfile && styleAfter.pendingHidden) { styleApplied = true; break; }
+            await page.waitForTimeout(100);
+          }
+          if (!styleApplied) jFails.push("queued style change never landed at the wrap");
+          if (styleAfter && styleAfter.tag !== "STYLE") jFails.push("canvas was rebuilt on the style swap (renderer torn down — NOT in-place)");
+          if (styleAfter && !styleAfter.playing) jFails.push("playback stopped during the queued style swap");
+        }
       }
       // Stop the jam + close any modal so the wakelock phase (fresh ctx) is clean.
       await page.evaluate(() => document.getElementById("virtuoso-stop")?.click());
