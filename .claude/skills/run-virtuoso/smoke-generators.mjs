@@ -405,6 +405,26 @@ async function run() {
           if ((chart.backingEvents || []).some((e) => e.role === "bass")) fatal.push("no_bass left bass events in the band");
           return { ok: fatal.length === 0, fatal, warn: [] };
         }));
+      rows.push(run("jam Spotlight: band turns use sparse phrase calls, not scale runs", "4/4",
+        { practiceType: "scale", stringSetup: "guitar_6_standard", key: "A", scale: "blues",
+          fretboardSystem: "position", fretMin: 4, fretMax: 9, bars: 12, bpm: 120, subdivision: "eighth",
+          progression: "12_bar_blues", chordDepth: "seventh", chordOverride: "dom7",
+          backingStyle: "boogie", swing: "shuffle",
+          jamStyle: "blues", jamPasses: 4, jamProgressionIdx: 0, jamSwitchUp: false, jamBandMode: "full", jamSpotlight: true },
+        (notes, barSec, chart) => {
+          const fatal = [];
+          const band = notes.filter((n) => !n._tail && n.solo === "band");
+          const you = notes.filter((n) => !n._tail && n.solo === "you");
+          if (!band.length) fatal.push("no band-turn Spotlight notes");
+          if (!you.length) fatal.push("no player-turn Spotlight notes");
+          if (band.some((n) => !n._spotlightPhrase)) fatal.push("band-turn notes include generic generated run material");
+          if (you.some((n) => n._spotlightPhrase)) fatal.push("player-turn notes were replaced with phrase calls");
+          if (band.length >= you.length * 0.75) fatal.push(`band phrases too dense (${band.length} vs player ${you.length})`);
+          const bandPcs = new Set(band.map((n) => ((OPENS6[n.s] + n.f) % 12 + 12) % 12));
+          const chordPcs = new Set((chart.timeline || []).flatMap((ev) => ev.cpcs || []));
+          if (![...bandPcs].some((pc) => chordPcs.has(pc))) fatal.push("band phrases do not target chord tones");
+          return { ok: fatal.length === 0, fatal, warn: [] };
+        }));
       setMeter("4/4");
       return rows;
     });

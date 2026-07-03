@@ -312,7 +312,7 @@ async function run() {
       if (!/Approach/i.test(bassUi[2] || "")) jFails.push(`bass Jam highlight 3 should teach approaches (got \"${bassUi[2] || ""}\")`);
 
       await page.waitForTimeout(300);
-      await page.evaluate(() => {
+      const bassIntentCopy = await page.evaluate(() => {
         const search = document.querySelector("#virtuoso-jam-styles .virtuoso-jam-search");
         if (search) { search.value = "jazz"; search.dispatchEvent(new Event("input", { bubbles: true })); }
         document.querySelector('#virtuoso-jam-styles [data-style="jazz"]')?.click();
@@ -320,7 +320,11 @@ async function run() {
         if (prog && [...prog.options].some((o) => o.value === "ii-V-I")) { prog.value = "ii-V-I"; prog.dispatchEvent(new Event("change", { bubbles: true })); }
         const t = document.getElementById("virtuoso-jam-tempo");
         if (t) t.value = "90";
+        document.querySelector('#virtuoso-jam-spotlight [data-spotlight="off"]')?.click();
+        document.querySelector('#virtuoso-jam-hl [data-hl="chord"]')?.click();
+        return [...document.querySelectorAll('#virtuoso-jam-intents .virtuoso-jam-intent')].map((b) => b.textContent.trim()).join(' | ');
       });
+      if (!/Walk quarters|ii-V-I roots/i.test(bassIntentCopy)) jFails.push(`bass style-specific intents did not switch to jazz language ("${bassIntentCopy}")`);
       await page.evaluate(() => document.getElementById("virtuoso-jam-go")?.click());
       const ready = await page.waitForFunction(() => { const a = globalThis.__ss_debug?.avSync?.(); return a && a.playing && a.scheduledUntilCtx > 0; }, { timeout: 8000 }).then(() => true).catch(() => false);
       if (!ready) jFails.push("jam did not start (no anchored ctx clock)");
@@ -330,12 +334,12 @@ async function run() {
           const bundle = window.Virtuoso.getActiveBundleInfo() || {};
           const lead = bundle.leadIn || 0;
           const beatSec = (60 / cfg.bpm) * (4 / ((cfg.meter && cfg.meter.denominator) || 4));
-          const musicDur = Math.max(0, (bundle.duration || 0) - lead);
-          const timeline = globalThis.__ss_debug.compileChordTimeline(cfg, musicDur);
+          const timeline = (globalThis.__ss_debug.activeBundleTimeline() || []).filter((e) => e && e.cpcs);
           const curRoot = timeline[0] ? timeline[0].rootPc : null;
           const nextEvent = timeline.find((e) => e.rootPc !== curRoot) || timeline[1] || null;
           const nextRoot = nextEvent ? nextEvent.rootPc : null;
           const nextTime = lead + (nextEvent ? nextEvent.startSec : beatSec);
+          document.querySelector('#virtuoso-jam-hl [data-hl="chord"]')?.click();
           const target = window.Virtuoso.jamTargetPcs(lead + Math.min(0.2, beatSec * 0.5));
           const ghost = window.Virtuoso.jamNextGuidePcs(Math.max(lead + 0.05, nextTime - beatSec * 0.75));
           document.querySelector('#virtuoso-jam-hl [data-hl="scale"]')?.click();
@@ -356,6 +360,25 @@ async function run() {
         if (!(bassMirror.nextRoot != null && bassMirror.approach.includes(bassMirror.nextRoot) && bassMirror.approach.length >= 3)) {
           jFails.push(`bass approach map should include the landing root plus neighbors (pcs=${bassMirror.approach.join(",")} next=${bassMirror.nextRoot})`);
         }
+        const recapLines = await page.evaluate(() => {
+          const D = globalThis.__ss_debug;
+          const cfg = D.activeBundleCfg();
+          const bundle = window.Virtuoso.getActiveBundleInfo() || {};
+          const lead = bundle.leadIn || 0;
+          const beatSec = (60 / cfg.bpm) * (4 / ((cfg.meter && cfg.meter.denominator) || 4));
+          const timeline = (D.activeBundleTimeline() || []).filter((e) => e && e.cpcs);
+          const first = timeline[0], next = timeline.find((e) => first && e.rootPc !== first.rootPc) || timeline[1];
+          D.jamMirrorReset();
+          if (first) D.jamMirrorDebugAdd(first.rootPc, lead + first.startSec + beatSec * 0.1);
+          if (next) {
+            D.jamMirrorDebugAdd((next.rootPc + 11) % 12, lead + next.startSec - beatSec * 0.45);
+            D.jamMirrorDebugAdd(next.rootPc, lead + next.startSec + beatSec * 0.1);
+          }
+          return D.jamRecapAnalysisLines();
+        });
+        if (!recapLines.some((line) => /Root focus/i.test(line))) jFails.push(`Jam recap analysis missing root-focus line (${recapLines.join(" | ")})`);
+        if (!recapLines.some((line) => /Change landings/i.test(line))) jFails.push(`Jam recap analysis missing change-landing line (${recapLines.join(" | ")})`);
+        if (!recapLines.some((line) => /Approach motion/i.test(line))) jFails.push(`Jam recap analysis missing approach-motion line (${recapLines.join(" | ")})`);
 
         // Force a SHORT loop so it wraps several times within the sample window.
         const loop = await page.evaluate(() => { const info = window.Virtuoso.getActiveBundleInfo(); const lead = info.leadIn || 0; window.Virtuoso.setSegmentLoop(lead, lead + 1.2); return { a: lead, b: lead + 1.2, dur: info.duration }; });
