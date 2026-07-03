@@ -34,7 +34,6 @@ Jam is already more than the older redesign brief implies:
 ### Experience
 
 - Jam still had loop accumulation visible through `#virtuoso-loop-count`. That reads like time-served progress, not creative application.
-- Fretboard map can be off even though the README sells Jam around chord/guide-tone lighting. Jam needs the target map to be more discoverable.
 - Jam live-change behavior still needs deeper soak coverage beyond the current transport smoke, especially around rapid voice/mixer churn and wrap-boundary state updates.
 - Recap did not show if no pitch was detected. A no-mic or quiet Jam still deserves a descriptive form/intent recap.
 - Intent chips are framed before Jam but not strongly reflected at the end.
@@ -42,7 +41,6 @@ Jam is already more than the older redesign brief implies:
 ### Pedagogy
 
 - Guitar Jam reflection records note count and pitch classes, but not target behavior: guide-tone landings, chord-tone choices, root resets, or whether the player actually worked the selected intent.
-- Bass target guidance is still too guitar-shaped. Bass needs roots, next roots, approaches, register, and pocket language before 3rds/7ths.
 - Bass intent chips are too generic for style transfer. Disco octave engine, reggae space, walking approaches, ghost-note pocket, etc. should vary by style.
 - Spotlight's band-turn line is currently generated scale-run material; the form is right, but the content should become sparse, style-aware call phrases.
 
@@ -57,7 +55,6 @@ Jam is already more than the older redesign brief implies:
 
 ### Sound / Backing
 
-- `MIX_RECIPES` only covers country, metal, and jazz; many genres have correct cells but still share the house mix.
 - Acoustic kits are one shared curated bank; rock/soft/jazz differ mainly by level/EQ, not by true brush/metal/Latin/percussion curation.
 - Public clean/drive cab realism is weaker than local dogfood because only the V30 4x12 IR is committed.
 - `FEEL_TIMING` covers only selected profiles. Latin/afrobeat/funk/soul/disco need explicit feel decisions.
@@ -79,18 +76,15 @@ Jam is already more than the older redesign brief implies:
 - Always show a descriptive Jam recap, even with no detected notes; include style, key, progression, duration, and selected intent.
 - Broaden low-risk Jam progression options using existing engine tokens and add label guardrails.
 - Add a Jam live-change probe for rapid band-strip/Mixer swaps, then promote a durable row into `smoke-renderers.mjs` if stable.
-- Make the Jam fretboard map harder to miss: auto-enable on first Jam or surface a clear `Map off` affordance in the primary path.
 
 ### Next: make the mirror teach target choice
 
 - Add descriptive Jam analysis from existing pitch stream plus `chart.timeline`: chord-tone hits, guide-tone landings, distinct target colors, root restarts, and bass root-on-one / approach behavior. Keep wording descriptive, never graded.
-- Add bass-specific highlight modes: root, next root, approach, register band. Keep chord/guide/scale/off for guitar.
 - Refine `JAM_INTENTS` by instrument and style. Bass and guitar should get different verbs and roles.
 - Replace Spotlight band-turn scale runs with sparse call phrases drawn from motif/style vocabulary.
 
 ### Next: audible genre separation
 
-- Expand `MIX_RECIPES` for high-traffic Jam genres first: blues, funk, reggae, disco, pop, soul, synthwave.
 - Add per-genre space/saturation decisions without touching the master limiter.
 - Expand `FEEL_TIMING` for styles where pocket is load-bearing.
 - Curate real kit variants: jazz brushes, metal kick/snare/cymbals, Latin/percussion.
@@ -113,6 +107,9 @@ Implemented the first `Now` slice and the next Jam live-change pass:
 - Style changes now obey the same wrap-quantized contract as key/tempo/feel edits instead of hard-restarting the band mid-phrase.
 - The Jam pending chip now reports a live beats-to-wrap countdown while the change is queued.
 - `smoke-renderers.mjs` now covers queued style swaps so this behavior does not silently regress.
+- Jam now auto-primes the fretboard target map on first entry and labels it as a target map while you jam.
+- Bass Jam now teaches roots, next roots, and approach tones instead of reusing guitar-centric guide-tone copy.
+- `MIX_RECIPES` now gives blues, funk, reggae, disco, pop, soul, and synthwave distinct backing-space and drum-voicing defaults.
 
 ## Verification Expected
 
