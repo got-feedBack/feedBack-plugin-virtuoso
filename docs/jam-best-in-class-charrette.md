@@ -35,8 +35,7 @@ Jam is already more than the older redesign brief implies:
 
 - Jam still had loop accumulation visible through `#virtuoso-loop-count`. That reads like time-served progress, not creative application.
 - Fretboard map can be off even though the README sells Jam around chord/guide-tone lighting. Jam needs the target map to be more discoverable.
-- Style changes apply immediately while most setup controls queue to wrap. The mixed apply model needs explicit copy and smoke coverage.
-- The pending chip lacks a beats-to-wrap countdown, even though the UI comments point that direction.
+- Jam live-change behavior still needs deeper soak coverage beyond the current transport smoke, especially around rapid voice/mixer churn and wrap-boundary state updates.
 - Recap did not show if no pitch was detected. A no-mic or quiet Jam still deserves a descriptive form/intent recap.
 - Intent chips are framed before Jam but not strongly reflected at the end.
 
@@ -88,7 +87,6 @@ Jam is already more than the older redesign brief implies:
 - Add bass-specific highlight modes: root, next root, approach, register band. Keep chord/guide/scale/off for guitar.
 - Refine `JAM_INTENTS` by instrument and style. Bass and guitar should get different verbs and roles.
 - Replace Spotlight band-turn scale runs with sparse call phrases drawn from motif/style vocabulary.
-- Add beats-to-wrap to the pending-change chip.
 
 ### Next: audible genre separation
 
@@ -106,12 +104,15 @@ Jam is already more than the older redesign brief implies:
 
 ## This Session Started
 
-Implemented the first `Now` slice:
+Implemented the first `Now` slice and the next Jam live-change pass:
 
 - Jam loop-count accumulation is suppressed in Jam.
 - Jam recap now appears even without detected pitch and includes progression/intent context.
 - Jam palette options expanded for blues, jazz, country, soul, and afrobeat using existing/new progression tokens.
 - `JAM_PROG_LABELS` now has a startup guard so every exposed Jam progression gets a musician-readable label.
+- Style changes now obey the same wrap-quantized contract as key/tempo/feel edits instead of hard-restarting the band mid-phrase.
+- The Jam pending chip now reports a live beats-to-wrap countdown while the change is queued.
+- `smoke-renderers.mjs` now covers queued style swaps so this behavior does not silently regress.
 
 ## Verification Expected
 

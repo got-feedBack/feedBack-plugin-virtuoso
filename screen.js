@@ -4175,6 +4175,7 @@
   let jamGuideLine = false;       // audible generated line: OFF by default
   let jamBandMode = 'no_bass';    // bass players: 'no_bass' | 'drums_only' | 'full' (guitar always full)
   let _jamPending = false;        // J-2 (D-J3): a live panel change is queued for the next loop wrap
+  let _jamPendingParts = [];      // the queued-change summary currently shown in the Jam pending chip
   let _jamSnapshot = null;        // the panel state the CURRENT jam pass was built from (delta source)
   let _jamApplyToken = 0;         // Jam-UX reliability: monotonic guard so a stale async voice-swap apply can't win (the out-of-order race)
   let jamIntent = '';             // J-2 (D-J8): the picked intent — self-checked, shown, NEVER judged
@@ -14856,6 +14857,7 @@
         ? Math.max(0, (audioCtx.currentTime - playAnchorCtx) * 1000)
         : Math.max(0, nowMs - playAnchorMs);
       currentPracticeTime = playAnchorChartTime + elapsedMs / 1000;
+      if (_jamPending && isJamMode()) syncJamPendingChip();
       if (currentPracticeTime > _runMaxChartTime) _runMaxChartTime = currentPracticeTime;   // recap reached-tracking (furthest this pass)
       if (_preRollUntil > 0 && currentPracticeTime >= _preRollUntil) _preRollUntil = 0;   // resume pre-roll done → normal play (notes audible, judge live)
       if (_preRollUntil === 0) maybeOfferDownshift();   // beginner mid-run offer (cheap: gated flags first, evaluates once per run)
@@ -19993,9 +19995,10 @@
     const activeId = currentJamStyleId();
     const q = _jamPickerQuery.trim().toLowerCase();
     const pickStyle = (id) => {
+      if (!STYLE_PALETTES[id] || id === activeId) return;
       setJamStyleId(id);
-      syncJamStyleDetails(id);                 // Changes picker + Band strip + intents
-      if (playing && isJamMode()) jamPlay();   // a genre change = a NEW band → switch now (its count-in is the entrance)
+      syncJamStyleDetails(id);                 // Updates picker + Band strip + intents immediately
+      if (playing && isJamMode()) jamQueueChange();   // Jam live-edits land at the wrap, style included
       renderJamStyles();
     };
     const mkChip = (id) => {
@@ -20174,6 +20177,23 @@
       spotlight: jamSpotlight,
     };
   }
+  function jamPendingCountdownText() {
+    if (!playing || !isJamMode() || segmentLoopA == null || segmentLoopB == null || !activeBundle) return '';
+    const beatSec = chartBeatSeconds(activeBundle) || 0;
+    if (!(beatSec > 0.02)) return '';
+    const remain = Math.max(0, segmentLoopB - currentPracticeTime);
+    const beatsLeft = Math.max(1, Math.ceil(remain / beatSec - 1e-3));
+    return beatsLeft <= 1 ? 'next beat' : ('in ' + beatsLeft + ' beats');
+  }
+  function syncJamPendingChip() {
+    const chip = $('virtuoso-jam-pending');
+    if (!chip) return;
+    chip.hidden = !_jamPending;
+    if (_jamPending) {
+      const when = jamPendingCountdownText();
+      chip.textContent = '↻ At the wrap' + (when ? ' ' + when : '') + ': ' + _jamPendingParts.join(' · ');
+    }
+  }
   // Called by every jam-panel control while a jam is running: diff against the
   // pass's snapshot, show/refresh (or clear) the pending chip. Changing a value
   // back before the wrap cancels cleanly — nothing rebuilds.
@@ -20191,14 +20211,12 @@
     if (now.energy !== was.energy) parts.push(now.energy === 'auto' ? 'auto-energy' : now.energy + ' energy');
     if (now.spotlight !== was.spotlight) parts.push(now.spotlight ? 'spotlight: trade solos' : 'spotlight off');
     _jamPending = parts.length > 0;
-    const chip = $('virtuoso-jam-pending');
-    if (chip) {
-      chip.hidden = !_jamPending;
-      if (_jamPending) chip.textContent = '↻ At the wrap: ' + parts.join(' · ');
-    }
+    _jamPendingParts = parts;
+    syncJamPendingChip();
   }
   function jamPendingClear() {
     _jamPending = false;
+    _jamPendingParts = [];
     const chip = $('virtuoso-jam-pending'); if (chip) chip.hidden = true;
   }
 
