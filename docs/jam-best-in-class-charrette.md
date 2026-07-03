@@ -77,12 +77,6 @@ Jam is already more than the older redesign brief implies:
 - Broaden low-risk Jam progression options using existing engine tokens and add label guardrails.
 - Add a Jam live-change probe for rapid band-strip/Mixer swaps, then promote a durable row into `smoke-renderers.mjs` if stable.
 
-### Next: make the mirror teach target choice
-
-- Add descriptive Jam analysis from existing pitch stream plus `chart.timeline`: chord-tone hits, guide-tone landings, distinct target colors, root restarts, and bass root-on-one / approach behavior. Keep wording descriptive, never graded.
-- Refine `JAM_INTENTS` by instrument and style. Bass and guitar should get different verbs and roles.
-- Replace Spotlight band-turn scale runs with sparse call phrases drawn from motif/style vocabulary.
-
 ### Next: audible genre separation
 
 - Add per-genre space/saturation decisions without touching the master limiter.
@@ -109,6 +103,9 @@ Implemented the first `Now` slice and the next Jam live-change pass:
 - `smoke-renderers.mjs` now covers queued style swaps so this behavior does not silently regress.
 - Jam now auto-primes the fretboard target map on first entry and labels it as a target map while you jam.
 - Bass Jam now teaches roots, next roots, and approach tones instead of reusing guitar-centric guide-tone copy.
+- Bass Jam intents are now style-specific: walking jazz, reggae space, disco octaves, funk ghosts, country two-feel, metal/djent grid, and related idiom roles.
+- Jam recap now compares detected pitch events against the active chord timeline and describes chord-tone, guide-tone, root, change-landing, and bass approach behavior without scoring it.
+- Spotlight band turns now use sparse chord-aware call phrases instead of replaying generic scale-run material.
 - `MIX_RECIPES` now gives blues, funk, reggae, disco, pop, soul, and synthwave distinct backing-space and drum-voicing defaults.
 
 ## Verification Expected

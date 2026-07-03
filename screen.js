@@ -4792,10 +4792,8 @@
   };
   // J-2 intent chips (D-J8: intents, not scores). An intent is a SELF-checked
   // musical aim the player picks before/while jamming — shown on the status line,
-  // never judged, never scored (the mirror rule). Per-style guitar sets + a
-  // bass-native set (a bassist's job is the foundation, not lead intents).
-  // Draft copy — the genre-idiom refinement sweep (owed from J-1's JAM_PROMPTS)
-  // covers these too.
+  // never judged, never scored (the mirror rule). Per-style guitar sets plus
+  // style-specific bass sets (a bassist's job changes by idiom).
   const JAM_INTENTS = {
     blues:   ['Say it in 2 bars, leave 2 empty', 'End every phrase on a chord tone', 'One bend per phrase — in tune'],
     rock:    ['Land the root on every change', 'Build a riff, repeat it ×4', 'Double-stops on the chorus'],
@@ -4829,7 +4827,41 @@
     western_swing: ['Chase chord tones — land the 6th', 'Take a hot solo, then "take it away"', 'Twin-fiddle it — harmonize in 3rds/6ths'],
     synthwave: ['Soar — one long held note per phrase', 'Land the ♭3, then lift to major', 'Ride the arp, answer the change'],
   };
-  const JAM_INTENTS_BASS = ['Walk into every change', 'Lock the one with the kick', 'Ghost notes between the roots'];
+  const JAM_INTENTS_BASS = {
+    default: ['Root on the one', 'Approach the next root', 'Lock with the kick'],
+    blues: ['Walk the I-IV-V roots', 'Approach the turnaround from below', 'Leave space after the V'],
+    rock: ['Eight-note roots with authority', 'Fifth-to-root answers', 'Push into the chorus change'],
+    metal: ['Pedal the root tightly', 'Mirror the kick accents', 'Mute every release cleanly'],
+    djent: ['Own the low-string grid', 'Choke the gaps with the band', 'Answer accents, then disappear'],
+    jazz: ['Walk quarters through every change', 'Chromatic approach into ii-V-I roots', 'Outline roots before color tones'],
+    funk: ['One-bar pocket, repeat it', 'Ghost 16ths around the root', 'Lock accents with the kick'],
+    pop: ['Hold the hook, not the fill', 'Lift into the pre-chorus root', 'Leave the vocal lane open'],
+    country: ['Two-feel roots on 1 and 3', 'Walk into IV and V', 'Pedal the fifth on the turnaround'],
+    gospel: ['Walk up into every one', 'Answer the left-hand push', 'Resolve fills to the root'],
+    reggae: ['Hold the bass hook', 'Leave the one empty when it feels right', 'Answer the skank with space'],
+    disco: ['Octaves with the kick', 'Root-octave engine for 8 bars', 'Ghost into each octave'],
+    latin: ['Tumbao root-fifth motion', 'Leave room for the clave', 'Anticipate the barline softly'],
+    soul: ['Motown approach into every root', 'Hold note endings full value', 'Pocket just behind the beat'],
+    afrobeat: ['Repeat the ostinato until it hypnotizes', 'Interlock with kick and guitar', 'Small variation every 4 bars'],
+    norteno: ['Oom-pah roots and fifths', 'Walk cleanly into the push', 'Let the accordion lead breathe'],
+    tango: ['Marcato roots, full value', 'Pull hard into the downbeat', 'Silence after the accent'],
+    bluegrass: ['Root-fifth drive without rushing', 'Walk into the turnaround', 'Keep the two-beat engine steady'],
+    'city-pop': ['Smooth octave pocket', 'Approach ii-V roots chromatically', 'Let the synth bass breathe'],
+    new_orleans: ['Big-four push into the root', 'Bounce the fifth, never rush', 'Leave room for the snare drag'],
+    classical: ['Anchor harmonic roots clearly', 'Sustain through phrase cadences', 'Move by step when possible'],
+    flamenco: ['Pedal the tonic hard', 'Lean into the Phrygian b2', 'Stop sharply after rasgueado answers'],
+    folk: ['Drone the tonic when it fits', 'Step into the next chord', 'Keep the song pulse plain'],
+    gypsy_jazz: ['Two-feel roots, then walk', 'Chromatic approach each dominant', 'Keep quarter notes light'],
+    ragtime: ['Alternating root-fifth stride', 'Catch the syncopated push', 'Land secondary dominants cleanly'],
+    surf: ['Palm-muted root engine', 'Slide into the V', 'Keep eighths even under reverb'],
+    shoegaze: ['Long roots under the wash', 'Change late, sustain wide', 'Let octave blooms replace fills'],
+    emo: ['Pedal open roots', 'Step through passing chords', 'Interlock with the high guitar figure'],
+    punk: ['Downstroke roots with the kick', 'One fill before the chorus', 'No drift through the turnaround'],
+    prog: ['Track the odd-meter one', 'Pedal through modal color', 'Outline roots before extensions'],
+    western_swing: ['Two-feel roots and fifths', 'Walk the 6th into the change', 'Bounce behind the beat'],
+    synthwave: ['Octave pulse under the arp', 'Hold the root through pad changes', 'Slide into the next bass note'],
+  };
+  function jamBassIntents(styleId) { return JAM_INTENTS_BASS[styleId] || JAM_INTENTS_BASS.default; }
 
   // ===========================================================================
   // SEGMENT TEMPLATES + VARIATION ENGINE (Workout library substrate)
@@ -11527,6 +11559,52 @@
       else { const v = Number.isFinite(ev.vel) ? ev.vel : 1; ev.vel = +Math.min(1, Math.max(0.05, v * k)).toFixed(4); }
     }
   }
+  function jamSpotlightPhrasePcs(ev, cfg, styleId, pass, idx) {
+    const root = ((ev.rootPc || 0) % 12 + 12) % 12;
+    const cpcs = Array.isArray(ev.cpcs) && ev.cpcs.length ? ev.cpcs : [root, (root + 4) % 12, (root + 7) % 12];
+    const guides = Array.isArray(ev.gpcs) && ev.gpcs.length ? ev.gpcs : cpcs.filter(pc => pc !== root && pc !== (root + 7) % 12);
+    const fifth = cpcs.includes((root + 7) % 12) ? (root + 7) % 12 : cpcs[1] || root;
+    if (isBassCfg(cfg)) {
+      if (['disco', 'synthwave', 'funk'].includes(styleId)) return [root, (root + 7) % 12, root];
+      if (['jazz', 'gypsy_jazz', 'western_swing'].includes(styleId)) return [root, (root + 11) % 12, root];
+      if (['reggae', 'dub', 'shoegaze'].includes(styleId)) return [root];
+      return [root, fifth];
+    }
+    if (['jazz', 'gypsy_jazz', 'city-pop', 'ragtime'].includes(styleId)) return [guides[0] || cpcs[1] || root, guides[1] || cpcs[2] || root, root];
+    if (['funk', 'reggae', 'afrobeat', 'disco', 'soul'].includes(styleId)) return [root, fifth, cpcs[(idx + pass) % cpcs.length] || root];
+    if (['metal', 'djent', 'punk', 'rock', 'surf'].includes(styleId)) return [root, fifth, root];
+    if (['country', 'bluegrass', 'western_swing', 'blues'].includes(styleId)) return [root, cpcs.find(pc => pc !== root && pc !== fifth) || fifth, fifth];
+    return [root, guides[0] || cpcs[1] || fifth, cpcs[2] || root];
+  }
+  function jamSpotlightPhraseNotes(cfg, duration, pass, styleId) {
+    const tl = compileChordTimeline(cfg, duration).filter(ev => ev && ev.cpcs && ev.startSec < duration - 0.001);
+    const beatSec = (60 / cfg.bpm) * (4 / cfg.meter.denominator);
+    const opens = openMidisForConfig(cfg);
+    const fMin = Math.max(0, Number.isFinite(cfg.fretMin) ? cfg.fretMin : 0);
+    const fMax = Math.min(24, Number.isFinite(cfg.fretMax) ? cfg.fretMax : fMin + 7);
+    const notes = [];
+    let prevMidi = isBassCfg(cfg) ? 40 : 60;
+    for (let i = 0; i < tl.length; i++) {
+      const ev = tl[i];
+      if (ev.startSec >= duration - 0.001) break;
+      if (!isBassCfg(cfg) && i % 2 !== pass % 2) continue;   // call, then air
+      const pcs = jamSpotlightPhrasePcs(ev, cfg, styleId, pass, i);
+      const maxNotes = isBassCfg(cfg) ? Math.min(2, pcs.length) : Math.min(3, pcs.length);
+      for (let j = 0; j < maxNotes; j++) {
+        const tt = ev.startSec + beatSec * (isBassCfg(cfg) ? j : (j === 0 ? 0 : j * 0.75));
+        if (tt >= ev.endSec - beatSec * 0.15 || tt >= duration - 0.001) continue;
+        const pos = nearestPositionForPc(pcs[j], prevMidi, opens, fMin, fMax);
+        if (!pos) continue;
+        prevMidi = pos.midi;
+        notes.push(noteDefaults({
+          t: Number(tt.toFixed(6)), s: pos.s, f: pos.f,
+          sus: Math.max(0.08, beatSec * (isBassCfg(cfg) ? 0.72 : 0.52)),
+          ac: j === 0, _spotlightPhrase: true,
+        }));
+      }
+    }
+    return notes.length ? notes : buildSingleChart(cfg).notes.slice(0, 4).map(n => Object.assign({}, n, { _spotlightPhrase: true }));
+  }
   function buildJamChart(cfg) {
     const pal = STYLE_PALETTES[cfg.jamStyle];
     const passes = Math.max(2, Math.min(8, cfg.jamPasses | 0 || 4));
@@ -11569,7 +11647,8 @@
       // lead notes (you're the soloist); the cue + highlight switch per turn. Off →
       // no tag added → byte-identical chart.
       const soloTurn = cfg.jamSpotlight ? (pass % 2 === 0 ? 'you' : 'band') : null;
-      sw.notes.forEach(n => { const nn = Object.assign({}, n, { t: Number((n.t + t).toFixed(6)) }); if (soloTurn) nn.solo = soloTurn; notes.push(nn); });
+      const leadNotes = soloTurn === 'band' ? swingNotesBacking(jamSpotlightPhraseNotes(pCfg, dur, pass, cfg.jamStyle), [], pCfg).notes : sw.notes;
+      leadNotes.forEach(n => { const nn = Object.assign({}, n, { t: Number((n.t + t).toFixed(6)) }); if (soloTurn) nn.solo = soloTurn; notes.push(nn); });
       chart.chords.forEach(c => chords.push(Object.assign({}, c, { t: Number((c.t + t).toFixed(6)), id: c.id + tplOffset })));
       chart.chordTemplates.forEach(ct => chordTemplates.push(ct));
       chart.handShapes.forEach(hs => handShapes.push(Object.assign({}, hs, { chord_id: hs.chord_id + tplOffset, start_time: Number((hs.start_time + t).toFixed(6)), end_time: Number((hs.end_time + t).toFixed(6)) })));
@@ -12363,7 +12442,7 @@
       // dogfood bug, 2026-06-09). Jam (mode undefined + its own A–B segment loop)
       // stays endless and never judges. So: eligible = anything with a mode.
       finiteRun: cfg.mode != null,
-    isReady:true, notes:notesWithTail, chords:c.chords, anchors:c.anchors, beats:beatsWithTail, sections:c.sections, chordTemplates:c.chordTemplates, handShapes:c.handShapes, segmentBounds:c.segmentBounds || null,
+    isReady:true, notes:notesWithTail, chords:c.chords, anchors:c.anchors, beats:beatsWithTail, sections:c.sections, chordTemplates:c.chordTemplates, handShapes:c.handShapes, segmentBounds:c.segmentBounds || null, timeline:c.timeline || null,
       leadIn:lead,
       // Backing comp/bass + drums cover the music only ([lead, duration]); generate
       // both for the content length, concat, then shift past the count-in (so drums
@@ -16876,6 +16955,8 @@
     const noteCount = m ? m.noteCount : 0;
     const pcs = m ? [...m.pcs].sort((a, b) => a - b).map(pcName) : [];
     const toneList = pcs.length ? pcs.join(' · ') : 'No pitch was detected.';
+    const analysis = noteCount > 0 ? jamRecapAnalysisLines() : [];
+    const analysisHtml = analysis.map(line => `<div class="virtuoso-jam-recap-line">${esc(line)}</div>`).join('');
     const intentLine = jamIntent ? `<div class="virtuoso-jam-recap-line">Intent: <b>${esc(jamIntent)}</b></div>` : '';
     if (title) title.textContent = 'Jam mirror';
     body.innerHTML =
@@ -16886,7 +16967,8 @@
           ? `<div class="virtuoso-jam-recap-line">${noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>`
           : `<div class="virtuoso-jam-recap-line">No pitch was detected, so this stays a form-and-intent recap.</div>`) +
         `<div class="virtuoso-jam-recap-tones">${esc(toneList)}</div>` +
-        `<div class="virtuoso-jam-recap-sub">A mirror, never a score. Use the form, intent, and tones as a prompt for the next pass.</div>` +
+        analysisHtml +
+        `<div class="virtuoso-jam-recap-sub">A mirror, never a score. Use the form, intent, tones, and targets as prompts for the next pass.</div>` +
         `<div class="virtuoso-jam-recap-cta">` +
           `<button type="button" class="virtuoso-results-primary" data-act="jam-again">Jam again</button>` +
           `<button type="button" class="virtuoso-results-quiet" data-act="jam-done">Done</button>` +
@@ -20176,7 +20258,7 @@
   function renderJamIntents(styleId) {
     const host = $('virtuoso-jam-intents');
     if (!host) return;
-    const list = isBassCfg(readConfig()) ? JAM_INTENTS_BASS : (JAM_INTENTS[styleId] || []);
+    const list = isBassCfg(readConfig()) ? jamBassIntents(styleId) : (JAM_INTENTS[styleId] || []);
     const items = (_jamDeviceIntent ? [_jamDeviceIntent] : []).concat(list);
     if (jamIntent && !items.includes(jamIntent)) jamIntent = '';   // stale pick (style/instrument switch)
     host.innerHTML = '';
@@ -20250,6 +20332,62 @@
   // each jamPlay (a new session); NOT reset on a wrap hot-swap (same session).
   const JAM_PLAYED_FADE_MS = 1400;
   function jamMirrorReset() { _jamPlayed = []; _jamMirror = { noteCount: 0, pcs: new Set(), lastPc: -1, lastMs: 0 }; }
+  function jamMirrorDebugAdd(pc, chartT) {
+    if (!_jamMirror) jamMirrorReset();
+    const p = ((pc % 12) + 12) % 12;
+    _jamMirror.noteCount++;
+    _jamMirror.pcs.add(p);
+    _jamPlayed.push({ pc: p, midi: pcAtOrAbove(p, jamIsBassContext() ? 36 : 60), t: performance.now(), chartT: Number(chartT) || 0 });
+    if (_jamPlayed.length > 192) _jamPlayed.shift();
+  }
+  function jamTimelineEventsForRecap() {
+    if (!activeBundle) return [];
+    return activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline) || [];
+  }
+  function jamRecapAnalysisLines() {
+    if (!_jamMirror || !_jamPlayed.length || !activeBundle) return [];
+    const played = _jamPlayed.filter(p => Number.isFinite(p.chartT));
+    if (!played.length) return [];
+    const lines = [];
+    let seen = 0, chord = 0, guide = 0, roots = 0;
+    for (const p of played) {
+      const info = jamCarrierInfo(p.chartT);
+      if (!info || !info.cur) continue;
+      seen++;
+      if (Array.isArray(info.cur.cpcs) && info.cur.cpcs.includes(p.pc)) chord++;
+      if (Array.isArray(info.cur.gpcs) && info.cur.gpcs.includes(p.pc)) guide++;
+      if (info.cur.rootPc === p.pc) roots++;
+    }
+    if (!seen) return [];
+    if (jamIsBassContext()) {
+      const tl = jamTimelineEventsForRecap();
+      const lead = activeBundle.leadIn || 0;
+      const beat = chartBeatSeconds(activeBundle) || 0.5;
+      let changes = 0, rootDownbeats = 0, approaches = 0;
+      for (let i = 0; i < tl.length; i++) {
+        const ev = tl[i], prev = tl[i - 1] || null;
+        if (ev.rootPc == null) continue;
+        const changed = !prev || prev.rootPc !== ev.rootPc || prev.quality !== ev.quality;
+        if (!changed) continue;
+        const start = lead + (ev.startSec != null ? ev.startSec : (ev.t || 0));
+        const root = ((ev.rootPc % 12) + 12) % 12;
+        changes++;
+        if (played.some(p => p.chartT >= start - 0.05 && p.chartT <= start + beat * 0.75 && p.pc === root)) rootDownbeats++;
+        if (i > 0) {
+          const lo = (root + 11) % 12, hi = (root + 1) % 12;
+          if (played.some(p => p.chartT >= start - beat && p.chartT < start && (p.pc === lo || p.pc === hi))) approaches++;
+        }
+      }
+      lines.push(`Root focus: ${roots} of ${seen} detected notes were roots of the chord under them.`);
+      if (changes) lines.push(`Change landings: ${rootDownbeats} of ${changes} chord changes had a detected root near the downbeat.`);
+      if (approaches) lines.push(`Approach motion: heard half-step motion into ${approaches} change${approaches === 1 ? '' : 's'}.`);
+    } else {
+      lines.push(`Chord-tone choices: ${chord} of ${seen} detected notes matched the chord under them.`);
+      if (guide) lines.push(`Guide-tone color: ${guide} detected notes were 3rds or 7ths.`);
+      if (roots) lines.push(`Root resets: ${roots} detected root landing${roots === 1 ? '' : 's'} anchored the form.`);
+    }
+    return lines;
+  }
   function jamMirrorCapture(freqHz) {
     if (!_jamMirror || !(freqHz > 0)) return;
     const midi = Math.round(69 + 12 * Math.log2(freqHz / 440));
@@ -20261,8 +20399,8 @@
     if (!isNew) return;
     _jamMirror.noteCount++;
     _jamMirror.pcs.add(pc);
-    _jamPlayed.push({ pc, midi, t: now });
-    if (_jamPlayed.length > 48) _jamPlayed.shift();
+    _jamPlayed.push({ pc, midi, t: now, chartT: currentPracticeTime });
+    if (_jamPlayed.length > 192) _jamPlayed.shift();
   }
   function jamPanelState() {
     return {
@@ -25407,7 +25545,7 @@
     jamArmFromDrill, jamTargetPcs, jamNextGuidePcs,
     getActiveBundleInfo: () => activeBundle ? { config: activeBundle.config, duration: activeBundle.songInfo && activeBundle.songInfo.duration, leadIn: activeBundle.leadIn } : null,
     sgStats: () => { const out = { ready: 0, loading: 0, failed: 0 }; for (const k of Object.keys(sgBuffers)) out[sgBuffers[k].state] = (out[sgBuffers[k].state] || 0) + 1; return out; } };
-  if (typeof globalThis !== 'undefined' && globalThis.__SS_HARNESS__) globalThis.__ss_debug = { STRING_SETUPS, resolveCAGEDShape, resolveThreeNPSPosition, NOTE_ALIASES, chordRootForDegree, nearestPositionForPc, compileChordTimeline, MOTIF_CELLS, resolveMotifCell, buildMotifExercise, applyTimelinePush, resolveHumanSeed, parseMeter, BASS_FIGURES, bassFigureForConfig, DRUM_GROOVES, DRUM_PIECE_GAIN, resolveGroove, ARRANGEMENT_RECIPES, resolveArrangement, compCellForConfig, DRUMKIT_BANKS, KIT_REGISTRY, resolveDrumKit, recipeTracks, resolveHumanSeed, buildCompCellHits, activeBundleBacking: () => activeBundle ? activeBundle.backingEvents : null, activeBundleChords: () => activeBundle ? activeBundle.chords : null, activeBundleCfg: () => activeBundle ? activeBundle.config : null, irState: () => Object.fromEntries(Object.entries(_irBufs).map(([k, v]) => [k, v.state])), rigState: () => JSON.parse(JSON.stringify(rigState)), buildDrumEvents, drawHeatmapHero, drawLeanStripHero, buildResultsHero, countInSubTicks, blockFeltInfo, ptPracticeTime: () => currentPracticeTime, preRollUntil: () => _preRollUntil, wrapAnim: () => _wrapAnim, ptWindows: () => _ptWin, ptRunInfo: () => _ptRunInfo, ptPreviewJudgeCounts, ptSpeakBudget, ptScoredUnits: () => _ptScoredUnits, lvlMode: () => _lvlMode, ndContainedMode: () => _ndContainedMode, ndContainedFallback: () => _ndContainedFallback, ndVerifyMode: () => _ndVerifyMode, ptCalibrateOffsetMs, ptLatency, pickSinkMatch, sinkTokens, applyHostSink, sinkState: () => ({ appliedId: _sinkAppliedId, mismatch: _sinkMismatch, outs: _sinkLastOuts }), audioCtxRef: () => audioCtx, resolveAudioProfile, resolveMix, resolveAmpId, sgNotesWanted, sgHarmWanted, sgPadWanted, applyStyleMixerDefaults, sgFilesFor, bankDesc, bankLayerTag, SAMPLE_BANKS, compTargetMidis, COMP_GROOVES, wafGmTrim, WAF_GM_TRIM, TONE_GM, liveInstrumentReady, prewarmMixerCandidates, jamApplyToken: () => _jamApplyToken, mixerStateRef: () => mixerState, jamMirrorCapture, jamMirrorReset, jamMirror: () => _jamMirror ? { noteCount: _jamMirror.noteCount, pcs: [..._jamMirror.pcs] } : null, jamPlayedLen: () => _jamPlayed.length, jamSpotlightTurn, activeBundleNotes: () => activeBundle ? activeBundle.notes : null,
+  if (typeof globalThis !== 'undefined' && globalThis.__SS_HARNESS__) globalThis.__ss_debug = { STRING_SETUPS, resolveCAGEDShape, resolveThreeNPSPosition, NOTE_ALIASES, chordRootForDegree, nearestPositionForPc, compileChordTimeline, MOTIF_CELLS, resolveMotifCell, buildMotifExercise, applyTimelinePush, resolveHumanSeed, parseMeter, BASS_FIGURES, bassFigureForConfig, DRUM_GROOVES, DRUM_PIECE_GAIN, resolveGroove, ARRANGEMENT_RECIPES, resolveArrangement, compCellForConfig, DRUMKIT_BANKS, KIT_REGISTRY, resolveDrumKit, recipeTracks, resolveHumanSeed, buildCompCellHits, activeBundleBacking: () => activeBundle ? activeBundle.backingEvents : null, activeBundleChords: () => activeBundle ? activeBundle.chords : null, activeBundleCfg: () => activeBundle ? activeBundle.config : null, activeBundleTimeline: () => activeBundle ? (activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline)) : null, irState: () => Object.fromEntries(Object.entries(_irBufs).map(([k, v]) => [k, v.state])), rigState: () => JSON.parse(JSON.stringify(rigState)), buildDrumEvents, drawHeatmapHero, drawLeanStripHero, buildResultsHero, countInSubTicks, blockFeltInfo, ptPracticeTime: () => currentPracticeTime, preRollUntil: () => _preRollUntil, wrapAnim: () => _wrapAnim, ptWindows: () => _ptWin, ptRunInfo: () => _ptRunInfo, ptPreviewJudgeCounts, ptSpeakBudget, ptScoredUnits: () => _ptScoredUnits, lvlMode: () => _lvlMode, ndContainedMode: () => _ndContainedMode, ndContainedFallback: () => _ndContainedFallback, ndVerifyMode: () => _ndVerifyMode, ptCalibrateOffsetMs, ptLatency, pickSinkMatch, sinkTokens, applyHostSink, sinkState: () => ({ appliedId: _sinkAppliedId, mismatch: _sinkMismatch, outs: _sinkLastOuts }), audioCtxRef: () => audioCtx, resolveAudioProfile, resolveMix, resolveAmpId, sgNotesWanted, sgHarmWanted, sgPadWanted, applyStyleMixerDefaults, sgFilesFor, bankDesc, bankLayerTag, SAMPLE_BANKS, compTargetMidis, COMP_GROOVES, wafGmTrim, WAF_GM_TRIM, TONE_GM, liveInstrumentReady, prewarmMixerCandidates, jamApplyToken: () => _jamApplyToken, mixerStateRef: () => mixerState, jamMirrorCapture, jamMirrorReset, jamMirrorDebugAdd, jamRecapAnalysisLines, jamBassIntents, jamSpotlightPhraseNotes, jamMirror: () => _jamMirror ? { noteCount: _jamMirror.noteCount, pcs: [..._jamMirror.pcs] } : null, jamPlayedLen: () => _jamPlayed.length, jamSpotlightTurn, activeBundleNotes: () => activeBundle ? activeBundle.notes : null,
     busRms: () => { const out = {}; if (audioBus && audioBus.analysers) { for (const k in audioBus.analysers) { const an = audioBus.analysers[k]; const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; out[k] = Math.sqrt(s / buf.length); } } return out; },
     busGains: () => { const out = {}; if (audioBus && audioBus.tracks) { for (const k in audioBus.tracks) out[k] = audioBus.tracks[k].gain.value; } return out; }, ampState: () => ({ want: { ..._ampWant }, wired: audioBus && audioBus.amps ? Object.fromEntries(Object.entries(audioBus.amps).map(([k, v]) => [k, v.id])) : null }), avSync: () => (audioCtx ? { ctxNow: audioCtx.currentTime, perfNow: performance.now(), outputLatency: Number(audioCtx.outputLatency) || 0, baseLatency: Number(audioCtx.baseLatency) || 0, scheduledUntilCtx, schedChartPos, playAnchorMs, playAnchorChartTime, playAnchorCtx, practiceTime: currentPracticeTime, playing, paused } : null) };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once:true }); else boot();
