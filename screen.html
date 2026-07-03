@@ -486,6 +486,87 @@
     .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"].vir-lit .virtuoso-render-host::after { animation: none; }
   }
 
+  /* Cockpit identity pass (theme-framework Phase 1): Whole-studio themes differ by
+     material/control treatment as well as palette. Scoped to non-Signature skins so
+     Signature + Card-only remain the calm host-native baseline. */
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin][data-vir-skincockpit="on"] .virtuoso-mixer {
+    border-color: var(--vir-card-frame);
+  }
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-mixer {
+    background: linear-gradient(180deg, rgba(8,12,30,0.94), rgba(5,8,20,0.96));
+    box-shadow: 0 0 0 1px var(--vir-card-accent-soft), 0 18px 48px rgba(0,0,0,0.54), 0 0 24px -8px var(--vir-card-accent);
+  }
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-mode-toggle,
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-mixer-viewtabs {
+    border-color: var(--vir-card-frame); box-shadow: var(--vir-recess), inset 0 0 14px var(--vir-card-accent-soft);
+  }
+  .virtuoso-root[data-vir-cardskin="neon"][data-vir-skincockpit="on"] .virtuoso-mode-btn.active { text-shadow: 0 0 10px var(--vir-card-accent-soft); }
+
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-mixer {
+    background: #0a0c0e; box-shadow: none;
+  }
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-settings-lbl,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-mixer-title,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-mode-btn,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-view-btn {
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-mini-btn.active,
+  .virtuoso-root[data-vir-cardskin="esports"][data-vir-skincockpit="on"] .virtuoso-actions button.primary {
+    box-shadow: none; background: var(--vir-card-accent); color: #090b0d;
+  }
+
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-mixer {
+    background: linear-gradient(180deg, #2e3338, #17191d 58%, #101215);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -2px 5px rgba(0,0,0,0.62), 0 16px 42px rgba(0,0,0,0.54);
+  }
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-mode-toggle,
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-view-tabs,
+  .virtuoso-root[data-vir-cardskin="metal"][data-vir-skincockpit="on"] .virtuoso-mixer-strip {
+    border-color: var(--vir-card-frame); box-shadow: inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -1px 3px rgba(0,0,0,0.62);
+  }
+
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-mixer {
+    background: linear-gradient(180deg, rgba(48,33,23,0.96), rgba(30,20,14,0.98));
+    box-shadow: inset 0 1px 0 rgba(245,236,216,0.08), 0 14px 40px rgba(0,0,0,0.50), 0 0 18px -12px var(--vir-card-accent);
+  }
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-mode-toggle,
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-mixer-viewtabs,
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-mini-btn {
+    background-color: #201510; border-color: rgba(232,161,60,0.32);
+  }
+  .virtuoso-root[data-vir-cardskin="warm"][data-vir-skincockpit="on"] .virtuoso-header h1 { letter-spacing: 0.015em; }
+
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-settings-menu,
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-progress-sheet,
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-cheat-card,
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-mixer {
+    background: #0d1013; box-shadow: none;
+  }
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-header h1 {
+    background: none; color: #f4f7fa; -webkit-text-fill-color: #f4f7fa; filter: none; animation: none;
+  }
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-mode-toggle,
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-view-tabs,
+  .virtuoso-root[data-vir-cardskin="focus"][data-vir-skincockpit="on"] .virtuoso-mixer-viewtabs {
+    box-shadow: none; border-color: #4a555f;
+  }
+
   /* ══ Mastery CREST — earned-standing emblem (gamification: derived, additive, never a
      tally — Proven → Versed → Fluent; UX: a laurel/aegis that elaborates by rank). Accent-
      family ONLY, NEVER --vir-meter/green — so a CLEARED run shows BOTH the green cleared

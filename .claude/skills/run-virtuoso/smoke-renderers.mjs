@@ -241,11 +241,25 @@ async function run() {
         settings?.click();
         for (const skin of skins) {
           document.querySelector(`#virtuoso-cardskin-pick [data-cardskin="${skin}"]`)?.click();
+          document.querySelector('#virtuoso-skinscope-pick [data-skinscope="cockpit"]')?.click();
           const swatches = [...document.querySelectorAll("#virtuoso-cardtone-pick .virtuoso-cardtone-swatch")];
           const second = swatches[1] || null;
           const beforeAccent = getComputedStyle(root).getPropertyValue("--vir-card-accent").trim();
           if (second) second.click();
           const afterAccent = getComputedStyle(root).getPropertyValue("--vir-card-accent").trim();
+          const menu = document.getElementById("virtuoso-settings-menu");
+          const modeBtn = document.querySelector(".virtuoso-mode-btn");
+          const title = document.querySelector(".virtuoso-header h1");
+          const ms = menu ? getComputedStyle(menu) : null;
+          const bs = modeBtn ? getComputedStyle(modeBtn) : null;
+          const ts = title ? getComputedStyle(title) : null;
+          const cockpitKey = [
+            ms ? ms.backgroundColor : "",
+            ms ? ms.backgroundImage : "",
+            ms ? ms.boxShadow : "",
+            bs ? bs.textTransform : "",
+            ts ? ts.color : "",
+          ].join(" || ");
           rows.push({
             skin,
             count: swatches.length,
@@ -253,9 +267,11 @@ async function run() {
             picked: second ? second.dataset.cardtone : "",
             rootSkin: root.getAttribute("data-vir-cardskin") || "",
             rootTone: root.getAttribute("data-vir-cardtone") || "default",
+            rootScope: root.getAttribute("data-vir-skincockpit") || "",
             stored: localStorage.getItem(`virtuoso.cardTone.${skin}`) || "",
             beforeAccent,
             afterAccent,
+            cockpitKey,
           });
         }
         document.querySelector('#virtuoso-cardskin-pick [data-cardskin="signature"]')?.click();
@@ -266,10 +282,13 @@ async function run() {
         if (row.count < 3) themeFails.push(`${row.skin} exposes ${row.count} colorway(s), expected at least 3`);
         if (new Set(row.labels).size !== row.labels.length) themeFails.push(`${row.skin} has duplicate colorway labels (${row.labels.join("|")})`);
         if (row.rootSkin !== row.skin) themeFails.push(`${row.skin} did not stamp data-vir-cardskin (got ${row.rootSkin})`);
+        if (row.rootScope !== "on") themeFails.push(`${row.skin} did not enable whole-studio scope (got ${row.rootScope})`);
         if (!row.picked || row.rootTone !== row.picked) themeFails.push(`${row.skin} did not stamp picked card tone (${row.rootTone} vs ${row.picked})`);
         if (row.stored !== row.picked) themeFails.push(`${row.skin} did not persist picked tone (${row.stored} vs ${row.picked})`);
         if (row.beforeAccent === row.afterAccent) themeFails.push(`${row.skin} colorway did not change --vir-card-accent (${row.afterAccent})`);
       }
+      const cockpitKeys = new Set(parity.rows.map((row) => row.cockpitKey));
+      if (cockpitKeys.size !== parity.rows.length) themeFails.push(`whole-studio cockpit treatments are not distinct (${cockpitKeys.size}/${parity.rows.length})`);
       if (!parity.signatureHidden) themeFails.push("Signature should hand off to the Accent picker, not show card-tone swatches");
       if (parity.signatureSkin || parity.signatureTone) themeFails.push(`Signature left skin attributes behind (skin=${parity.signatureSkin} tone=${parity.signatureTone})`);
       for (const e of pageErrors.slice(errBase)) themeFails.push(`pageerror: ${e}`);
