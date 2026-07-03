@@ -226,6 +226,57 @@ async function run() {
       results.push({ kind: r.kind, pass, status, canvas, pixels, clock, fails, notes });
     }
 
+    // ── Card theme color parity: Signature follows the global Accent picker;
+    // every non-Signature skin owns a few skin-specific colorways that persist per skin
+    // and flow through CSS tokens into card/cockpit palettes.
+    {
+      const themeFails = [];
+      const errBase = pageErrors.length;
+      const conBase = consoleErrors.length;
+      const parity = await page.evaluate(() => {
+        const root = document.getElementById("virtuoso-root");
+        const skins = ["neon", "esports", "metal", "warm", "focus"];
+        const rows = [];
+        const settings = document.getElementById("virtuoso-settings-btn");
+        settings?.click();
+        for (const skin of skins) {
+          document.querySelector(`#virtuoso-cardskin-pick [data-cardskin="${skin}"]`)?.click();
+          const swatches = [...document.querySelectorAll("#virtuoso-cardtone-pick .virtuoso-cardtone-swatch")];
+          const second = swatches[1] || null;
+          const beforeAccent = getComputedStyle(root).getPropertyValue("--vir-card-accent").trim();
+          if (second) second.click();
+          const afterAccent = getComputedStyle(root).getPropertyValue("--vir-card-accent").trim();
+          rows.push({
+            skin,
+            count: swatches.length,
+            labels: swatches.map((b) => b.getAttribute("aria-label") || b.title || ""),
+            picked: second ? second.dataset.cardtone : "",
+            rootSkin: root.getAttribute("data-vir-cardskin") || "",
+            rootTone: root.getAttribute("data-vir-cardtone") || "default",
+            stored: localStorage.getItem(`virtuoso.cardTone.${skin}`) || "",
+            beforeAccent,
+            afterAccent,
+          });
+        }
+        document.querySelector('#virtuoso-cardskin-pick [data-cardskin="signature"]')?.click();
+        const signatureHidden = document.getElementById("virtuoso-cardtone-group")?.hidden === true;
+        return { rows, signatureHidden, signatureSkin: root.getAttribute("data-vir-cardskin") || "", signatureTone: root.getAttribute("data-vir-cardtone") || "" };
+      });
+      for (const row of parity.rows) {
+        if (row.count < 3) themeFails.push(`${row.skin} exposes ${row.count} colorway(s), expected at least 3`);
+        if (new Set(row.labels).size !== row.labels.length) themeFails.push(`${row.skin} has duplicate colorway labels (${row.labels.join("|")})`);
+        if (row.rootSkin !== row.skin) themeFails.push(`${row.skin} did not stamp data-vir-cardskin (got ${row.rootSkin})`);
+        if (!row.picked || row.rootTone !== row.picked) themeFails.push(`${row.skin} did not stamp picked card tone (${row.rootTone} vs ${row.picked})`);
+        if (row.stored !== row.picked) themeFails.push(`${row.skin} did not persist picked tone (${row.stored} vs ${row.picked})`);
+        if (row.beforeAccent === row.afterAccent) themeFails.push(`${row.skin} colorway did not change --vir-card-accent (${row.afterAccent})`);
+      }
+      if (!parity.signatureHidden) themeFails.push("Signature should hand off to the Accent picker, not show card-tone swatches");
+      if (parity.signatureSkin || parity.signatureTone) themeFails.push(`Signature left skin attributes behind (skin=${parity.signatureSkin} tone=${parity.signatureTone})`);
+      for (const e of pageErrors.slice(errBase)) themeFails.push(`pageerror: ${e}`);
+      for (const e of consoleErrors.slice(conBase)) themeFails.push(`console.error: ${e}`);
+      results.push({ kind: "theme-colors", pass: themeFails.length === 0, status: "per-skin card colorways", canvas: null, pixels: "n/a", clock: { from: "-", to: "-" }, fails: themeFails, notes: [] });
+    }
+
     // ── Transport split semantics (2026-06-06): Play/Pause toggle + dedicated
     // Stop. Pause freezes the clock in place (no advance, audio stops), Play
     // resumes from the frozen playhead, Stop ends the run and returns the
