@@ -677,9 +677,20 @@
   /* Greyed when the active Card theme is Signature (nothing to extend — it already follows Accent). */
   .virtuoso-settings-group.is-disabled { opacity: 0.42; }
   .virtuoso-settings-group.is-disabled .virtuoso-settings-row { pointer-events: none; }
-  /* Card-theme picker holds 6 skins — wrap to a 3-wide grid so the labels stay legible. */
-  #virtuoso-cardskin-pick { flex-wrap: wrap; }
-  #virtuoso-cardskin-pick .virtuoso-mini-btn { flex: 1 1 30%; }
+  /* Card-theme picker previews are rendered from VIR_THEME_RECIPES in screen.js. */
+  #virtuoso-cardskin-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .virtuoso-skin-card { min-width: 0; padding: 7px; display: grid; grid-template-columns: 38px minmax(0,1fr); grid-template-areas: "visual copy" "axes axes"; gap: 6px 8px; text-align: left; border: 1px solid var(--skin-frame); border-radius: 9px; background: linear-gradient(180deg, color-mix(in srgb, var(--skin-surface) 92%, white 8%), var(--skin-surface)); color: var(--skin-text); cursor: pointer; box-shadow: var(--skin-shadow); }
+  .virtuoso-skin-card:hover { border-color: var(--skin-a); }
+  .virtuoso-skin-card.active { outline: 2px solid var(--skin-a); outline-offset: 1px; }
+  .virtuoso-skin-card-visual { grid-area: visual; min-height: 34px; border-radius: var(--skin-radius); border: 1px solid var(--skin-frame); background: linear-gradient(135deg, var(--skin-surface), color-mix(in srgb, var(--skin-a) 24%, var(--skin-surface))); position: relative; overflow: hidden; }
+  .virtuoso-skin-card-visual span { position: absolute; left: 5px; right: 5px; top: 6px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, var(--skin-a), var(--skin-b)); }
+  .virtuoso-skin-card-visual i { position: absolute; left: 6px; bottom: 7px; width: 12px; height: 8px; border-radius: 2px; background: var(--skin-a); opacity: 0.88; }
+  .virtuoso-skin-card-visual b { position: absolute; right: 6px; bottom: 7px; width: 13px; height: 8px; border-radius: 999px; border: 1px solid var(--skin-b); }
+  .virtuoso-skin-card-copy { grid-area: copy; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+  .virtuoso-skin-card-copy strong { font-size: 12px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .virtuoso-skin-card-copy em { font-style: normal; font-size: 10px; line-height: 1.15; color: color-mix(in srgb, var(--skin-text) 72%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .virtuoso-skin-card-axes { grid-area: axes; display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+  .virtuoso-skin-card-axes i { font-style: normal; font-size: 9px; line-height: 1; padding: 3px 4px; border-radius: 4px; color: var(--skin-text); background: color-mix(in srgb, var(--skin-a) 18%, transparent); border: 1px solid color-mix(in srgb, var(--skin-frame) 75%, transparent); }
   .virtuoso-settings-select { width: 100%; padding: 5px 8px; font-size: 12px; border-radius: 6px; border: 1px solid #334155; background: #0b1220; color: #e2e8f0; }
   .virtuoso-settings-divider { height: 1px; background: var(--vir-hairline, rgba(148,163,184,0.14)); margin: 4px 6px; }
   /* Mode dropdown fallback — hidden until the narrowest breakpoint. */
@@ -2149,7 +2160,7 @@
         </div>
         <div class="virtuoso-settings-group">
           <span class="virtuoso-settings-lbl">Card theme</span>
-          <div class="virtuoso-settings-row" id="virtuoso-cardskin-pick" title="Styles your results + shareable copy card. Signature: the default Virtuoso look (follows your Accent). Neon / Esports / Metal: opt-in looks matched to note_detect — the cockpit stays calm either way.">
+          <div class="virtuoso-settings-row" id="virtuoso-cardskin-pick" title="Styles results + shareable copy cards. Each theme declares its own palette, material, typography, shape, and motion recipe; Whole studio can extend that recipe into the cockpit.">
             <button type="button" class="virtuoso-mini-btn active" data-cardskin="signature">Signature</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="neon">Neon</button>
             <button type="button" class="virtuoso-mini-btn" data-cardskin="esports">Esports</button>

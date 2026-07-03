@@ -239,6 +239,12 @@ async function run() {
         const rows = [];
         const settings = document.getElementById("virtuoso-settings-btn");
         settings?.click();
+        const previews = [...document.querySelectorAll("#virtuoso-cardskin-pick .virtuoso-skin-card")].map((card) => ({
+          skin: card.dataset.cardskin || "",
+          axes: card.querySelectorAll(".virtuoso-skin-card-axes i").length,
+          label: card.querySelector(".virtuoso-skin-card-copy strong")?.textContent || "",
+          radius: getComputedStyle(card).getPropertyValue("--skin-radius").trim(),
+        }));
         for (const skin of skins) {
           document.querySelector(`#virtuoso-cardskin-pick [data-cardskin="${skin}"]`)?.click();
           document.querySelector('#virtuoso-skinscope-pick [data-skinscope="cockpit"]')?.click();
@@ -276,8 +282,14 @@ async function run() {
         }
         document.querySelector('#virtuoso-cardskin-pick [data-cardskin="signature"]')?.click();
         const signatureHidden = document.getElementById("virtuoso-cardtone-group")?.hidden === true;
-        return { rows, signatureHidden, signatureSkin: root.getAttribute("data-vir-cardskin") || "", signatureTone: root.getAttribute("data-vir-cardtone") || "" };
+        return { rows, previews, signatureHidden, signatureSkin: root.getAttribute("data-vir-cardskin") || "", signatureTone: root.getAttribute("data-vir-cardtone") || "" };
       });
+      if (parity.previews.length !== 6) themeFails.push(`theme picker rendered ${parity.previews.length} preview cards, expected 6`);
+      for (const preview of parity.previews) {
+        if (!preview.skin || !preview.label) themeFails.push(`theme preview missing identity copy (${JSON.stringify(preview)})`);
+        if (preview.skin !== "signature" && preview.axes < 3) themeFails.push(`${preview.skin} preview exposes ${preview.axes} identity axes, expected at least 3`);
+        if (!preview.radius) themeFails.push(`${preview.skin} preview did not receive recipe radius`);
+      }
       for (const row of parity.rows) {
         if (row.count < 3) themeFails.push(`${row.skin} exposes ${row.count} colorway(s), expected at least 3`);
         if (new Set(row.labels).size !== row.labels.length) themeFails.push(`${row.skin} has duplicate colorway labels (${row.labels.join("|")})`);
