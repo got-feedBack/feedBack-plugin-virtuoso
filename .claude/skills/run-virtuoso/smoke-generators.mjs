@@ -396,13 +396,13 @@ async function run() {
           backingStyle: "boogie", swing: "shuffle",
           jamStyle: "blues", jamPasses: 4, jamProgressionIdx: 0, jamSwitchUp: true, jamBandMode: "no_bass" },
         (notes, barSec, chart) => {
-          const passSec = 12 * barSec;
           const fatal = [];
-          if (Math.abs((chart.duration || 0) - passSec * 4) > 0.05) fatal.push(`duration ${chart.duration} ≠ 4 passes`);
           const secs = (chart.sections || []).map((s) => s.name);
-          if (secs.length !== 4 || secs[0] === secs[1]) fatal.push(`sections ${secs.join("|")} — switch-up not alternating`);
+          if (secs.length !== 4 || new Set(secs).size < 2) fatal.push(`sections ${secs.join("|")} — switch-up not varying`);
+          if (!((chart.duration || 0) > 0)) fatal.push(`bad duration ${chart.duration}`);
+          const last = (chart.timeline || [])[Math.max(0, (chart.timeline || []).length - 1)];
+          if (!last || last.end < (chart.duration || 0) - 0.05) fatal.push(`timeline ends ${last && last.end}, duration ${chart.duration}`);
           if ((chart.backingEvents || []).some((e) => e.role === "bass")) fatal.push("no_bass left bass events in the band");
-          if ((chart.timeline || []).length < 48) fatal.push(`timeline ${(chart.timeline || []).length} < 48`);
           return { ok: fatal.length === 0, fatal, warn: [] };
         }));
       setMeter("4/4");

@@ -247,7 +247,9 @@
     diatonic:[1,2,3,4,5,6,7,1],
     diatonic_7ths:[1,2,3,4,5,6,7],   // the harmonized-key lap (Chords ladder): one diatonic 7th per degree, no wrap. With chordDepth:'seventh' + chordOverride:'auto' → Imaj7 ii7 iii7 IVmaj7 V7 vi7 vii7♭5 (modal over dorian/mixo).
     static_i:[1],                 // one-chord vamp — Beginner Core "static vamp" (Pulse & Muting); roots stay on the tonic
+    'I-IV':[1,4,1,4],
     'I-IV-V':[1,4,5,1],
+    'I-IV-I-V':[1,4,1,5],
     'I-V-vi-IV':[1,5,6,4],
     'I-vi-IV-V':[1,6,4,5],
     'I-vi-ii-V':[1,6,2,5],
@@ -314,6 +316,7 @@
     modal_mixture:[1,4,{ deg:4, q:'min7' },5],               // I–IV–iv–V : borrowed-minor-iv modal mixture (the iv is the colour)
     // ── World / genre vamps (band-intel genre batch, 2026-06-13) ──────────────
     'i-iv':[1,4],                                             // i–iv minor vamp (reggae / minor soul) — pair with natural_minor so the iv stays MINOR (Am→Dm); distinct from dorian_vamp's major IV
+    'I-II7-V':[1, { semis:2, q:'dom7', rn:'II7' }, 5, 1],     // I–II7–V : bright secondary-dominant country / western-swing pull
     soul_turnaround:[1, { semis:9, q:'dom7', rn:'VI7' }, 2, 5], // I–VI7–ii–V : the soul/Motown turnaround — the VI is a SECONDARY DOMINANT (the soul colour), not the diatonic vi
     // Ragtime secondary-dominant chain (III7–VI7–II7–V7–I) — every link a dom7 (the
     // bright forward-leaning ragtime motion); same {semis,q:'dom7'} chromatic form as
@@ -4628,7 +4631,7 @@
   //   feel            { swing, backingStyle } — the backing feel
   //   audioProfile    AUDIO_PROFILES key (the sound), or null → clean family inferred
   const STYLE_PALETTES = {
-    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
+    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues','jazz_blues','blues_turnaround'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
     // J-2 (D-J5b) modal-vamp wiring: the dormant bright-modal tokens join the
     // styles whose leadScales already speak the mode (rock/funk ride mixolydian's
     // ♭VII; metal's phrygian i–♭II is its signature semitone move). lydian_vamp
@@ -4637,21 +4640,21 @@
     rock:    { label:'Rock',       defaultKey:'E', progressions:['i-VII-VI-VII','I-V-vi-IV','I-IV-V','mixolydian_rock','mixolydian_vamp'], leadScales:['minor_pentatonic','natural_minor','mixolydian'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'rock' },
     metal:   { label:'Metal',      defaultKey:'E', progressions:['metal_i_bVI_bVII','metal_pedal_chromatic','metal_i_bVII_bVI_V','phrygian_vamp'], leadScales:['phrygian','natural_minor','harmonic_minor'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'metal' },
     djent:   { label:'Djent',      defaultKey:'E', progressions:['metal_pedal_chromatic'], leadScales:['phrygian','natural_minor'], chordDepth:'triad', chordOverride:'5oct', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'djent' },
-    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
+    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what','jazz_blues','tritone_sub_ii_V_I','backdoor_ii_V','tadd_dameron'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
     // Funk goes Dorian (modal-M1 ride-along, approved 2026-06-05): dorian_vamp's
     // dom7 IV carries the ♮6 — the James Brown sound — so chordOverride must be
     // 'auto' (a min7 override would silence the vamp's major/dom IV).
     funk:    { label:'Funk / R&B', defaultKey:'A', progressions:['dorian_vamp','static_i','i-VII-VI-VII','mixolydian_vamp'], leadScales:['dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'funk' },
     pop:     { label:'Pop',        defaultKey:'C', progressions:['I-V-vi-IV','vi-IV-I-V','I-vi-IV-V'], leadScales:['major','major_pentatonic'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'pop' },
-    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-V-vi-IV'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
+    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-IV-I-V','I-II7-V','I-V-vi-IV','mixolydian_rock'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
     gospel:  { label:'Gospel',     defaultKey:'C', progressions:['ii-V-I','I-vi-ii-V'], leadScales:['major','dorian'], chordDepth:'ninth', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'gospel' },
     // ── World / genre batch (band-intel, panel 2026-06-13) — each genre vetted by
     // its idiom agent; the band each one declares lives in ARRANGEMENT_RECIPES.
     reggae:   { label:'Reggae',       defaultKey:'A', progressions:['static_i','i-iv','i-VII-VI-VII','I-IV-V','I-V-vi-IV'], leadScales:['minor_pentatonic','natural_minor','dorian'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'reggae' },
     disco:    { label:'Disco',        defaultKey:'A', progressions:['i-VII-VI-VII','dorian_vamp','vi-IV-I-V','static_i'], leadScales:['minor_pentatonic','dorian','natural_minor'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'disco' },
     latin:    { label:'Latin / Bossa', defaultKey:'A', progressions:['ii-V-I','minor_ii_V_i','I-vi-ii-V'], leadScales:['major','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'latin' },
-    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
-    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
+    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','modal_mixture','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
+    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','I-IV','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
     // ── World / genre Wave 2 (band-intel, panel 2026-06-13) — feel is straight/pad
     // for ALL so the genre's ARRANGEMENT_RECIPE drives (backingStyle:'boogie' or a
     // non-straight swing pre-empt the recipe; the recipe cells carry each feel).
@@ -4721,6 +4724,7 @@
   // D-J5a: the palettes already carry progressions[] plural — name them so the
   // picker speaks the player's vocabulary). Fallback = prettified token.
   const JAM_PROG_LABELS = {
+    'I-IV':'I–IV vamp', 'I-IV-I-V':'I–IV–I–V train-beat', 'I-II7-V':'I–II7–V secondary dominant',
     '12_bar_blues':'12-Bar Blues', quick_change_blues:'Quick-Change Blues',
     'i-VII-VI-VII':'i–♭VII–♭VI–♭VII', 'I-V-vi-IV':'I–V–vi–IV', 'I-IV-V':'I–IV–V',
     'I-vi-IV-V':'I–vi–IV–V', 'vi-IV-I-V':'vi–IV–I–V', 'I-vi-ii-V':'I–vi–ii–V',
@@ -4732,6 +4736,8 @@
     mixolydian_vamp:'Mixolydian vamp (I–♭VII–IV)', phrygian_vamp:'Phrygian vamp (i–♭II)',
     'i-iv':'i–iv minor vamp', soul_turnaround:'Soul turnaround (I–VI7–ii–V)',
     andalusian:'Andalusian (i–♭VII–♭VI–V)', blues_turnaround:'Blues turnaround',
+    jazz_blues:'Jazz blues', tritone_sub_ii_V_I:'Tritone-sub ii–V–I', backdoor_ii_V:'Backdoor ii–V', tadd_dameron:'Tadd Dameron turn',
+    modal_mixture:'Borrowed iv (I–IV–iv–V)',
     pachelbel:'Pachelbel (I–V–vi–iii–IV…)', circle_diatonic:'Circle of 5ths', 'i-VI-III-VII':'i–♭VI–♭III–♭VII',
     ragtime_circle:'Ragtime chain (III7–VI7–II7–V7–I)', 'I-vi-ii-V':'I–vi–ii–V',
     lydian_vamp:'Lydian vamp (I–II)',
@@ -4740,6 +4746,13 @@
   function jamProgressionLabel(token) {
     return JAM_PROG_LABELS[token] || String(token || '').replace(/_/g, ' ');
   }
+  (function validateJamProgressionLabels() {
+    for (const id of Object.keys(STYLE_PALETTES)) {
+      for (const pr of STYLE_PALETTES[id].progressions || []) {
+        if (!JAM_PROG_LABELS[pr]) throw new Error(`[Virtuoso jam] ${id} progression "${pr}" needs a JAM_PROG_LABELS label`);
+      }
+    }
+  })();
   // One per-style "try this" line (slice J-1 — the intent SEED, goal-card grammar:
   // a constraint to jam against, never a score). Draft prompts pending the
   // genre-idiom refinement sweep (logged in ROADMAP).
@@ -14878,7 +14891,11 @@
           }
           _loopWraps++;
           const lc = $('virtuoso-loop-count');
-          if (lc) { lc.hidden = false; lc.textContent = 'Loop ' + _loopWraps; }
+          if (lc) {
+            const showLoopCount = !isJamMode();
+            lc.hidden = !showLoopCount;
+            if (showLoopCount) lc.textContent = 'Loop ' + _loopWraps;
+          }
         }
       } else if (finiteRunActive()) {
         // Finite drill (Depth Ladder slice 1): the right-sized run plays ONCE, then
@@ -16749,22 +16766,27 @@
     const root = $('virtuoso-root'), body = $('virtuoso-results-body'), title = $('virtuoso-results-title');
     if (!root || !body) return;
     const m = _jamMirror;
-    if (!m || m.noteCount <= 0) return;   // nothing played → stop quietly, no recap
     const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const ms = (s && s.duration_ms) || 0;
     const mins = Math.floor(ms / 60000), secs = Math.round((ms % 60000) / 1000);
     const dur = ms >= 1000 ? `${mins}:${String(secs).padStart(2, '0')}` : 'a moment';
     const style = (s && s.style) || (STYLE_PALETTES[currentJamStyleId()] || {}).label || 'your style';
     const key = (($('virtuoso-jam-key') || {}).value) || 'A';
-    const pcs = [...m.pcs].sort((a, b) => a - b).map(pcName);
-    const toneList = pcs.length ? pcs.join(' · ') : '—';
-    if (title) title.textContent = 'Nice jam.';
+    const prog = (s && s.progression) ? jamProgressionLabel(s.progression) : jamProgressionLabel((($('virtuoso-jam-prog') || {}).value) || '');
+    const noteCount = m ? m.noteCount : 0;
+    const pcs = m ? [...m.pcs].sort((a, b) => a - b).map(pcName) : [];
+    const toneList = pcs.length ? pcs.join(' · ') : 'No pitch was detected.';
+    const intentLine = jamIntent ? `<div class="virtuoso-jam-recap-line">Intent: <b>${esc(jamIntent)}</b></div>` : '';
+    if (title) title.textContent = 'Jam mirror';
     body.innerHTML =
       `<div class="virtuoso-jam-recap">` +
-        `<div class="virtuoso-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>.</div>` +
-        `<div class="virtuoso-jam-recap-line">${m.noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>` +
+        `<div class="virtuoso-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>${prog ? ` · <b>${esc(prog)}</b>` : ''}.</div>` +
+        intentLine +
+        (noteCount > 0
+          ? `<div class="virtuoso-jam-recap-line">${noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>`
+          : `<div class="virtuoso-jam-recap-line">No pitch was detected, so this stays a form-and-intent recap.</div>`) +
         `<div class="virtuoso-jam-recap-tones">${esc(toneList)}</div>` +
-        `<div class="virtuoso-jam-recap-sub">A mirror of what you played — no score, just what came out. Take any of those into the next one.</div>` +
+        `<div class="virtuoso-jam-recap-sub">A mirror, never a score. Use the form, intent, and tones as a prompt for the next pass.</div>` +
         `<div class="virtuoso-jam-recap-cta">` +
           `<button type="button" class="virtuoso-results-primary" data-act="jam-again">Jam again</button>` +
           `<button type="button" class="virtuoso-results-quiet" data-act="jam-done">Done</button>` +
@@ -18878,7 +18900,11 @@
     $('virtuoso-loop-a')?.classList.toggle('active', tpA != null);
     $('virtuoso-loop-b')?.classList.toggle('active', tpB != null);
     const lc = $('virtuoso-loop-count');
-    if (lc) { const active = segmentLoopA != null && segmentLoopB != null; lc.hidden = !active || _loopWraps < 1; lc.textContent = 'Loop ' + _loopWraps; }
+    if (lc) {
+      const active = segmentLoopA != null && segmentLoopB != null && !isJamMode();
+      lc.hidden = !active || _loopWraps < 1;
+      if (active) lc.textContent = 'Loop ' + _loopWraps;
+    }
     const lr = $('virtuoso-loop-range');
     if (lr) { const txt = loopReadoutText(); lr.hidden = !txt; lr.textContent = txt || ''; }
     syncFeelControl();
