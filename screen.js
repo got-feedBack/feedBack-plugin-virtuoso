@@ -9433,18 +9433,18 @@
       }
     }
 
-    let t = 0, unitIdx = 0;
-    while (t < totalTime - 0.001) {
+    const totalSteps = wholeCycleStepCount(totalTime, step, unit.length);
+    let t = 0;
+    for (let unitIdx = 0; unitIdx < totalSteps; unitIdx++) {
       const { s, f, fg } = unit[unitIdx % unit.length];
       const nf = { t: Number(t.toFixed(6)), s, f, sus: Math.max(0.04, step * 0.85) };
       if (fg != null) nf.fg = f === 0 ? 0 : fg;
       notes.push(noteDefaults(nf));
       t += step;
-      unitIdx++;
     }
     applyStrokePolicy(notes, cfg, 'alternate');   // the chromatic warmup IS the alternate-picking lesson
 
-    const duration = Math.max(t, totalTime);
+    const duration = Math.max(totalTime, Number(t.toFixed(6)));
     return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration };
   }
 
@@ -9484,8 +9484,10 @@
     const notes = [];
     const sections = [{ name: `Spider — strings ${count - lo} & ${count - hi}`, number: 1, time: 0 }];
     const cellLen = offsets.length * 2;                      // hi-lead pass + the lo-lead mirror
-    let t = 0, k = 0;
-    while (t < totalTime - 0.001) {
+    const fullCycleSteps = Math.max(1, frames.length * cellLen);
+    const totalSteps = wholeCycleStepCount(totalTime, step, fullCycleSteps);
+    let t = 0;
+    for (let k = 0; k < totalSteps; k++) {
       const cell = Math.floor(k / cellLen), inCell = k % cellLen;
       const F = frames[cell % frames.length];
       const mirrored = inCell >= offsets.length;
@@ -9496,9 +9498,9 @@
                    rh: onHi ? trebleRh : 0 };
       if (off >= 0 && off <= 3) nf.fg = off + 1;             // one finger per frame fret
       notes.push(noteDefaults(nf));
-      t += step; k++;
+      t += step;
     }
-    return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration: Math.max(t, totalTime) };
+    return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration: Math.max(totalTime, Number(t.toFixed(6))) };
   }
 
   // p-i-m-a broken-chord study over a progression — the classical arpeggio-
@@ -9634,22 +9636,38 @@
   }
 
   // Fill the timeline with `seq`, cycling it, one note per step.
-  // opts: { step, steps?, totalTime, sus, name, startAt=0, duration=Math.max(t,totalTime) }
+  // opts: { step, steps?, totalTime, sus, name, startAt=0, loopCycleSteps?, duration=Math.max(t,totalTime) }
   // `steps` (optional) is a cycling array of per-note durations for non-uniform
   // rhythms (gallop — see rhythmSteps); when absent, the uniform `step` is used.
+  // `loopCycleSteps` rounds uniform-step drills up to a whole sequence cycle so
+  // playback loops back to the start of a complete mechanical phrase.
   function fillNotesFromSeq(seq, opts) {
     const { step, steps, totalTime, sus, name, startAt = 0 } = opts;
     const notes = [], sections = [{ name, number: 1, time: 0 }];
+    const hasVariableSteps = !!(steps && steps.length);
+    const loopCycleSteps = !hasVariableSteps && opts.loopCycleSteps != null
+      ? Math.max(1, Math.round(opts.loopCycleSteps) || 1) : 0;
+    const targetSteps = loopCycleSteps
+      ? wholeCycleStepCount(Math.max(0, totalTime - startAt), step, loopCycleSteps) : null;
     let t = startAt, idx = 0;
-    while (t < totalTime - 0.001) {
+    while (targetSteps != null ? idx < targetSteps : t < totalTime - 0.001) {
       const ev = seq[idx % seq.length];
       const note = { t: Number(t.toFixed(6)), s: ev.s, f: ev.f, sus };
       for (const k of SEQ_NOTE_FIELDS) if (ev[k] !== undefined) note[k] = ev[k];
       notes.push(noteDefaults(note));
-      t += (steps && steps.length) ? steps[idx % steps.length] : step; idx++;
+      t += hasVariableSteps ? steps[idx % steps.length] : step; idx++;
     }
-    const duration = opts.duration != null ? opts.duration : Math.max(t, totalTime);
+    const duration = opts.duration != null ? opts.duration : Math.max(totalTime, Number(t.toFixed(6)));
     return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration };
+  }
+  // Loopable warmup drills should wrap at the end of a WHOLE mechanical cycle,
+  // not at an arbitrary bars×time cutoff mid-cell. `bars` is therefore treated
+  // as the MINIMUM length for these drills; the chart rounds up to the next full
+  // cycle so keep-looping playback re-enters on a natural hand-motion boundary.
+  function wholeCycleStepCount(totalTime, step, cycleSteps) {
+    const minSteps = Math.max(1, Math.ceil(Math.max(0, totalTime - 1e-9) / Math.max(1e-6, step)));
+    const cycle = Math.max(1, Math.round(cycleSteps) || 1);
+    return Math.ceil(minSteps / cycle) * cycle;
   }
 
   // Bending drill — cycles scale tones on the highest (thinnest) strings, each
@@ -9694,7 +9712,7 @@
     else                                   seq = events;
     const sus = Math.max(0.2, step * 0.92);
     const bendName = bendTarget === 'half' ? 'Half-step bends' : bendTarget === 'whole' ? 'Whole-step bends' : 'Mixed bends';
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `${bendName} — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `${bendName} — ${cfg.key} ${cfg.scale}` });
   }
 
   // ── 20 additional generators ────────────────────────────────────────────────
@@ -9720,7 +9738,7 @@
     }
     const seq = cfg.direction === 'ascending' ? asc : cfg.direction === 'descending' ? desc : [...asc, ...desc];
     const sus = Math.max(0.05, step * 0.9);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Legato runs — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Legato runs — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildVibratoExercise(cfg) {
@@ -9730,7 +9748,7 @@
     const sorted = allPos.slice().sort((a, b) => a.midi - b.midi);
     const seq = orientSeq(sorted.map(p => ({ s: p.s, f: p.f, vb: true })), cfg.direction);
     const noteStep = mLen / 2, sus = Math.max(0.4, noteStep - 0.08);
-    return fillNotesFromSeq(seq, { step: noteStep, totalTime, sus, name: `Vibrato — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step: noteStep, totalTime, sus, loopCycleSteps: seq.length, name: `Vibrato — ${cfg.key} ${cfg.scale}` });
   }
 
   // Build a "scale in <interval>" run. For each scale tone (lower voice) we pair
@@ -9774,14 +9792,15 @@
         : cfg.direction === 'up_down' ? [...pairs, ...pairs.slice().reverse()] : pairs;
       const sus = Math.max(0.05, (steps ? steps[0] : step) * 0.9);
       const tr = !!cfg.tremolo;   // tremolo-picked twin leads — the melodeath signature
+      const targetSteps = steps && steps.length ? null : wholeCycleStepCount(totalTime, step, seq.length);
       const notes = []; let t = 0, idx = 0;
-      while (t < totalTime - 0.001) {
+      while (targetSteps != null ? idx < targetSteps : t < totalTime - 0.001) {
         const [lo, hi] = seq[idx % seq.length];
         notes.push(noteDefaults({ t: Number(t.toFixed(6)), s: lo.s, f: lo.f, sus, tr }));
         notes.push(noteDefaults({ t: Number(t.toFixed(6)), s: hi.s, f: hi.f, sus, tr }));
         t += (steps && steps.length) ? steps[idx % steps.length] : step; idx++;
       }
-      return { notes, chords: [], chordTemplates: [], handShapes: [], sections: [{ name: `Harmonized ${label} — ${cfg.key} ${cfg.scale}`, number: 1, time: 0 }], duration: Math.max(t, totalTime) };
+      return { notes, chords: [], chordTemplates: [], handShapes: [], sections: [{ name: `Harmonized ${label} — ${cfg.key} ${cfg.scale}`, number: 1, time: 0 }], duration: Math.max(totalTime, Number(t.toFixed(6))) };
     }
     const asc = [];
     for (const [lo, hi] of pairs) { asc.push(lo); asc.push(hi); }
@@ -9792,7 +9811,7 @@
     const cleaned = asc.filter((p, i) => i === 0 || p.s !== asc[i - 1].s || p.f !== asc[i - 1].f);
     const seq = orientSeq(cleaned, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Scale in ${label} — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Scale in ${label} — ${cfg.key} ${cfg.scale}` });
   }
 
   // Diatonic third ≈ 3–4 semitones (m3/M3). Target 4 (M3) so major-leaning
@@ -10243,7 +10262,7 @@
     }
     if (!events.length) throw new Error('No tapping positions — try fretMin ≤ 12.');
     const sus = Math.max(0.05, step * 0.85);
-    return fillNotesFromSeq(events, { step, totalTime, sus, name: `Tapping — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(events, { step, totalTime, sus, loopCycleSteps: events.length, name: `Tapping — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPedalPointExercise(cfg) {
@@ -10259,7 +10278,7 @@
     const events = [];
     for (const m of melSeq) { events.push(pedal); events.push(m); }
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(events, { step, totalTime, sus, name: `Pedal point — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(events, { step, totalTime, sus, loopCycleSteps: events.length, name: `Pedal point — ${cfg.key} ${cfg.scale}` });
   }
 
   // Pedal-point RIFF (genre-framework §2.3): a palm-muted low pedal (s=0, tonic,
@@ -10328,7 +10347,7 @@
     }
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `String skipping — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `String skipping — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPositionShiftExercise(cfg) {
@@ -10340,7 +10359,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Position shift — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Position shift — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildRhythmicDisplacementExercise(cfg) {
@@ -10385,7 +10404,7 @@
     const cleaned = events.filter((p, i) => i === 0 || p.s !== events[i - 1].s || p.f !== events[i - 1].f);
     const seq = orientSeq(cleaned, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Chromatic enclosures — ${cfg.key}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Chromatic enclosures — ${cfg.key}` });
   }
 
   function buildBebopScaleExercise(cfg) {
@@ -10407,7 +10426,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Bebop scale — ${cfg.key} (${bebopScale.replace('_', ' ')})` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Bebop scale — ${cfg.key} (${bebopScale.replace('_', ' ')})` });
   }
 
   function buildArpeggioInversionsExercise(cfg) {
@@ -10458,7 +10477,7 @@
     const seq = orientSeq(events, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    const ex = fillNotesFromSeq(seq, { step, totalTime, sus, name: `Inversions — ${cfg.key} ${quality}` });
+    const ex = fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Inversions — ${cfg.key} ${quality}` });
     applyStrokePolicy(ex.notes, cfg, 'bass_parity');   // bass: strict i-m parity (guitar: player's choice)
     return ex;
   }
@@ -10613,7 +10632,7 @@
     if (!events.length) throw new Error('Need ≥ 2 strings for hybrid picking.');
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Hybrid picking — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Hybrid picking — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildTriadicPairsExercise(cfg) {
@@ -10653,7 +10672,7 @@
     const deduped = events.filter((p, i) => i === 0 || p.s !== events[i - 1].s || p.f !== events[i - 1].f);
     const seq = orientSeq(deduped, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Triadic pairs — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Triadic pairs — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPentatonicSuperExercise(cfg) {
@@ -10676,7 +10695,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
     const superName = pcName(superRoot);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Pent. superimposition — ${superName}m over ${cfg.key}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Pent. superimposition — ${superName}m over ${cfg.key}` });
   }
 
   function buildShellVoicingsExercise(cfg) {
@@ -10746,7 +10765,7 @@
     if (!events.length) throw new Error('No octave pairs in range — expand fret range.');
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Octave displacement — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Octave displacement — ${cfg.key} ${cfg.scale}` });
   }
 
   // ── strum_comp: held voiced chord + strum rhythm/feel ───────────────────────

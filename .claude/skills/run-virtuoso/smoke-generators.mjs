@@ -517,6 +517,55 @@ async function run() {
         if (!chrom.every((n, i) => n.pkd === i % 2)) fatal.push("chromatic pkd not strict-alternate from down");
         return fatal;
       }));
+      rows.push(row("loopable warmups: chromatic + spider round up to whole drill cycles", () => {
+        const fatal = [];
+        const chromCfg = Object.assign(S.readConfig(), { shapeNotes: null, practiceType: "chromatic", mode: "chromatic", stringSetup: "guitar_6_standard", chromaticPattern: "1234", fretMin: 1, fretMax: 4, subdivision: "quarter", bpm: 60, bars: 4, direction: "up_down" });
+        const chromChart = S.generateExercise(chromCfg).chart;
+        const chromNotes = (chromChart.notes || []).filter((n) => !n._tail);
+        const chromCycle = 6 * 4 * 2;
+        if (chromNotes.length % chromCycle !== 0) fatal.push(`chromatic note count ${chromNotes.length} is not a whole up/down cycle (${chromCycle})`);
+        if (Math.abs((chromChart.duration || 0) - chromNotes.length) > 0.001) fatal.push(`chromatic duration ${chromChart.duration} does not match ${chromNotes.length} quarter-note steps`);
+        const spiderCfg = Object.assign(S.readConfig(), { shapeNotes: null, practiceType: "spider", mode: "spider", stringSetup: "guitar_6_standard", chromaticPattern: "1342", spiderPair: "adjacent", fretMin: 5, fretMax: 10, subdivision: "quarter", bpm: 60, bars: 5, direction: "up_down" });
+        const spiderChart = S.generateExercise(spiderCfg).chart;
+        const spiderNotes = (spiderChart.notes || []).filter((n) => !n._tail);
+        const spiderFrames = [5, 6, 7, 6];
+        const spiderCycle = spiderFrames.length * 8;
+        if (spiderNotes.length % spiderCycle !== 0) fatal.push(`spider note count ${spiderNotes.length} is not a whole frame-walk cycle (${spiderCycle})`);
+        if (Math.abs((spiderChart.duration || 0) - spiderNotes.length) > 0.001) fatal.push(`spider duration ${spiderChart.duration} does not match ${spiderNotes.length} quarter-note steps`);
+        return fatal;
+      }));
+      rows.push(row("loopable sequence drills round up without stretching progression timelines", () => {
+        const fatal = [];
+        const base = { shapeNotes: null, meter: { numerator: 4, denominator: 4, grouping: [4] }, subdivision: "quarter", bpm: 60, bars: 1, direction: "up_down", stringSetup: "guitar_6_standard", fretboardSystem: "position", fretMin: 0, fretMax: 7, key: "C", scale: "major" };
+        const loopCases = [
+          { practiceType: "legato", minDuration: 4 },
+          { practiceType: "tapping", fretMax: 5, minDuration: 4 },
+          { practiceType: "string_skipping", minDuration: 4 },
+          { practiceType: "bebop_scale", minDuration: 4 },
+          { practiceType: "arpeggio_inversions", chordDepth: "triad", minDuration: 4 },
+          { practiceType: "scale_thirds", minDuration: 4 }
+        ];
+        for (const cfg of loopCases) {
+          const c = Object.assign({}, S.readConfig(), base, cfg, { mode: cfg.practiceType });
+          const chart = S.generateExercise(c).chart;
+          const notes = (chart.notes || []).filter((n) => !n._tail);
+          if (!notes.length) { fatal.push(`${cfg.practiceType} generated no notes`); continue; }
+          if ((chart.duration || 0) <= (cfg.minDuration || 4) + 0.001) fatal.push(`${cfg.practiceType} did not round past the one-bar minimum (duration ${chart.duration})`);
+          if (cfg.practiceType !== "scale_thirds" && Math.abs((chart.duration || 0) - notes.length) > 0.001) fatal.push(`${cfg.practiceType} duration ${chart.duration} no longer matches ${notes.length} quarter-step notes`);
+        }
+        const progressionCases = [
+          { practiceType: "chord_scales", mode: "chord_scales", progression: "ii-V-I", chordDepth: "seventh", bars: 5 },
+          { practiceType: "walking_bass", mode: "walking_bass", stringSetup: "bass_4_standard", stringCount: 4, progression: "ii-V-I", chordDepth: "seventh", bars: 5, fretMin: 0, fretMax: 7 },
+          { practiceType: "pedal_riff", mode: "pedal_riff", key: "E", scale: "natural_minor", progression: "i-VII-VI-VII", chordOverride: "5", bars: 5, fretMin: 0, fretMax: 7 }
+        ];
+        for (const cfg of progressionCases) {
+          const c = Object.assign({}, S.readConfig(), base, cfg);
+          const chart = S.generateExercise(c).chart;
+          const want = (cfg.bars || base.bars) * 4;
+          if (Math.abs((chart.duration || 0) - want) > 0.001) fatal.push(`${cfg.practiceType} progression timeline duration ${chart.duration}, want ${want}`);
+        }
+        return fatal;
+      }));
       rows.push(row("full_neck: NO fg (honesty by omission — no validated source)", () => {
         const fullNeck = gen({ practiceType: "scale", fretboardSystem: "full_neck", key: "C", scale: "major", stringSetup: "guitar_6_standard" });
         all.push(...fullNeck);
