@@ -236,9 +236,16 @@ async function run() {
       const parity = await page.evaluate(() => {
         const root = document.getElementById("virtuoso-root");
         const skins = ["neon", "esports", "metal", "warm", "focus"];
+        const expectedStageFrames = { neon: "chromatic-ring", esports: "solid-frame", metal: "inset-ring", warm: "warm-edge-light", focus: "quiet-solid" };
         const rows = [];
         const settings = document.getElementById("virtuoso-settings-btn");
         settings?.click();
+        const previews = [...document.querySelectorAll("#virtuoso-cardskin-pick .virtuoso-skin-card")].map((card) => ({
+          skin: card.dataset.cardskin || "",
+          axes: card.querySelectorAll(".virtuoso-skin-card-axes i").length,
+          label: card.querySelector(".virtuoso-skin-card-copy strong")?.textContent || "",
+          radius: getComputedStyle(card).getPropertyValue("--skin-radius").trim(),
+        }));
         for (const skin of skins) {
           document.querySelector(`#virtuoso-cardskin-pick [data-cardskin="${skin}"]`)?.click();
           document.querySelector('#virtuoso-skinscope-pick [data-skinscope="cockpit"]')?.click();
@@ -250,15 +257,25 @@ async function run() {
           const menu = document.getElementById("virtuoso-settings-menu");
           const modeBtn = document.querySelector(".virtuoso-mode-btn");
           const title = document.querySelector(".virtuoso-header h1");
+          const host = document.querySelector(".virtuoso-render-host");
           const ms = menu ? getComputedStyle(menu) : null;
           const bs = modeBtn ? getComputedStyle(modeBtn) : null;
           const ts = title ? getComputedStyle(title) : null;
+          const fs = host ? getComputedStyle(host, "::after") : null;
           const cockpitKey = [
             ms ? ms.backgroundColor : "",
             ms ? ms.backgroundImage : "",
             ms ? ms.boxShadow : "",
             bs ? bs.textTransform : "",
             ts ? ts.color : "",
+          ].join(" || ");
+          const frameKey = [
+            fs ? fs.content : "",
+            fs ? fs.paddingTop : "",
+            fs ? fs.backgroundColor : "",
+            fs ? fs.backgroundImage : "",
+            fs ? fs.animationName : "",
+            fs ? fs.boxShadow : "",
           ].join(" || ");
           rows.push({
             skin,
@@ -268,29 +285,42 @@ async function run() {
             rootSkin: root.getAttribute("data-vir-cardskin") || "",
             rootTone: root.getAttribute("data-vir-cardtone") || "default",
             rootScope: root.getAttribute("data-vir-skincockpit") || "",
+            stageFrame: root.getAttribute("data-vir-stageframe") || "",
+            expectedStageFrame: expectedStageFrames[skin],
             stored: localStorage.getItem(`virtuoso.cardTone.${skin}`) || "",
             beforeAccent,
             afterAccent,
             cockpitKey,
+            frameKey,
           });
         }
         document.querySelector('#virtuoso-cardskin-pick [data-cardskin="signature"]')?.click();
         const signatureHidden = document.getElementById("virtuoso-cardtone-group")?.hidden === true;
-        return { rows, signatureHidden, signatureSkin: root.getAttribute("data-vir-cardskin") || "", signatureTone: root.getAttribute("data-vir-cardtone") || "" };
+        return { rows, previews, signatureHidden, signatureSkin: root.getAttribute("data-vir-cardskin") || "", signatureTone: root.getAttribute("data-vir-cardtone") || "", signatureStageFrame: root.getAttribute("data-vir-stageframe") || "" };
       });
+      if (parity.previews.length !== 6) themeFails.push(`theme picker rendered ${parity.previews.length} preview cards, expected 6`);
+      for (const preview of parity.previews) {
+        if (!preview.skin || !preview.label) themeFails.push(`theme preview missing identity copy (${JSON.stringify(preview)})`);
+        if (preview.skin !== "signature" && preview.axes < 3) themeFails.push(`${preview.skin} preview exposes ${preview.axes} identity axes, expected at least 3`);
+        if (!preview.radius) themeFails.push(`${preview.skin} preview did not receive recipe radius`);
+      }
       for (const row of parity.rows) {
         if (row.count < 3) themeFails.push(`${row.skin} exposes ${row.count} colorway(s), expected at least 3`);
         if (new Set(row.labels).size !== row.labels.length) themeFails.push(`${row.skin} has duplicate colorway labels (${row.labels.join("|")})`);
         if (row.rootSkin !== row.skin) themeFails.push(`${row.skin} did not stamp data-vir-cardskin (got ${row.rootSkin})`);
         if (row.rootScope !== "on") themeFails.push(`${row.skin} did not enable whole-studio scope (got ${row.rootScope})`);
+        if (row.stageFrame !== row.expectedStageFrame) themeFails.push(`${row.skin} stamped stage frame ${row.stageFrame}, expected ${row.expectedStageFrame}`);
+        if (!row.frameKey || row.frameKey.includes("none || 0px")) themeFails.push(`${row.skin} renderer frame did not compute (${row.frameKey})`);
         if (!row.picked || row.rootTone !== row.picked) themeFails.push(`${row.skin} did not stamp picked card tone (${row.rootTone} vs ${row.picked})`);
         if (row.stored !== row.picked) themeFails.push(`${row.skin} did not persist picked tone (${row.stored} vs ${row.picked})`);
         if (row.beforeAccent === row.afterAccent) themeFails.push(`${row.skin} colorway did not change --vir-card-accent (${row.afterAccent})`);
       }
       const cockpitKeys = new Set(parity.rows.map((row) => row.cockpitKey));
       if (cockpitKeys.size !== parity.rows.length) themeFails.push(`whole-studio cockpit treatments are not distinct (${cockpitKeys.size}/${parity.rows.length})`);
+      const frameKeys = new Set(parity.rows.map((row) => row.frameKey));
+      if (frameKeys.size !== parity.rows.length) themeFails.push(`whole-studio stage-frame treatments are not distinct (${frameKeys.size}/${parity.rows.length})`);
       if (!parity.signatureHidden) themeFails.push("Signature should hand off to the Accent picker, not show card-tone swatches");
-      if (parity.signatureSkin || parity.signatureTone) themeFails.push(`Signature left skin attributes behind (skin=${parity.signatureSkin} tone=${parity.signatureTone})`);
+      if (parity.signatureSkin || parity.signatureTone || parity.signatureStageFrame) themeFails.push(`Signature left skin attributes behind (skin=${parity.signatureSkin} tone=${parity.signatureTone} frame=${parity.signatureStageFrame})`);
       for (const e of pageErrors.slice(errBase)) themeFails.push(`pageerror: ${e}`);
       for (const e of consoleErrors.slice(conBase)) themeFails.push(`console.error: ${e}`);
       results.push({ kind: "theme-colors", pass: themeFails.length === 0, status: "per-skin card colorways", canvas: null, pixels: "n/a", clock: { from: "-", to: "-" }, fails: themeFails, notes: [] });

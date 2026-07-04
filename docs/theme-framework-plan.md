@@ -218,6 +218,20 @@ For any theme change:
 - Copy-card/rendered-card export reads the active theme tokens.
 - Smoke or probe coverage verifies the root attributes, persistence keys, and at least one visible computed-style change.
 
+
+## Current Virtuoso Adapter Slice
+
+As of the first implementation slice, Virtuoso has started Phase 3 inside the existing no-build architecture:
+
+- `screen.js` owns a `VIR_THEME_RECIPES` registry for `Signature`, `Neon`, `Esports`, `Metal`, `Warm`, and `Focus`.
+- The registry carries each theme's label, role, axes, palette preview, typography, shape, material, motion, stage-frame, and colorway list.
+- The Settings theme picker renders live preview cards from that registry instead of hardcoded buttons.
+- Existing CSS selectors remain the web adapter for now. This keeps launch risk low while giving future Codex/Claude sessions a single data source to migrate into formal `--vir-theme-*` tokens.
+- `applyCardSkin()` stamps the recipe's `stageFrame.style` as `data-vir-stageframe`, so the renderer frame now consumes registry data instead of only skin-specific selectors.
+- Renderer smoke verifies the preview cards, per-theme colorways, persistence, root attributes, distinct Whole-studio cockpit treatments, and distinct stage-frame computed styles.
+
+Next migration target: generate or stamp formal theme tokens from `VIR_THEME_RECIPES`, then progressively replace remaining skin-specific cockpit selectors with token-consuming component rules.
+
 ## Immediate Virtuoso Slice
 
 Start with cockpit treatment rules under `[data-vir-cardskin][data-vir-skincockpit="on"]`:
