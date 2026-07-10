@@ -27,7 +27,7 @@ try {
   await page.waitForFunction(() => typeof window.showScreen === "function");
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
   await page.waitForSelector("#virtuoso-root", { state: "attached" });
-  await page.waitForSelector(".virtuoso-view-btn");
+  await page.waitForSelector("#virtuoso-view-select");
   await page.waitForFunction(() => window.Virtuoso && typeof window.Virtuoso.generateExercise === "function", { timeout: 10000 });
 
   const run = (form) => page.evaluate((f) => {

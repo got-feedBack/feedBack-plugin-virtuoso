@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.12';
+  const VIRTUOSO_VERSION = '0.1.13';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -13816,6 +13816,10 @@
       const f = await borrowHostViz('jumpingtab', '/api/plugins/jumpingtab/screen.js');
       return f ? { factory:f, label:'Jumping Tab' } : { factory:makeBuiltin2DRenderer, label:'2D Highway (fallback)' };
     }
+    // The in-tree 2D highway, DIRECTLY selectable (view dropdown, 2026-07-10).
+    // Historically only the builtin_2d/highway_3d fallback; 'highway_2d' is its
+    // first-class slot. No host borrow — always available, any string count.
+    if (kind === 'highway_2d') return { factory:makeBuiltin2DRenderer, label:'2D Highway' };
     if (kind === 'tab_2d') return { factory:makeBuiltin2DTabRenderer, label:'Tab' };
     if (kind === 'notation_2d') return { factory:makeBuiltin2DNotationRenderer, label:'Notation' };
     // Piano Roll — groundwork; borrows the host Piano Highway viz. Reachable
@@ -24938,19 +24942,21 @@
   // ── End Session UI ──────────────────────────────────────────────────────────
 
   function syncViewSwitcher(kind) {
-    document.querySelectorAll('.virtuoso-view-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.renderer === kind);
-    });
+    // The view dropdown mirrors what's ACTUALLY rendered (saved-pref restore,
+    // the >8-string force in attachRenderer) — value-set only, no change event,
+    // so syncing never re-triggers onViewSwitch.
+    const viewSel = $('virtuoso-view-select');
+    if (viewSel && viewSel.value !== kind) viewSel.value = kind;
     // Theme toggle is only meaningful for the themed renderers (Tab,
     // Notation); the highway renderers have their own visual identity.
     const root = $('virtuoso-root');
     if (root) {
       root.classList.toggle('virtuoso-theme-renderer', kind === 'tab_2d' || kind === 'notation_2d');
       // Fretboard strip is offered on every stringed-instrument view — 3D
-      // Highway, Jumping Tab, Tab, and Notation; the user can toggle it off.
-      // (Always hidden for the Piano instrument via CSS.)
+      // Highway, 2D Highway, Jumping Tab, Tab, and Notation; the user can
+      // toggle it off. (Always hidden for the Piano instrument via CSS.)
       root.classList.toggle('virtuoso-fb-capable',
-        kind === 'highway_3d' || kind === 'builtin_2d' || kind === 'tab_2d' || kind === 'notation_2d');
+        kind === 'highway_3d' || kind === 'highway_2d' || kind === 'builtin_2d' || kind === 'tab_2d' || kind === 'notation_2d');
       // The HUD title only shows for 3D Highway — every other renderer draws
       // the exercise name in-canvas itself, so showing it here too would double.
       root.classList.toggle('virtuoso-hud-title-on', kind === 'highway_3d');
@@ -25516,10 +25522,8 @@
     document.querySelectorAll('.virtuoso-practice-pill input').forEach(inp => {
       inp.addEventListener('change', () => { writeShareHash(); if (activeBundle) onGenerate(); });
     });
-    // View switcher tabs in the render stage — independent of exercise mode
-    document.querySelectorAll('.virtuoso-view-btn').forEach(btn => {
-      btn.addEventListener('click', () => onViewSwitch(btn.dataset.renderer));
-    });
+    // View dropdown in the render stage — independent of exercise mode
+    $('virtuoso-view-select')?.addEventListener('change', (e) => onViewSwitch(e.target.value));
     // Hand-marks pill (hand-marks Slice 1): default ON, persisted, never
     // auto-flipped. Renderers + the strip read handMarksOn() per frame, so a
     // flip shows on the next draw with no re-attach.

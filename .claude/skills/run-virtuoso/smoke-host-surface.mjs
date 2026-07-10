@@ -59,7 +59,7 @@ async function gotoVirtuoso(page) {
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
   await page.evaluate(() => document.getElementById("v3-onboarding")?.remove()).catch(() => {});
   await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector(".virtuoso-view-btn", { timeout: 5_000 });
+  await page.waitForSelector("#virtuoso-view-select", { timeout: 5_000 });
 }
 
 async function generate(page) {
@@ -110,8 +110,13 @@ async function run() {
     //    Switch to highway_3d, then require the factory global registered AND the
     //    renderer actually attached (status != "...(fallback)"). A silent 2D
     //    fallback (the v0.3.0 feedBackViz_* rename) fails here.
-    const hwBtn = await page.$('.virtuoso-view-btn[data-renderer="highway_3d"]');
-    if (hwBtn) { await hwBtn.click(); await page.waitForTimeout(900); }
+    await page.evaluate(() => {
+      const sel = document.querySelector("#virtuoso-view-select");
+      if (!sel) return;
+      sel.value = "highway_3d";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForTimeout(900);
     const hw = await page.evaluate(() => {
       const f = window.feedBackViz_highway_3d || window.slopsmithViz_highway_3d;
       const status = (document.getElementById("virtuoso-renderer-status")?.textContent || "").trim();

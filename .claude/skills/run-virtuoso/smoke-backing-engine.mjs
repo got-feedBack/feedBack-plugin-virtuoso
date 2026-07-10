@@ -57,7 +57,7 @@ try {
     catch (e) { if (i >= 2) throw e; await page.waitForTimeout(1500); }
   }
   await page.waitForSelector("#virtuoso-root", { state: "attached" });
-  await page.waitForSelector(".virtuoso-view-btn");
+  await page.waitForSelector("#virtuoso-view-select");
   await page.waitForFunction(() => window.Virtuoso && typeof window.Virtuoso.generateExercise === "function" && globalThis.__ss_debug);
   await page.waitForTimeout(600);   // let the screen's boot settle (first-load race)
 

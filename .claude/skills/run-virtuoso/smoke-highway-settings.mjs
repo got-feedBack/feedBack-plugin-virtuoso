@@ -46,11 +46,17 @@ async function main() {
     await page.waitForFunction(() => typeof window.showScreen === "function", { timeout: 5000 });
     await page.evaluate(() => window.showScreen("plugin-virtuoso"));
     await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10000 });
-    await page.waitForSelector(".virtuoso-view-btn", { timeout: 5000 });
+    await page.waitForSelector("#virtuoso-view-select", { timeout: 5000 });
 
-    // Ensure the 3D highway is the active view, then settle.
-    const hwBtn = await page.$('.virtuoso-view-btn[data-renderer="highway_3d"]');
-    if (hwBtn) { await hwBtn.click(); await page.waitForTimeout(600); }
+    // Ensure the 3D highway is the active view, then settle. (View selector is
+    // a dropdown since v0.1.13 — value + change, the user event path.)
+    const setView = (k) => page.evaluate((kind) => {
+      const sel = document.querySelector("#virtuoso-view-select");
+      if (!sel) return;
+      sel.value = kind;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }, k);
+    await setView("highway_3d"); await page.waitForTimeout(600);
 
     // Baseline snapshot AFTER the highway has attached once.
     const before = await page.evaluate(snapshotH3dBg);
@@ -69,9 +75,8 @@ async function main() {
 
     // Cycle through the other renderers and back to the highway (attach/detach
     // churn is the most likely place a stray settings-write could hide).
-    for (const kind of ["builtin_2d", "tab_2d", "notation_2d", "highway_3d"]) {
-      const b = await page.$(`.virtuoso-view-btn[data-renderer="${kind}"]`);
-      if (b) { await b.click(); await page.waitForTimeout(400); }
+    for (const kind of ["builtin_2d", "highway_2d", "tab_2d", "notation_2d", "highway_3d"]) {
+      await setView(kind); await page.waitForTimeout(400);
     }
 
     const after = await page.evaluate(snapshotH3dBg);
