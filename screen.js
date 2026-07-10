@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.9';
+  const VIRTUOSO_VERSION = '0.1.10';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -3547,7 +3547,7 @@
     if (renderer && activeBundle) drawOnce();
   }
   // Pitch tracker state — wraps slopsmithMinigames.scoring.createContinuous (no registration required)
-  let _ptHandle = null, _ptNotes = [], _ptOpenMidis = [], _ptScored = new Set(), _ptByKey = new Map(), _ptHadInput = false;
+  let _ptHandle = null, _ptNotes = [], _ptOpenMidis = [], _ptScored = new Set(), _ptByKey = new Map(), _ptHadInput = false, _ptLive = null;
   let _ptRunInfo = null;        // results-modal diagnostics: judged universe + exemptions + which ear (set per run)
   let _ptSpanCount = 0;         // tremolo spans this run (unit-denominated)
   let _ptExempt = null;         // Slice-2 class counts { legato, fast, spanNotes, floorMs } (set per run)
@@ -3812,7 +3812,9 @@
   // ── Borrowed-highway judgment events (feel-panel reconciliation 2026-06-07) ─
   // The host 3D highway renders its native hit flare / miss mark + the
   // "↑ +Nms" / "♯ +N¢" label sprites from window CustomEvents
-  // (notedetect:hit / notedetect:miss — normalizer hw:5620, listener hw:5669).
+  // (notedetect:hit / notedetect:miss). Since feedBack#254 highway_3d's getNoteState
+  // PROVIDER is authoritative over these window marks — see ptGetNoteState's live
+  // keep-alive, which stops the provider-cull deleting a gem before our async verdict.
   // Dispatching them from OUR judge gets that rendering free. The panel's
   // binding conditions: HIGHWAY-ONLY (our own surfaces keep the quiet
   // grammar); dispatch = TRUTH (evidence-backed judged outcomes only — exempt
@@ -22353,6 +22355,13 @@
       ptUpdateMeter({ show: true, active: false, cents: 0, note: '--', hits: _ptScoredUnits, total: passedTotal });
       return;
     }
+    // Live-ear snapshot for the borrowed-highway keep-alive gem (feedBack#254): a
+    // confident lock THIS frame, captured raw. ptGetNoteState reads it to return a
+    // display-only { state:'active', live:true } so the host gem survives at the strike
+    // line until the async contained verdict lands — else the provider-cull deletes it
+    // ~100ms past the line, before our verdict exists → no green flare. DISPLAY ONLY:
+    // it never credits (credit stays verifier-only, _ptScored) and never judges.
+    _ptLive = { t: currentPracticeTime, f: freqHz, c: confidence };
     // Fresh-lock gate: only frames the detector locked THIS frame may score
     // (≤0.85 = a fade re-emitting the previous pitch — display-only).
     const fresh = confidence > PT_CONF_FRESH;
@@ -22448,6 +22457,7 @@
 
   function stopPitchTracker() {
     if (_ptHandle) { try { _ptHandle.stop(); } catch (_) {} _ptHandle = null; }
+    _ptLive = null;   // drop the live-ear snapshot so a stale lock can't light a gem on the next run
     ndStopVerify();   // clear the verify target + listener, restore note_detect
     stopLevelMeter();   // tear down the level/onset tap (poll / RAF / mic stream)
     // Clear scoring state so a later silent preview can't read this run's
@@ -22486,6 +22496,31 @@
       const w = _ptWinByKey.get(k);
       const missAt = (w ? w.matchEnd : end + 0.06) + 0.10;   // candidate window + display grace
       if (now - ptLatency() > missAt) return 'miss';   // window passed on the JUDGE clock, never hit
+    }
+    // Live keep-alive for the borrowed highway (feedBack#254 provider): while this note
+    // straddles the strike line AND the live ear hears its target pitch NOW, return a
+    // display-only { state:'active', live:true } so the host gem stays lit until the async
+    // contained verdict credits it — the provider-cull would otherwise delete the gem
+    // ~100ms past the line, before our verdict lands (the "hits invisible on the 3D
+    // highway" bug). MIRRORS note_detect's own noteStateFor provisional glow: it renders
+    // NO judgment and drives NO credit ('hit'/'miss'/credit stay verifier-only, above);
+    // the 2D strip's string check ignores the object, so that surface stays credited-only.
+    // live:true routes it through the highway's non-latched 'hit-live' branch, so it
+    // extinguishes on mute / relights on re-strike and can never stick a false green.
+    if (_ptLive && _ptLive.c >= PT_CONF_INPUT) {
+      const age = now - _ptLive.t, om = _ptOpenMidis[note.s];
+      if (age > -0.05 && age < 0.08 && om != null && now >= tn.t - 0.12 && now <= end + 0.12) {
+        const cents = Math.abs(1200 * Math.log2(_ptLive.f / midiToFreq(om + note.f)));
+        const tol = note.bn ? PT_BEND_CENTS : 50;   // no looser than the credit floor
+        // level/onset evidence — the SAME host-mirror tap the credit gate trusts, so a
+        // confident YIN lock on an inaudible residual can't false-light the gem.
+        let leveled = true;
+        if (_lvlMode !== 'none') { const lo = now - PT_LVL_RECENT_WIN; leveled = !ptHasSamplesIn(lo, now) || ptPeakLevelIn(lo, now) >= PT_LVL_FLOOR_MIN; }
+        if (cents <= tol && leveled) {
+          const alpha = 0.55 + 0.4 * Math.max(0, Math.min(1, (_ptLive.c - PT_CONF_INPUT) / (1 - PT_CONF_INPUT)));
+          return { state: 'active', live: true, alpha };
+        }
+      }
     }
     return null;                                            // not yet judged — don't pre-color
   }
@@ -23290,18 +23325,19 @@
   // (Promise to keep the click activation) → download PNG → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
-    const nd = _ndCardApi();
-    if (nd) {
-      const data = _resultsCardData(s);
-      if (data) {
-        const overlay = _virCardOverlay();
-        try {
-          if (action === 'download') { const r = await nd.saveResultsCard(data, { overlayEl: overlay }); return (r && r.ok) ? 'saved' : 'failed'; }
-          return (await nd.copyResultsCard(data, { overlayEl: overlay })) || 'failed';
-        } catch (_) { /* fall through to the local fallback below */ }
-        finally { try { overlay.remove(); } catch (_) {} }
-      }
-    }
+    // Virtuoso renders its OWN verdict-led, skinned card — the ratified v0.1.4
+    // decision (memory project_card_theme_skins): "KEEP our renderer, don't
+    // consume note_detect's." The card is north-star IP and carries our skins
+    // (Neon/Esports/Metal/Warm/Focus) + the mastery crest. The old delegation to
+    // window.noteDetect.renderResultsCard is RETIRED here: whenever note_detect
+    // was present it PREFERRED note_detect's renderer, which (a) drew its hero
+    // accuracy from note_detect's own last-session counters — 0/0 under our
+    // contained verifier, the "ACCURACY 0% · 0/0 notes hit" bug (same mechanism
+    // as the v0.1.8 leak) — while our real numbers only reached the stats[] row,
+    // and (b) suppressed every skin + the crest on desktop (the headless smoke
+    // host lacks note_detect's card API, so the skin probes never exercised this
+    // path). _ndCardApi/_resultsCardData/_virCardOverlay are kept dormant below
+    // in case a host-level card capability ever supersedes ours.
     // Ensure the active theme's display face is loaded before the canvas rasterizes
     // (the DOM card gets it via CSS font-display; the canvas needs it resident).
     await loadCardFonts();
