@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.7';
+  const VIRTUOSO_VERSION = '0.1.8';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -4024,7 +4024,12 @@
     _ndContainedMode = false; _ndContainedFallback = false; _ndContainedPushInFlight = false;
     if (_ndVerifyListener) { window.removeEventListener('notedetect:verify', _ndVerifyListener); _ndVerifyListener = null; }
     if (_ndVerifyMode) { try { window.noteDetect.setVerifyTarget(null); } catch (_) {} }
-    if (_ndWeEnabledNoteDetect) { try { window.noteDetect.disable?.(); } catch (_) {} _ndWeEnabledNoteDetect = false; }
+    // silent: Virtuoso shows its OWN results card — suppress note_detect's
+    // end-of-song summary modal (nd disable() shows it by default), which would
+    // otherwise fire with note_detect's OWN count (0/0, since the CONTAINED
+    // verifier scored, not note_detect's own UI) — the "normal score card 0/0"
+    // tester report, 2026-07-09. nd screen.js:13445 skips showSummary() on silent.
+    if (_ndWeEnabledNoteDetect) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} _ndWeEnabledNoteDetect = false; }
     _ndVerifyMode = false; _ndVerifyCtx = null; _ndVerifyActive = []; _ndVerifyActiveKey = null; _ndVerifyActiveWin = null;
   }
   // Build the contained engine chart from the judged set. ptKey(n) is the stable
@@ -4063,7 +4068,7 @@
     } catch (_) {}
     if (weEnabled) _ndWeEnabledNoteDetect = true;
     if (superseded()) {
-      if (weEnabled) { try { window.noteDetect.disable?.(); } catch (_) {} _ndWeEnabledNoteDetect = false; }
+      if (weEnabled) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} _ndWeEnabledNoteDetect = false; }
       return;   // run stopped/restarted during enable() → don't arm
     }
     if (ndContainedAvailable()) {
@@ -21120,21 +21125,36 @@
     if (playerSetup.openMidis.length !== rungSetup.openMidis.length) return;
     const effective = instrumentStoreMidis(inst);
     if (!effective) return;
-    // The player's tuning must be a tagged OFFSET-kind preset (intent, never
-    // midis arithmetic — see the TUNING_PRESETS tag comment).
+    // Player already IS in the rung's coded tuning → nothing to adapt.
+    if (effective.every((m, i) => m === rungSetup.openMidis[i])) return;
+    // (A) TAGGED uniform detune (Eb / D-standard — a small `offset`-kind preset,
+    // by INTENT not midis arithmetic; see the TUNING_PRESETS tag comment) with a
+    // UNIFORM delta vs the rung: transpose key + opens together. The engine is
+    // transposition-covariant, so frets come out identical (fingering pedagogy
+    // preserved) while labels/detector/backing land on the player's sounding key.
     const fam = `${playerSetup.instrument}_${effective.length}`;
     const preset = (TUNING_PRESETS[fam] || []).find(p => p.midis.length === effective.length && p.midis.every((m, i) => m === effective[i]));
-    if (!preset || !preset.offset) return;
-    // …and a UNIFORM delta against the rung's coded tuning (a drop-D-coded rung
-    // vs a D-standard player is non-uniform on the low string → Phase 2).
     const d0 = effective[0] - rungSetup.openMidis[0];
-    if (d0 === 0) return;
-    if (!effective.every((m, i) => m - rungSetup.openMidis[i] === d0)) return;
-    const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
-    cfg.keyNominal = cfg.key;
-    cfg.tuningOffset = d0;
-    cfg.tuningLabel = preset.label;
-    cfg.key = NOTE_NAMES[((keyPc + d0) % 12 + 12) % 12];     // sharp names — matches the key <select> options
+    const uniform = effective.every((m, i) => m - rungSetup.openMidis[i] === d0);
+    if (preset && preset.offset && uniform && d0 !== 0) {
+      const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
+      cfg.keyNominal = cfg.key;
+      cfg.tuningOffset = d0;
+      cfg.tuningLabel = preset.label;
+      cfg.key = NOTE_NAMES[((keyPc + d0) % 12 + 12) % 12];   // sharp names — matches the key <select> options
+      cfg.customOpenMidis = effective.join(',');
+      return;
+    }
+    // (B) STRUCTURAL / large / untagged re-stringing (drop-*, B-standard, BEAD,
+    // high-C, DADGAD, open tunings): chart on the player's REAL opens at CONCERT
+    // pitch — KEEP the rung's key, and let the degree-driven resolver re-finger
+    // the concert line onto the physical strings. Without this the chart stayed
+    // on the rung's STANDARD opens while the player was re-strung, so every note
+    // mis-targeted the verifier = catastrophic mis-score (the "B-standard → 24%"
+    // tester bug, 2026-07-09). A structural re-stringing is concert-pitch, never
+    // a uniform transpose (bass-pedagogy ruling 2026-07-05: a B string is a B,
+    // not "everything down a 4th"). keyNominal/tuningOffset stay unset (no Travel
+    // double-credit); the label shows the concert key the line actually sounds.
     cfg.customOpenMidis = effective.join(',');
   }
 
