@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.8';
+  const VIRTUOSO_VERSION = '0.1.9';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -12723,13 +12723,19 @@
           ctx.beginPath(); ctx.moveTo(x - 10, y - 10); ctx.lineTo(x + 10, y + 10); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(x + 10, y - 10); ctx.lineTo(x - 10, y + 10); ctx.stroke();
         } else {
-          // note tile
-          ctx.fillStyle = col;
+          // note tile — a CREDITED hit fills GREEN with a glow (the host highway's
+          // green-hit grammar brought to our own surfaces so a hit is unmistakable
+          // on 2D/Tab/Notation, not just the borrowed 3D highway — tester report
+          // 2026-07-09). #22c55e/#4ade80 = the cleared/hit green (never themed).
+          const hit = (st === 'hit' || st === 'active');
+          if (hit) { ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 12; }
+          ctx.fillStyle = hit ? '#22c55e' : col;
           ctx.beginPath(); ctx.roundRect(x - 17, y - 13, 34, 26, 7); ctx.fill();
-          ctx.strokeStyle = (st === 'hit' || st === 'active') ? '#f8fafc'
+          if (hit) ctx.shadowBlur = 0;
+          ctx.strokeStyle = hit ? '#4ade80'
             : dimmed ? '#ff0066'
             : n.ac ? '#f8fafc' : 'rgba(248,250,252,0.5)';
-          ctx.lineWidth = (st === 'hit' || st === 'active') ? 3 : n.ac ? 3 : dimmed ? 2 : 1.2;
+          ctx.lineWidth = hit ? 3 : n.ac ? 3 : dimmed ? 2 : 1.2;
           ctx.stroke();
           ctx.fillStyle = '#020617';
           ctx.font = '800 14px system-ui';
@@ -12961,11 +12967,15 @@
         // null outside a scored run and always null in Jam (mirror rule).
         const st = bundle.getNoteState ? bundle.getNoteState(n) : null;
         if (st === 'hit' || st === 'active') {
-          ctx.fillStyle = t.ink;
+          // credited hit → GREEN tile + glow (matches the highway/host green-hit
+          // grammar; the number stays readable in the tile's bg color).
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+          ctx.fillStyle = '#22c55e';
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(x - tw/2 - 3, y - fontSize/2 - 2, tw + 6, fontSize + 4, 3);
           else ctx.rect(x - tw/2 - 3, y - fontSize/2 - 2, tw + 6, fontSize + 4);
           ctx.fill();
+          ctx.shadowBlur = 0;
           ctx.fillStyle = t.bg;
         } else {
           ctx.fillStyle = t.bg; ctx.fillRect(x - tw/2 - 2, y - fontSize/2 - 1, tw + 4, fontSize + 2);
@@ -13454,9 +13464,12 @@
         if (nv.hasStem && !bk.has(`${n.t.toFixed(4)}|${n.s}`)) noteStemAndFlag(x, y, up, nv, ls);
         if (dimmed) ctx.globalAlpha = 1;
         if (st === 'hit' || st === 'active') {
-          ctx.strokeStyle = t.ink; ctx.lineWidth = 2.2;
+          // credited hit → GREEN ring + glow around the notehead (host green-hit
+          // grammar; a ring, never a fill — fill would change duration semantics).
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 9;
+          ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2.4;
           ctx.beginPath(); ctx.ellipse(x, y, ls * 0.95, ls * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
-          ctx.lineWidth = 1;
+          ctx.shadowBlur = 0; ctx.lineWidth = 1;
         }
       }
     }
@@ -14484,8 +14497,13 @@
       // self-guards (null without a scorer, always null in Jam).
       const st = n.n ? ptGetNoteState(n.n) : null;
       if (st === 'hit' || st === 'active') {
-        ctx.globalAlpha = 1; ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2.2;
+        // credited hit → GREEN glow-ring on the live dot (reward-only; a miss
+        // paints nothing here — the strip is the honesty surface). Host green-hit
+        // grammar, consistent with the note renderers (tester report 2026-07-09).
+        ctx.globalAlpha = 1; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+        ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.arc(x, y, 10.5, 0, 6.2832); ctx.stroke();
+        ctx.shadowBlur = 0;
       }
       ctx.globalAlpha = 1;
     }
