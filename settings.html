@@ -27,4 +27,71 @@
       file, if present, is migrated in automatically on first load.
     </p>
   </div>
+
+  <div class="bg-dark-700 border border-gray-700 rounded-lg p-3">
+    <div class="font-semibold text-gray-100 mb-1">Save folder for cards</div>
+    <p class="mb-2">
+      Where the <strong>Save</strong> button (and auto-save, if on) writes the
+      results / copy card PNG. Leave blank to use your Pictures folder
+      (e.g. <code>C:\Users\you\Pictures</code>). Must be an absolute path.
+      <span class="block text-xs text-gray-500 mt-1">Shared with note_detect — both plugins write their cards to this folder.</span>
+    </p>
+    <div class="flex gap-2">
+      <input type="text" id="virtuoso_beta-save-dir" placeholder="(default: your Pictures folder)"
+             class="flex-1 min-w-0 bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200">
+      <!-- Native folder picker — DESKTOP only. The web build has no bridge, so the
+           script keeps this hidden unless feedBackDesktop.pickDirectory exists; the
+           text field is the fallback either way. Mirrors note_detect (PR #49). -->
+      <button type="button" id="virtuoso_beta-save-browse"
+              class="hidden shrink-0 bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200 cursor-pointer">Browse…</button>
+    </div>
+    <label class="flex items-start gap-2 mt-3 cursor-pointer select-none">
+      <input type="checkbox" id="virtuoso_beta-autosave-card" class="mt-0.5">
+      <span class="text-sm text-gray-300">Auto-save a card after every run
+        <span class="block text-xs text-gray-500 mt-1">Off by default. When on, a card PNG is saved automatically each time a run ends &mdash; named <code>Virtuoso - Skill - date.png</code>, never overwriting a previous take.</span>
+      </span>
+    </label>
+  </div>
 </div>
+
+<script>
+  // Save-folder setting. The FOLDER is SHARED with note_detect (the same
+  // localStorage key), so both plugins write their cards to one place; the
+  // auto-save toggle is Virtuoso's own. Mirrors note_detect's settings.html.
+  (function () {
+    var dir = document.getElementById('virtuoso_beta-save-dir');
+    var auto = document.getElementById('virtuoso_beta-autosave-card');
+    if (dir) {
+      try { dir.value = localStorage.getItem('slopsmith_notedetect_save_dir') || ''; } catch (e) {}
+      dir.addEventListener('change', function () {
+        try {
+          var v = (dir.value || '').trim();
+          if (v) localStorage.setItem('slopsmith_notedetect_save_dir', v);
+          else localStorage.removeItem('slopsmith_notedetect_save_dir');
+        } catch (e) {}
+      });
+    }
+    if (auto) {
+      try { auto.checked = localStorage.getItem('virtuoso_beta.autosaveCard') === '1'; } catch (e) {}
+      auto.addEventListener('change', function () {
+        try { localStorage.setItem('virtuoso_beta.autosaveCard', auto.checked ? '1' : '0'); } catch (e) {}
+      });
+    }
+    // Browse… opens the desktop shell's native folder picker via the bridge
+    // (window.feedBackDesktop / legacy slopsmithDesktop alias) — the SAME mechanism
+    // note_detect uses (PR #49), so both plugins behave identically. Only the desktop
+    // build exposes it; in the web testbed the button stays hidden and typing an
+    // absolute path is the input. Picking fills the field + persists the shared key.
+    var browseBtn = document.getElementById('virtuoso_beta-save-browse');
+    var desktop = (typeof window !== 'undefined') ? (window.feedBackDesktop || window.slopsmithDesktop) : null;
+    if (browseBtn && dir && desktop && typeof desktop.pickDirectory === 'function') {
+      browseBtn.classList.remove('hidden');
+      browseBtn.onclick = async function () {
+        try {
+          var picked = await desktop.pickDirectory();
+          if (picked) { dir.value = picked; dir.dispatchEvent(new Event('change')); }
+        } catch (e) { /* dialog cancelled / unavailable */ }
+      };
+    }
+  })();
+</script>

@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.1-beta.1';
+  const VIRTUOSO_VERSION = '0.1.9-beta.1';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -69,15 +69,17 @@
   // queued on the same AudioContext clock before the previous one ends.
   const SCHED_WINDOW_SECONDS = 10;
   const SCHED_REFILL_AHEAD = 4;
-  // The host detector's hard tracking floor (YIN minHz:70 in the minigames SDK,
-  // verified vs checkout a04050b 2026-06-06): pitches below this are INVISIBLE
-  // to the mic — bass E1 (41 Hz) / A1 (55 Hz), drop-C/B guitar low strings.
-  // Sub-floor expected notes are honest-ungraded (excluded from judgment like
-  // chords — the click is the judge); the tuner octave-folds sub-floor targets
-  // (YIN reports the 2nd harmonic). FLIP TRIGGER: the host exposing minHz on
-  // createContinuous (their yinDetect already accepts it — host-expert watch
-  // item); then run the staged E1 probe and retire these gates where cleared.
-  const DETECTOR_MIN_HZ = 70;
+  // Detector tracking floor (Hz): pitches below this are honest-ungraded (excluded
+  // from judgment like chords — the click is the judge); the tuner octave-folds
+  // sub-floor targets (YIN reports the 2nd harmonic). LOWERED 70 → 30 (2026-06-28)
+  // per the notedetect-expert verdict: note_detect's low-end is fixed (30 Hz
+  // detection floor + 2048 frame ≈ 3× bass recall + sample-rate accumulation buffer
+  // + HPS; native comb/ML on the DI rig), so the old 70 Hz gate OVER-exempted low
+  // bass the detector now hears (E1 41 Hz, A1 55 Hz, 5-string low B 30.9 Hz). 30 Hz
+  // sits just below low B. RISK (accepted on the user's call): 70 originally tracked
+  // the minigames SDK's YIN minHz — if the WEB SDK is still 70, sub-70 notes go
+  // MISSED, not exempt, on the web path; the desktop/DI-rig contained verifier is 30.
+  const DETECTOR_MIN_HZ = 30;
 
   const STRING_SETUPS = {
     guitar_6_standard: { label:'6-string guitar — standard', instrument:'guitar', openMidis:[40,45,50,55,59,64], tuning:[0,0,0,0,0,0] },
@@ -245,7 +247,9 @@
     diatonic:[1,2,3,4,5,6,7,1],
     diatonic_7ths:[1,2,3,4,5,6,7],   // the harmonized-key lap (Chords ladder): one diatonic 7th per degree, no wrap. With chordDepth:'seventh' + chordOverride:'auto' → Imaj7 ii7 iii7 IVmaj7 V7 vi7 vii7♭5 (modal over dorian/mixo).
     static_i:[1],                 // one-chord vamp — Beginner Core "static vamp" (Pulse & Muting); roots stay on the tonic
+    'I-IV':[1,4,1,4],
     'I-IV-V':[1,4,5,1],
+    'I-IV-I-V':[1,4,1,5],
     'I-V-vi-IV':[1,5,6,4],
     'I-vi-IV-V':[1,6,4,5],
     'I-vi-ii-V':[1,6,2,5],
@@ -312,6 +316,7 @@
     modal_mixture:[1,4,{ deg:4, q:'min7' },5],               // I–IV–iv–V : borrowed-minor-iv modal mixture (the iv is the colour)
     // ── World / genre vamps (band-intel genre batch, 2026-06-13) ──────────────
     'i-iv':[1,4],                                             // i–iv minor vamp (reggae / minor soul) — pair with natural_minor so the iv stays MINOR (Am→Dm); distinct from dorian_vamp's major IV
+    'I-II7-V':[1, { semis:2, q:'dom7', rn:'II7' }, 5, 1],     // I–II7–V : bright secondary-dominant country / western-swing pull
     soul_turnaround:[1, { semis:9, q:'dom7', rn:'VI7' }, 2, 5], // I–VI7–ii–V : the soul/Motown turnaround — the VI is a SECONDARY DOMINANT (the soul colour), not the diatonic vi
     // Ragtime secondary-dominant chain (III7–VI7–II7–V7–I) — every link a dom7 (the
     // bright forward-leaning ragtime motion); same {semis,q:'dom7'} chromatic form as
@@ -4019,7 +4024,12 @@
     _ndContainedMode = false; _ndContainedFallback = false; _ndContainedPushInFlight = false;
     if (_ndVerifyListener) { window.removeEventListener('notedetect:verify', _ndVerifyListener); _ndVerifyListener = null; }
     if (_ndVerifyMode) { try { window.noteDetect.setVerifyTarget(null); } catch (_) {} }
-    if (_ndWeEnabledNoteDetect) { try { window.noteDetect.disable?.(); } catch (_) {} _ndWeEnabledNoteDetect = false; }
+    // silent: Virtuoso shows its OWN results card — suppress note_detect's
+    // end-of-song summary modal (nd disable() shows it by default), which would
+    // otherwise fire with note_detect's OWN count (0/0, since the CONTAINED
+    // verifier scored, not note_detect's own UI) — the "normal score card 0/0"
+    // tester report, 2026-07-09. nd screen.js:13445 skips showSummary() on silent.
+    if (_ndWeEnabledNoteDetect) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} _ndWeEnabledNoteDetect = false; }
     _ndVerifyMode = false; _ndVerifyCtx = null; _ndVerifyActive = []; _ndVerifyActiveKey = null; _ndVerifyActiveWin = null;
   }
   // Build the contained engine chart from the judged set. ptKey(n) is the stable
@@ -4058,7 +4068,7 @@
     } catch (_) {}
     if (weEnabled) _ndWeEnabledNoteDetect = true;
     if (superseded()) {
-      if (weEnabled) { try { window.noteDetect.disable?.(); } catch (_) {} _ndWeEnabledNoteDetect = false; }
+      if (weEnabled) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} _ndWeEnabledNoteDetect = false; }
       return;   // run stopped/restarted during enable() → don't arm
     }
     if (ndContainedAvailable()) {
@@ -4170,6 +4180,7 @@
   let jamGuideLine = false;       // audible generated line: OFF by default
   let jamBandMode = 'no_bass';    // bass players: 'no_bass' | 'drums_only' | 'full' (guitar always full)
   let _jamPending = false;        // J-2 (D-J3): a live panel change is queued for the next loop wrap
+  let _jamPendingParts = [];      // the queued-change summary currently shown in the Jam pending chip
   let _jamSnapshot = null;        // the panel state the CURRENT jam pass was built from (delta source)
   let _jamApplyToken = 0;         // Jam-UX reliability: monotonic guard so a stale async voice-swap apply can't win (the out-of-order race)
   let jamIntent = '';             // J-2 (D-J8): the picked intent — self-checked, shown, NEVER judged
@@ -4626,7 +4637,7 @@
   //   feel            { swing, backingStyle } — the backing feel
   //   audioProfile    AUDIO_PROFILES key (the sound), or null → clean family inferred
   const STYLE_PALETTES = {
-    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
+    blues:   { label:'Blues',      defaultKey:'A', progressions:['12_bar_blues','quick_change_blues','jazz_blues','blues_turnaround'], leadScales:['blues','minor_pentatonic'], chordDepth:'seventh', chordOverride:'dom7', guideTones:false, feel:{ swing:'shuffle', backingStyle:'boogie' }, audioProfile:'blues' },
     // J-2 (D-J5b) modal-vamp wiring: the dormant bright-modal tokens join the
     // styles whose leadScales already speak the mode (rock/funk ride mixolydian's
     // ♭VII; metal's phrygian i–♭II is its signature semitone move). lydian_vamp
@@ -4635,21 +4646,21 @@
     rock:    { label:'Rock',       defaultKey:'E', progressions:['i-VII-VI-VII','I-V-vi-IV','I-IV-V','mixolydian_rock','mixolydian_vamp'], leadScales:['minor_pentatonic','natural_minor','mixolydian'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'rock' },
     metal:   { label:'Metal',      defaultKey:'E', progressions:['metal_i_bVI_bVII','metal_pedal_chromatic','metal_i_bVII_bVI_V','phrygian_vamp'], leadScales:['phrygian','natural_minor','harmonic_minor'], chordDepth:'triad', chordOverride:'5', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'metal' },
     djent:   { label:'Djent',      defaultKey:'E', progressions:['metal_pedal_chromatic'], leadScales:['phrygian','natural_minor'], chordDepth:'triad', chordOverride:'5oct', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'djent' },
-    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
+    jazz:    { label:'Jazz',       defaultKey:'C', progressions:['ii-V-I','vi-ii-V-I','minor_ii_V_i','rhythm_changes_a','so_what','jazz_blues','tritone_sub_ii_V_I','backdoor_ii_V','tadd_dameron'], leadScales:['major','dorian','mixolydian'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'swing', backingStyle:'pad' }, audioProfile:'jazz' },
     // Funk goes Dorian (modal-M1 ride-along, approved 2026-06-05): dorian_vamp's
     // dom7 IV carries the ♮6 — the James Brown sound — so chordOverride must be
     // 'auto' (a min7 override would silence the vamp's major/dom IV).
     funk:    { label:'Funk / R&B', defaultKey:'A', progressions:['dorian_vamp','static_i','i-VII-VI-VII','mixolydian_vamp'], leadScales:['dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'funk' },
     pop:     { label:'Pop',        defaultKey:'C', progressions:['I-V-vi-IV','vi-IV-I-V','I-vi-IV-V'], leadScales:['major','major_pentatonic'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'pop' },
-    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-V-vi-IV'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
+    country: { label:'Country',    defaultKey:'G', progressions:['I-IV-V','I-IV-I-V','I-II7-V','I-V-vi-IV','mixolydian_rock'], leadScales:['major_pentatonic','major'], chordDepth:'triad', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'country' },
     gospel:  { label:'Gospel',     defaultKey:'C', progressions:['ii-V-I','I-vi-ii-V'], leadScales:['major','dorian'], chordDepth:'ninth', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'gospel' },
     // ── World / genre batch (band-intel, panel 2026-06-13) — each genre vetted by
     // its idiom agent; the band each one declares lives in ARRANGEMENT_RECIPES.
     reggae:   { label:'Reggae',       defaultKey:'A', progressions:['static_i','i-iv','i-VII-VI-VII','I-IV-V','I-V-vi-IV'], leadScales:['minor_pentatonic','natural_minor','dorian'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'reggae' },
     disco:    { label:'Disco',        defaultKey:'A', progressions:['i-VII-VI-VII','dorian_vamp','vi-IV-I-V','static_i'], leadScales:['minor_pentatonic','dorian','natural_minor'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'disco' },
     latin:    { label:'Latin / Bossa', defaultKey:'A', progressions:['ii-V-I','minor_ii_V_i','I-vi-ii-V'], leadScales:['major','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:true, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'latin' },
-    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
-    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
+    soul:     { label:'Soul / Motown', defaultKey:'C', progressions:['I-vi-IV-V','soul_turnaround','modal_mixture','ii-V-I','I-IV-V'], leadScales:['major_pentatonic','dorian','minor_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'soul' },
+    afrobeat: { label:'Afrobeat',     defaultKey:'A', progressions:['static_i','I-IV','dorian_vamp','mixolydian_vamp','I-IV-V'], leadScales:['dorian','mixolydian','major_pentatonic'], chordDepth:'seventh', chordOverride:'auto', guideTones:false, feel:{ swing:'straight', backingStyle:'pad' }, audioProfile:'afrobeat' },
     // ── World / genre Wave 2 (band-intel, panel 2026-06-13) — feel is straight/pad
     // for ALL so the genre's ARRANGEMENT_RECIPE drives (backingStyle:'boogie' or a
     // non-straight swing pre-empt the recipe; the recipe cells carry each feel).
@@ -4719,6 +4730,7 @@
   // D-J5a: the palettes already carry progressions[] plural — name them so the
   // picker speaks the player's vocabulary). Fallback = prettified token.
   const JAM_PROG_LABELS = {
+    'I-IV':'I–IV vamp', 'I-IV-I-V':'I–IV–I–V train-beat', 'I-II7-V':'I–II7–V secondary dominant',
     '12_bar_blues':'12-Bar Blues', quick_change_blues:'Quick-Change Blues',
     'i-VII-VI-VII':'i–♭VII–♭VI–♭VII', 'I-V-vi-IV':'I–V–vi–IV', 'I-IV-V':'I–IV–V',
     'I-vi-IV-V':'I–vi–IV–V', 'vi-IV-I-V':'vi–IV–I–V', 'I-vi-ii-V':'I–vi–ii–V',
@@ -4730,6 +4742,8 @@
     mixolydian_vamp:'Mixolydian vamp (I–♭VII–IV)', phrygian_vamp:'Phrygian vamp (i–♭II)',
     'i-iv':'i–iv minor vamp', soul_turnaround:'Soul turnaround (I–VI7–ii–V)',
     andalusian:'Andalusian (i–♭VII–♭VI–V)', blues_turnaround:'Blues turnaround',
+    jazz_blues:'Jazz blues', tritone_sub_ii_V_I:'Tritone-sub ii–V–I', backdoor_ii_V:'Backdoor ii–V', tadd_dameron:'Tadd Dameron turn',
+    modal_mixture:'Borrowed iv (I–IV–iv–V)',
     pachelbel:'Pachelbel (I–V–vi–iii–IV…)', circle_diatonic:'Circle of 5ths', 'i-VI-III-VII':'i–♭VI–♭III–♭VII',
     ragtime_circle:'Ragtime chain (III7–VI7–II7–V7–I)', 'I-vi-ii-V':'I–vi–ii–V',
     lydian_vamp:'Lydian vamp (I–II)',
@@ -4738,6 +4752,13 @@
   function jamProgressionLabel(token) {
     return JAM_PROG_LABELS[token] || String(token || '').replace(/_/g, ' ');
   }
+  (function validateJamProgressionLabels() {
+    for (const id of Object.keys(STYLE_PALETTES)) {
+      for (const pr of STYLE_PALETTES[id].progressions || []) {
+        if (!JAM_PROG_LABELS[pr]) throw new Error(`[Virtuoso jam] ${id} progression "${pr}" needs a JAM_PROG_LABELS label`);
+      }
+    }
+  })();
   // One per-style "try this" line (slice J-1 — the intent SEED, goal-card grammar:
   // a constraint to jam against, never a score). Draft prompts pending the
   // genre-idiom refinement sweep (logged in ROADMAP).
@@ -4776,10 +4797,8 @@
   };
   // J-2 intent chips (D-J8: intents, not scores). An intent is a SELF-checked
   // musical aim the player picks before/while jamming — shown on the status line,
-  // never judged, never scored (the mirror rule). Per-style guitar sets + a
-  // bass-native set (a bassist's job is the foundation, not lead intents).
-  // Draft copy — the genre-idiom refinement sweep (owed from J-1's JAM_PROMPTS)
-  // covers these too.
+  // never judged, never scored (the mirror rule). Per-style guitar sets plus
+  // style-specific bass sets (a bassist's job changes by idiom).
   const JAM_INTENTS = {
     blues:   ['Say it in 2 bars, leave 2 empty', 'End every phrase on a chord tone', 'One bend per phrase — in tune'],
     rock:    ['Land the root on every change', 'Build a riff, repeat it ×4', 'Double-stops on the chorus'],
@@ -4813,7 +4832,41 @@
     western_swing: ['Chase chord tones — land the 6th', 'Take a hot solo, then "take it away"', 'Twin-fiddle it — harmonize in 3rds/6ths'],
     synthwave: ['Soar — one long held note per phrase', 'Land the ♭3, then lift to major', 'Ride the arp, answer the change'],
   };
-  const JAM_INTENTS_BASS = ['Walk into every change', 'Lock the one with the kick', 'Ghost notes between the roots'];
+  const JAM_INTENTS_BASS = {
+    default: ['Root on the one', 'Approach the next root', 'Lock with the kick'],
+    blues: ['Walk the I-IV-V roots', 'Approach the turnaround from below', 'Leave space after the V'],
+    rock: ['Eight-note roots with authority', 'Fifth-to-root answers', 'Push into the chorus change'],
+    metal: ['Pedal the root tightly', 'Mirror the kick accents', 'Mute every release cleanly'],
+    djent: ['Own the low-string grid', 'Choke the gaps with the band', 'Answer accents, then disappear'],
+    jazz: ['Walk quarters through every change', 'Chromatic approach into ii-V-I roots', 'Outline roots before color tones'],
+    funk: ['One-bar pocket, repeat it', 'Ghost 16ths around the root', 'Lock accents with the kick'],
+    pop: ['Hold the hook, not the fill', 'Lift into the pre-chorus root', 'Leave the vocal lane open'],
+    country: ['Two-feel roots on 1 and 3', 'Walk into IV and V', 'Pedal the fifth on the turnaround'],
+    gospel: ['Walk up into every one', 'Answer the left-hand push', 'Resolve fills to the root'],
+    reggae: ['Hold the bass hook', 'Leave the one empty when it feels right', 'Answer the skank with space'],
+    disco: ['Octaves with the kick', 'Root-octave engine for 8 bars', 'Ghost into each octave'],
+    latin: ['Tumbao root-fifth motion', 'Leave room for the clave', 'Anticipate the barline softly'],
+    soul: ['Motown approach into every root', 'Hold note endings full value', 'Pocket just behind the beat'],
+    afrobeat: ['Repeat the ostinato until it hypnotizes', 'Interlock with kick and guitar', 'Small variation every 4 bars'],
+    norteno: ['Oom-pah roots and fifths', 'Walk cleanly into the push', 'Let the accordion lead breathe'],
+    tango: ['Marcato roots, full value', 'Pull hard into the downbeat', 'Silence after the accent'],
+    bluegrass: ['Root-fifth drive without rushing', 'Walk into the turnaround', 'Keep the two-beat engine steady'],
+    'city-pop': ['Smooth octave pocket', 'Approach ii-V roots chromatically', 'Let the synth bass breathe'],
+    new_orleans: ['Big-four push into the root', 'Bounce the fifth, never rush', 'Leave room for the snare drag'],
+    classical: ['Anchor harmonic roots clearly', 'Sustain through phrase cadences', 'Move by step when possible'],
+    flamenco: ['Pedal the tonic hard', 'Lean into the Phrygian b2', 'Stop sharply after rasgueado answers'],
+    folk: ['Drone the tonic when it fits', 'Step into the next chord', 'Keep the song pulse plain'],
+    gypsy_jazz: ['Two-feel roots, then walk', 'Chromatic approach each dominant', 'Keep quarter notes light'],
+    ragtime: ['Alternating root-fifth stride', 'Catch the syncopated push', 'Land secondary dominants cleanly'],
+    surf: ['Palm-muted root engine', 'Slide into the V', 'Keep eighths even under reverb'],
+    shoegaze: ['Long roots under the wash', 'Change late, sustain wide', 'Let octave blooms replace fills'],
+    emo: ['Pedal open roots', 'Step through passing chords', 'Interlock with the high guitar figure'],
+    punk: ['Downstroke roots with the kick', 'One fill before the chorus', 'No drift through the turnaround'],
+    prog: ['Track the odd-meter one', 'Pedal through modal color', 'Outline roots before extensions'],
+    western_swing: ['Two-feel roots and fifths', 'Walk the 6th into the change', 'Bounce behind the beat'],
+    synthwave: ['Octave pulse under the arp', 'Hold the root through pad changes', 'Slide into the next bass note'],
+  };
+  function jamBassIntents(styleId) { return JAM_INTENTS_BASS[styleId] || JAM_INTENTS_BASS.default; }
 
   // ===========================================================================
   // SEGMENT TEMPLATES + VARIATION ENGINE (Workout library substrate)
@@ -9385,18 +9438,18 @@
       }
     }
 
-    let t = 0, unitIdx = 0;
-    while (t < totalTime - 0.001) {
+    const totalSteps = wholeCycleStepCount(totalTime, step, unit.length);
+    let t = 0;
+    for (let unitIdx = 0; unitIdx < totalSteps; unitIdx++) {
       const { s, f, fg } = unit[unitIdx % unit.length];
       const nf = { t: Number(t.toFixed(6)), s, f, sus: Math.max(0.04, step * 0.85) };
       if (fg != null) nf.fg = f === 0 ? 0 : fg;
       notes.push(noteDefaults(nf));
       t += step;
-      unitIdx++;
     }
     applyStrokePolicy(notes, cfg, 'alternate');   // the chromatic warmup IS the alternate-picking lesson
 
-    const duration = Math.max(t, totalTime);
+    const duration = Math.max(totalTime, Number(t.toFixed(6)));
     return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration };
   }
 
@@ -9436,8 +9489,10 @@
     const notes = [];
     const sections = [{ name: `Spider — strings ${count - lo} & ${count - hi}`, number: 1, time: 0 }];
     const cellLen = offsets.length * 2;                      // hi-lead pass + the lo-lead mirror
-    let t = 0, k = 0;
-    while (t < totalTime - 0.001) {
+    const fullCycleSteps = Math.max(1, frames.length * cellLen);
+    const totalSteps = wholeCycleStepCount(totalTime, step, fullCycleSteps);
+    let t = 0;
+    for (let k = 0; k < totalSteps; k++) {
       const cell = Math.floor(k / cellLen), inCell = k % cellLen;
       const F = frames[cell % frames.length];
       const mirrored = inCell >= offsets.length;
@@ -9448,9 +9503,9 @@
                    rh: onHi ? trebleRh : 0 };
       if (off >= 0 && off <= 3) nf.fg = off + 1;             // one finger per frame fret
       notes.push(noteDefaults(nf));
-      t += step; k++;
+      t += step;
     }
-    return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration: Math.max(t, totalTime) };
+    return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration: Math.max(totalTime, Number(t.toFixed(6))) };
   }
 
   // p-i-m-a broken-chord study over a progression — the classical arpeggio-
@@ -9586,22 +9641,38 @@
   }
 
   // Fill the timeline with `seq`, cycling it, one note per step.
-  // opts: { step, steps?, totalTime, sus, name, startAt=0, duration=Math.max(t,totalTime) }
+  // opts: { step, steps?, totalTime, sus, name, startAt=0, loopCycleSteps?, duration=Math.max(t,totalTime) }
   // `steps` (optional) is a cycling array of per-note durations for non-uniform
   // rhythms (gallop — see rhythmSteps); when absent, the uniform `step` is used.
+  // `loopCycleSteps` rounds uniform-step drills up to a whole sequence cycle so
+  // playback loops back to the start of a complete mechanical phrase.
   function fillNotesFromSeq(seq, opts) {
     const { step, steps, totalTime, sus, name, startAt = 0 } = opts;
     const notes = [], sections = [{ name, number: 1, time: 0 }];
+    const hasVariableSteps = !!(steps && steps.length);
+    const loopCycleSteps = !hasVariableSteps && opts.loopCycleSteps != null
+      ? Math.max(1, Math.round(opts.loopCycleSteps) || 1) : 0;
+    const targetSteps = loopCycleSteps
+      ? wholeCycleStepCount(Math.max(0, totalTime - startAt), step, loopCycleSteps) : null;
     let t = startAt, idx = 0;
-    while (t < totalTime - 0.001) {
+    while (targetSteps != null ? idx < targetSteps : t < totalTime - 0.001) {
       const ev = seq[idx % seq.length];
       const note = { t: Number(t.toFixed(6)), s: ev.s, f: ev.f, sus };
       for (const k of SEQ_NOTE_FIELDS) if (ev[k] !== undefined) note[k] = ev[k];
       notes.push(noteDefaults(note));
-      t += (steps && steps.length) ? steps[idx % steps.length] : step; idx++;
+      t += hasVariableSteps ? steps[idx % steps.length] : step; idx++;
     }
-    const duration = opts.duration != null ? opts.duration : Math.max(t, totalTime);
+    const duration = opts.duration != null ? opts.duration : Math.max(totalTime, Number(t.toFixed(6)));
     return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration };
+  }
+  // Loopable warmup drills should wrap at the end of a WHOLE mechanical cycle,
+  // not at an arbitrary bars×time cutoff mid-cell. `bars` is therefore treated
+  // as the MINIMUM length for these drills; the chart rounds up to the next full
+  // cycle so keep-looping playback re-enters on a natural hand-motion boundary.
+  function wholeCycleStepCount(totalTime, step, cycleSteps) {
+    const minSteps = Math.max(1, Math.ceil(Math.max(0, totalTime - 1e-9) / Math.max(1e-6, step)));
+    const cycle = Math.max(1, Math.round(cycleSteps) || 1);
+    return Math.ceil(minSteps / cycle) * cycle;
   }
 
   // Bending drill — cycles scale tones on the highest (thinnest) strings, each
@@ -9646,7 +9717,7 @@
     else                                   seq = events;
     const sus = Math.max(0.2, step * 0.92);
     const bendName = bendTarget === 'half' ? 'Half-step bends' : bendTarget === 'whole' ? 'Whole-step bends' : 'Mixed bends';
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `${bendName} — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `${bendName} — ${cfg.key} ${cfg.scale}` });
   }
 
   // ── 20 additional generators ────────────────────────────────────────────────
@@ -9672,7 +9743,7 @@
     }
     const seq = cfg.direction === 'ascending' ? asc : cfg.direction === 'descending' ? desc : [...asc, ...desc];
     const sus = Math.max(0.05, step * 0.9);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Legato runs — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Legato runs — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildVibratoExercise(cfg) {
@@ -9682,7 +9753,7 @@
     const sorted = allPos.slice().sort((a, b) => a.midi - b.midi);
     const seq = orientSeq(sorted.map(p => ({ s: p.s, f: p.f, vb: true })), cfg.direction);
     const noteStep = mLen / 2, sus = Math.max(0.4, noteStep - 0.08);
-    return fillNotesFromSeq(seq, { step: noteStep, totalTime, sus, name: `Vibrato — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step: noteStep, totalTime, sus, loopCycleSteps: seq.length, name: `Vibrato — ${cfg.key} ${cfg.scale}` });
   }
 
   // Build a "scale in <interval>" run. For each scale tone (lower voice) we pair
@@ -9726,14 +9797,15 @@
         : cfg.direction === 'up_down' ? [...pairs, ...pairs.slice().reverse()] : pairs;
       const sus = Math.max(0.05, (steps ? steps[0] : step) * 0.9);
       const tr = !!cfg.tremolo;   // tremolo-picked twin leads — the melodeath signature
+      const targetSteps = steps && steps.length ? null : wholeCycleStepCount(totalTime, step, seq.length);
       const notes = []; let t = 0, idx = 0;
-      while (t < totalTime - 0.001) {
+      while (targetSteps != null ? idx < targetSteps : t < totalTime - 0.001) {
         const [lo, hi] = seq[idx % seq.length];
         notes.push(noteDefaults({ t: Number(t.toFixed(6)), s: lo.s, f: lo.f, sus, tr }));
         notes.push(noteDefaults({ t: Number(t.toFixed(6)), s: hi.s, f: hi.f, sus, tr }));
         t += (steps && steps.length) ? steps[idx % steps.length] : step; idx++;
       }
-      return { notes, chords: [], chordTemplates: [], handShapes: [], sections: [{ name: `Harmonized ${label} — ${cfg.key} ${cfg.scale}`, number: 1, time: 0 }], duration: Math.max(t, totalTime) };
+      return { notes, chords: [], chordTemplates: [], handShapes: [], sections: [{ name: `Harmonized ${label} — ${cfg.key} ${cfg.scale}`, number: 1, time: 0 }], duration: Math.max(totalTime, Number(t.toFixed(6))) };
     }
     const asc = [];
     for (const [lo, hi] of pairs) { asc.push(lo); asc.push(hi); }
@@ -9744,7 +9816,7 @@
     const cleaned = asc.filter((p, i) => i === 0 || p.s !== asc[i - 1].s || p.f !== asc[i - 1].f);
     const seq = orientSeq(cleaned, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Scale in ${label} — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Scale in ${label} — ${cfg.key} ${cfg.scale}` });
   }
 
   // Diatonic third ≈ 3–4 semitones (m3/M3). Target 4 (M3) so major-leaning
@@ -10195,7 +10267,7 @@
     }
     if (!events.length) throw new Error('No tapping positions — try fretMin ≤ 12.');
     const sus = Math.max(0.05, step * 0.85);
-    return fillNotesFromSeq(events, { step, totalTime, sus, name: `Tapping — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(events, { step, totalTime, sus, loopCycleSteps: events.length, name: `Tapping — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPedalPointExercise(cfg) {
@@ -10211,7 +10283,7 @@
     const events = [];
     for (const m of melSeq) { events.push(pedal); events.push(m); }
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(events, { step, totalTime, sus, name: `Pedal point — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(events, { step, totalTime, sus, loopCycleSteps: events.length, name: `Pedal point — ${cfg.key} ${cfg.scale}` });
   }
 
   // Pedal-point RIFF (genre-framework §2.3): a palm-muted low pedal (s=0, tonic,
@@ -10280,7 +10352,7 @@
     }
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `String skipping — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `String skipping — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPositionShiftExercise(cfg) {
@@ -10292,7 +10364,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Position shift — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Position shift — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildRhythmicDisplacementExercise(cfg) {
@@ -10337,7 +10409,7 @@
     const cleaned = events.filter((p, i) => i === 0 || p.s !== events[i - 1].s || p.f !== events[i - 1].f);
     const seq = orientSeq(cleaned, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Chromatic enclosures — ${cfg.key}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Chromatic enclosures — ${cfg.key}` });
   }
 
   function buildBebopScaleExercise(cfg) {
@@ -10359,7 +10431,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Bebop scale — ${cfg.key} (${bebopScale.replace('_', ' ')})` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Bebop scale — ${cfg.key} (${bebopScale.replace('_', ' ')})` });
   }
 
   function buildArpeggioInversionsExercise(cfg) {
@@ -10410,7 +10482,7 @@
     const seq = orientSeq(events, cfg.direction);
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
     const sus = Math.max(0.05, step * 0.88);
-    const ex = fillNotesFromSeq(seq, { step, totalTime, sus, name: `Inversions — ${cfg.key} ${quality}` });
+    const ex = fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Inversions — ${cfg.key} ${quality}` });
     applyStrokePolicy(ex.notes, cfg, 'bass_parity');   // bass: strict i-m parity (guitar: player's choice)
     return ex;
   }
@@ -10565,7 +10637,7 @@
     if (!events.length) throw new Error('Need ≥ 2 strings for hybrid picking.');
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Hybrid picking — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Hybrid picking — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildTriadicPairsExercise(cfg) {
@@ -10605,7 +10677,7 @@
     const deduped = events.filter((p, i) => i === 0 || p.s !== events[i - 1].s || p.f !== events[i - 1].f);
     const seq = orientSeq(deduped, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Triadic pairs — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Triadic pairs — ${cfg.key} ${cfg.scale}` });
   }
 
   function buildPentatonicSuperExercise(cfg) {
@@ -10628,7 +10700,7 @@
     const seq = orientSeq(sorted, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
     const superName = pcName(superRoot);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Pent. superimposition — ${superName}m over ${cfg.key}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Pent. superimposition — ${superName}m over ${cfg.key}` });
   }
 
   function buildShellVoicingsExercise(cfg) {
@@ -10698,7 +10770,7 @@
     if (!events.length) throw new Error('No octave pairs in range — expand fret range.');
     const seq = orientSeq(events, cfg.direction);
     const sus = Math.max(0.05, step * 0.88);
-    return fillNotesFromSeq(seq, { step, totalTime, sus, name: `Octave displacement — ${cfg.key} ${cfg.scale}` });
+    return fillNotesFromSeq(seq, { step, totalTime, sus, loopCycleSteps: seq.length, name: `Octave displacement — ${cfg.key} ${cfg.scale}` });
   }
 
   // ── strum_comp: held voiced chord + strum rhythm/feel ───────────────────────
@@ -11511,6 +11583,52 @@
       else { const v = Number.isFinite(ev.vel) ? ev.vel : 1; ev.vel = +Math.min(1, Math.max(0.05, v * k)).toFixed(4); }
     }
   }
+  function jamSpotlightPhrasePcs(ev, cfg, styleId, pass, idx) {
+    const root = ((ev.rootPc || 0) % 12 + 12) % 12;
+    const cpcs = Array.isArray(ev.cpcs) && ev.cpcs.length ? ev.cpcs : [root, (root + 4) % 12, (root + 7) % 12];
+    const guides = Array.isArray(ev.gpcs) && ev.gpcs.length ? ev.gpcs : cpcs.filter(pc => pc !== root && pc !== (root + 7) % 12);
+    const fifth = cpcs.includes((root + 7) % 12) ? (root + 7) % 12 : cpcs[1] || root;
+    if (isBassCfg(cfg)) {
+      if (['disco', 'synthwave', 'funk'].includes(styleId)) return [root, (root + 7) % 12, root];
+      if (['jazz', 'gypsy_jazz', 'western_swing'].includes(styleId)) return [root, (root + 11) % 12, root];
+      if (['reggae', 'dub', 'shoegaze'].includes(styleId)) return [root];
+      return [root, fifth];
+    }
+    if (['jazz', 'gypsy_jazz', 'city-pop', 'ragtime'].includes(styleId)) return [guides[0] || cpcs[1] || root, guides[1] || cpcs[2] || root, root];
+    if (['funk', 'reggae', 'afrobeat', 'disco', 'soul'].includes(styleId)) return [root, fifth, cpcs[(idx + pass) % cpcs.length] || root];
+    if (['metal', 'djent', 'punk', 'rock', 'surf'].includes(styleId)) return [root, fifth, root];
+    if (['country', 'bluegrass', 'western_swing', 'blues'].includes(styleId)) return [root, cpcs.find(pc => pc !== root && pc !== fifth) || fifth, fifth];
+    return [root, guides[0] || cpcs[1] || fifth, cpcs[2] || root];
+  }
+  function jamSpotlightPhraseNotes(cfg, duration, pass, styleId) {
+    const tl = compileChordTimeline(cfg, duration).filter(ev => ev && ev.cpcs && ev.startSec < duration - 0.001);
+    const beatSec = (60 / cfg.bpm) * (4 / cfg.meter.denominator);
+    const opens = openMidisForConfig(cfg);
+    const fMin = Math.max(0, Number.isFinite(cfg.fretMin) ? cfg.fretMin : 0);
+    const fMax = Math.min(24, Number.isFinite(cfg.fretMax) ? cfg.fretMax : fMin + 7);
+    const notes = [];
+    let prevMidi = isBassCfg(cfg) ? 40 : 60;
+    for (let i = 0; i < tl.length; i++) {
+      const ev = tl[i];
+      if (ev.startSec >= duration - 0.001) break;
+      if (!isBassCfg(cfg) && i % 2 !== pass % 2) continue;   // call, then air
+      const pcs = jamSpotlightPhrasePcs(ev, cfg, styleId, pass, i);
+      const maxNotes = isBassCfg(cfg) ? Math.min(2, pcs.length) : Math.min(3, pcs.length);
+      for (let j = 0; j < maxNotes; j++) {
+        const tt = ev.startSec + beatSec * (isBassCfg(cfg) ? j : (j === 0 ? 0 : j * 0.75));
+        if (tt >= ev.endSec - beatSec * 0.15 || tt >= duration - 0.001) continue;
+        const pos = nearestPositionForPc(pcs[j], prevMidi, opens, fMin, fMax);
+        if (!pos) continue;
+        prevMidi = pos.midi;
+        notes.push(noteDefaults({
+          t: Number(tt.toFixed(6)), s: pos.s, f: pos.f,
+          sus: Math.max(0.08, beatSec * (isBassCfg(cfg) ? 0.72 : 0.52)),
+          ac: j === 0, _spotlightPhrase: true,
+        }));
+      }
+    }
+    return notes.length ? notes : buildSingleChart(cfg).notes.slice(0, 4).map(n => Object.assign({}, n, { _spotlightPhrase: true }));
+  }
   function buildJamChart(cfg) {
     const pal = STYLE_PALETTES[cfg.jamStyle];
     const passes = Math.max(2, Math.min(8, cfg.jamPasses | 0 || 4));
@@ -11553,7 +11671,8 @@
       // lead notes (you're the soloist); the cue + highlight switch per turn. Off →
       // no tag added → byte-identical chart.
       const soloTurn = cfg.jamSpotlight ? (pass % 2 === 0 ? 'you' : 'band') : null;
-      sw.notes.forEach(n => { const nn = Object.assign({}, n, { t: Number((n.t + t).toFixed(6)) }); if (soloTurn) nn.solo = soloTurn; notes.push(nn); });
+      const leadNotes = soloTurn === 'band' ? swingNotesBacking(jamSpotlightPhraseNotes(pCfg, dur, pass, cfg.jamStyle), [], pCfg).notes : sw.notes;
+      leadNotes.forEach(n => { const nn = Object.assign({}, n, { t: Number((n.t + t).toFixed(6)) }); if (soloTurn) nn.solo = soloTurn; notes.push(nn); });
       chart.chords.forEach(c => chords.push(Object.assign({}, c, { t: Number((c.t + t).toFixed(6)), id: c.id + tplOffset })));
       chart.chordTemplates.forEach(ct => chordTemplates.push(ct));
       chart.handShapes.forEach(hs => handShapes.push(Object.assign({}, hs, { chord_id: hs.chord_id + tplOffset, start_time: Number((hs.start_time + t).toFixed(6)), end_time: Number((hs.end_time + t).toFixed(6)) })));
@@ -12347,7 +12466,7 @@
       // dogfood bug, 2026-06-09). Jam (mode undefined + its own A–B segment loop)
       // stays endless and never judges. So: eligible = anything with a mode.
       finiteRun: cfg.mode != null,
-    isReady:true, notes:notesWithTail, chords:c.chords, anchors:c.anchors, beats:beatsWithTail, sections:c.sections, chordTemplates:c.chordTemplates, handShapes:c.handShapes, segmentBounds:c.segmentBounds || null,
+    isReady:true, notes:notesWithTail, chords:c.chords, anchors:c.anchors, beats:beatsWithTail, sections:c.sections, chordTemplates:c.chordTemplates, handShapes:c.handShapes, segmentBounds:c.segmentBounds || null, timeline:c.timeline || null,
       leadIn:lead,
       // Backing comp/bass + drums cover the music only ([lead, duration]); generate
       // both for the content length, concat, then shift past the count-in (so drums
@@ -12604,13 +12723,19 @@
           ctx.beginPath(); ctx.moveTo(x - 10, y - 10); ctx.lineTo(x + 10, y + 10); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(x + 10, y - 10); ctx.lineTo(x - 10, y + 10); ctx.stroke();
         } else {
-          // note tile
-          ctx.fillStyle = col;
+          // note tile — a CREDITED hit fills GREEN with a glow (the host highway's
+          // green-hit grammar brought to our own surfaces so a hit is unmistakable
+          // on 2D/Tab/Notation, not just the borrowed 3D highway — tester report
+          // 2026-07-09). #22c55e/#4ade80 = the cleared/hit green (never themed).
+          const hit = (st === 'hit' || st === 'active');
+          if (hit) { ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 12; }
+          ctx.fillStyle = hit ? '#22c55e' : col;
           ctx.beginPath(); ctx.roundRect(x - 17, y - 13, 34, 26, 7); ctx.fill();
-          ctx.strokeStyle = (st === 'hit' || st === 'active') ? '#f8fafc'
+          if (hit) ctx.shadowBlur = 0;
+          ctx.strokeStyle = hit ? '#4ade80'
             : dimmed ? '#ff0066'
             : n.ac ? '#f8fafc' : 'rgba(248,250,252,0.5)';
-          ctx.lineWidth = (st === 'hit' || st === 'active') ? 3 : n.ac ? 3 : dimmed ? 2 : 1.2;
+          ctx.lineWidth = hit ? 3 : n.ac ? 3 : dimmed ? 2 : 1.2;
           ctx.stroke();
           ctx.fillStyle = '#020617';
           ctx.font = '800 14px system-ui';
@@ -12842,11 +12967,15 @@
         // null outside a scored run and always null in Jam (mirror rule).
         const st = bundle.getNoteState ? bundle.getNoteState(n) : null;
         if (st === 'hit' || st === 'active') {
-          ctx.fillStyle = t.ink;
+          // credited hit → GREEN tile + glow (matches the highway/host green-hit
+          // grammar; the number stays readable in the tile's bg color).
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+          ctx.fillStyle = '#22c55e';
           ctx.beginPath();
           if (ctx.roundRect) ctx.roundRect(x - tw/2 - 3, y - fontSize/2 - 2, tw + 6, fontSize + 4, 3);
           else ctx.rect(x - tw/2 - 3, y - fontSize/2 - 2, tw + 6, fontSize + 4);
           ctx.fill();
+          ctx.shadowBlur = 0;
           ctx.fillStyle = t.bg;
         } else {
           ctx.fillStyle = t.bg; ctx.fillRect(x - tw/2 - 2, y - fontSize/2 - 1, tw + 4, fontSize + 2);
@@ -13335,9 +13464,12 @@
         if (nv.hasStem && !bk.has(`${n.t.toFixed(4)}|${n.s}`)) noteStemAndFlag(x, y, up, nv, ls);
         if (dimmed) ctx.globalAlpha = 1;
         if (st === 'hit' || st === 'active') {
-          ctx.strokeStyle = t.ink; ctx.lineWidth = 2.2;
+          // credited hit → GREEN ring + glow around the notehead (host green-hit
+          // grammar; a ring, never a fill — fill would change duration semantics).
+          ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 9;
+          ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2.4;
           ctx.beginPath(); ctx.ellipse(x, y, ls * 0.95, ls * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
-          ctx.lineWidth = 1;
+          ctx.shadowBlur = 0; ctx.lineWidth = 1;
         }
       }
     }
@@ -13889,9 +14021,13 @@
     if (hi - lo < MIN_SPAN) lo = Math.max(0, hi - MIN_SPAN);
     fbFretLo = lo; fbFretHi = hi;
   }
-  // Jam target-highlight: which pitch classes to light on the strip right now, given
-  // the Highlight mode (chord tones / guide tones / scale / off) and the chord at the
-  // playhead (from the enriched backing events). The teaching mirror.
+  // Jam target-highlight: the current teaching mirror on the strip. Guitar =
+  // chord / guide / scale / off; bass reuses the SAME 4-step ladder but teaches the
+  // bassist's job: roots / next root / approach / off. One control path, two jobs.
+  const JAM_HL_LABELS = {
+    guitar: { chord:'Chord tones — most support', guide:'Guide tones (3rd & 7th)', scale:'Scale', off:'Off — bare neck' },
+    bass:   { chord:'Roots — most support', guide:'Next root — see the change coming', scale:'Approach tones', off:'Off — bare neck' },
+  };
   let jamHighlightMode = 'chord';   // chord | guide | scale | off
   try { const m = localStorage.getItem('virtuoso_beta.jamHighlight'); if (m) jamHighlightMode = m; } catch (_) {}
   // Spotlight (J-3): which turn the playhead is in — even pass = you solo, odd =
@@ -13905,16 +14041,80 @@
     for (let i = 0; i < secs.length; i++) { if (secs[i].time <= t + 1e-6) idx = i; else break; }
     return (idx % 2 === 0) ? 'you' : 'band';
   }
+  function jamCurrentCfg() { return (activeBundle && activeBundle.config) || readConfig(); }
+  function jamInstrumentKind() {
+    const cfg = jamCurrentCfg() || {};
+    return ((STRING_SETUPS[cfg.stringSetup] || {}).instrument || cfg.instrument || 'guitar');
+  }
+  function jamIsBassContext() { return jamInstrumentKind() === 'bass'; }
+  function jamFretboardEligible() { const inst = jamInstrumentKind(); return inst === 'guitar' || inst === 'bass'; }
   // The fretboard highlight in effect right now: Spotlight OVERRIDES per turn (your
-  // solo → SCALE sandbox; band solo → CHORD tones to comp behind), else the user's pick.
+  // solo → SCALE sandbox / bass approaches; band solo → CHORD roots or chord tones),
+  // else the user's pick.
   function jamEffectiveHighlight(t) {
     const turn = jamSpotlightTurn(t);
     if (turn) return turn === 'band' ? 'chord' : 'scale';
     return jamHighlightMode;
   }
+  function jamCarrierInfo(t) {
+    if (!activeBundle) return null;
+    const beatSec = chartBeatSeconds(activeBundle) || 0.5;
+    const lead = activeBundle.leadIn || 0;
+    const tl = activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline) || [];
+    if (tl.length) {
+      let curIdx = -1;
+      for (let i = 0; i < tl.length; i++) {
+        const at = lead + (tl[i].startSec != null ? tl[i].startSec : (tl[i].t || 0));
+        if (at > t + 1e-6) break;
+        curIdx = i;
+      }
+      if (curIdx >= 0) {
+        const cur = tl[curIdx];
+        const next = tl[curIdx + 1] || tl[0] || null;
+        const nextAt = next
+          ? (next === tl[0] && curIdx === tl.length - 1
+            ? (activeBundle.songInfo?.duration || lead)
+            : lead + (next.startSec != null ? next.startSec : (next.t || 0)))
+          : (activeBundle.songInfo?.duration || lead);
+        const sameChord = !!(next && cur.cpcs && next.cpcs
+          && next.cpcs.length === cur.cpcs.length && next.cpcs.every(pc => cur.cpcs.includes(pc)));
+        return { cur, next, beatSec, timeToNext: Math.max(0, nextAt - t), sameChord };
+      }
+    }
+    const evs = activeBundle.backingEvents || [];
+    if (!evs.length) return null;
+    let curIdx = -1, firstCar = -1;
+    for (let i = 0; i < evs.length; i++) {
+      if (!evs[i].cpcs) continue;
+      if (firstCar < 0) firstCar = i;
+      if (evs[i].t > t + 1e-6) break;
+      curIdx = i;
+    }
+    if (curIdx < 0) return null;
+    let nextIdx = -1;
+    for (let i = curIdx + 1; i < evs.length; i++) { if (evs[i].cpcs) { nextIdx = i; break; } }
+    const cur = evs[curIdx];
+    const next = nextIdx >= 0 ? evs[nextIdx] : (firstCar != curIdx ? evs[firstCar] : null);
+    const timeToNext = nextIdx >= 0 ? evs[nextIdx].t - t : Math.max(0, (activeBundle.songInfo?.duration || 0) - t);
+    const sameChord = !!(next && cur.cpcs && next.cpcs
+      && next.cpcs.length === cur.cpcs.length && next.cpcs.every(pc => cur.cpcs.includes(pc)));
+    return { cur, next, beatSec, timeToNext, sameChord };
+  }
+  function bassApproachPcs(rootPc) {
+    const pc = ((rootPc % 12) + 12) % 12;
+    return [pc, (pc + 11) % 12, (pc + 1) % 12];
+  }
   function jamTargetPcs(t) {
     const mode = jamEffectiveHighlight(t);
     if (mode === 'off' || !activeBundle) return null;
+    if (jamIsBassContext()) {
+      const info = jamCarrierInfo(t);
+      if (!info || !info.cur) return null;
+      const rootPc = (mode === 'guide' || mode === 'scale') && info.next && !info.sameChord
+        ? info.next.rootPc : info.cur.rootPc;
+      if (rootPc == null) return null;
+      return mode === 'scale' ? new Set(bassApproachPcs(rootPc)) : new Set([((rootPc % 12) + 12) % 12]);
+    }
     if (mode === 'scale') {
       const cfg = activeBundle.config; if (!cfg) return null;
       const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
@@ -13928,12 +14128,9 @@
       }
       return ivs.length ? new Set(ivs.map(i => (keyPc + i) % 12)) : null;
     }
-    // chord / guide — the most recent backing chord at or before the playhead.
-    const evs = activeBundle.backingEvents || [];
-    let cur = null;
-    for (const e of evs) { if (e.t > t + 1e-6) break; if (e.cpcs) cur = e; }
-    if (!cur) return null;
-    const pcs = mode === 'guide' ? cur.gpcs : cur.cpcs;
+    const info = jamCarrierInfo(t);
+    if (!info || !info.cur) return null;
+    const pcs = mode === 'guide' ? info.cur.gpcs : info.cur.cpcs;
     return (pcs && pcs.length) ? new Set(pcs) : null;
   }
   // Shift telegraph (hand-marks Slice 2; UX ruling): when the run is about to
@@ -13965,35 +14162,21 @@
     return out.length ? { ghosts: out, lead } : null;
   }
   // Play-the-changes ANTICIPATION: within ~1.5 beats of the next chord, the NEXT
-  // chord's guide tones (3rd/7th) — drawn as a distinct amber "ghost" on the strip
-  // so the player preps the change before it lands. Wraps to the top of the loop.
+  // target is ghosted amber on the strip so the player preps the change before it
+  // lands. Guitar = next guide tones; bass = next root / approach pocket. Wraps to
+  // the top of the loop.
   function jamNextGuidePcs(t) {
-    if (jamHighlightMode === 'off' || !activeBundle) return null;
-    const evs = activeBundle.backingEvents || []; if (!evs.length) return null;
-    // Walk the chord-change CARRIERS only (the one cpcs-tagged event per
-    // change) — the dense comp/bass lanes (step 3–4) interleave nameless hits
-    // between changes, so "the next array element" is no longer "the next
-    // chord". For the legacy pad (every event a carrier) this is identical.
-    let curIdx = -1, firstCar = -1;
-    for (let i = 0; i < evs.length; i++) {
-      if (!evs[i].cpcs) continue;
-      if (firstCar < 0) firstCar = i;
-      if (evs[i].t > t + 1e-6) break;
-      curIdx = i;
+    const mode = jamEffectiveHighlight(t);
+    if (mode === 'off' || !activeBundle) return null;
+    const info = jamCarrierInfo(t);
+    if (!info || !info.cur) return null;
+    if (info.timeToNext > 1.6 * info.beatSec) return null;
+    if (jamIsBassContext()) {
+      const rootPc = info.next && !info.sameChord ? info.next.rootPc : info.cur.rootPc;
+      if (rootPc == null) return null;
+      return mode === 'scale' ? new Set(bassApproachPcs(rootPc)) : new Set([((rootPc % 12) + 12) % 12]);
     }
-    if (curIdx < 0) return null;
-    let nextIdx = -1;
-    for (let i = curIdx + 1; i < evs.length; i++) { if (evs[i].cpcs) { nextIdx = i; break; } }
-    const next = nextIdx >= 0 ? evs[nextIdx] : (firstCar !== curIdx ? evs[firstCar] : null);
-    // only as the change approaches (wrap: time to the loop's top)
-    const timeToNext = nextIdx >= 0 ? evs[nextIdx].t - t : Math.max(0, (activeBundle.songInfo?.duration || 0) - t);
-    if (timeToNext > 1.6 * chartBeatSeconds(activeBundle)) return null;
-    // "Static" = no next carrier OR the next carrier is the SAME chord (sub-bar
-    // harmonic rhythm re-slots an unchanged vamp chord every half bar, so a
-    // one-chord vamp still has "next" events — compare identity, not existence).
-    const sameChord = next && evs[curIdx].cpcs && next.cpcs
-      && next.cpcs.length === evs[curIdx].cpcs.length && next.cpcs.every(pc => evs[curIdx].cpcs.includes(pc));
-    if (!next || sameChord) {
+    if (!info.next || info.sameChord) {
       // D-J6 (J-2): a STATIC one-chord vamp has no "next chord" — instead of
       // going dark, pre-light the tonality's COLOR note near the wrap (Dorian
       // ♮6, Mixo ♭7, Lydian ♯4…): the note that says the mode, the thing worth
@@ -14004,7 +14187,7 @@
       const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
       return new Set([(keyPc + colorIv) % 12]);
     }
-    const pcs = next.gpcs || [];
+    const pcs = info.next.gpcs || [];
     return pcs.length ? new Set(pcs) : null;
   }
   // Notes sounding within ~80ms of the playhead, with a sustain-based fade.
@@ -14024,9 +14207,35 @@
   // Reflect the toggle state onto the root class (drives strip visibility) and
   // the toggle button. The strip only actually appears when the active renderer
   // is also fretboard-capable (see syncViewSwitcher's .virtuoso_beta-fb-capable).
+  function syncJamHighlightUI() {
+    const labels = jamIsBassContext() ? JAM_HL_LABELS.bass : JAM_HL_LABELS.guitar;
+    $('virtuoso_beta-jam-hl')?.setAttribute('aria-label', jamIsBassContext() ? 'Bass target map' : 'Fretboard highlight');
+    document.querySelectorAll('#virtuoso_beta-jam-hl .virtuoso_beta-jam-hl-btn').forEach(b => {
+      const mode = b.dataset.hl || 'off';
+      if (labels[mode]) b.textContent = labels[mode];
+      b.classList.toggle('active', mode === jamHighlightMode);
+    });
+  }
   function syncFretboardUI() {
     $('virtuoso_beta-root')?.classList.toggle('virtuoso_beta-fb-on', fretboardOn);
-    $('virtuoso_beta-fretboard-toggle')?.setAttribute('aria-checked', String(fretboardOn));
+    const toggle = $('virtuoso_beta-fretboard-toggle');
+    toggle?.setAttribute('aria-checked', String(fretboardOn));
+    const jam = isJamMode();
+    const label = $('virtuoso_beta-fretboard-toggle-label');
+    if (label) label.textContent = jam ? (fretboardOn ? 'Target map' : 'Target map off') : 'Fretboard view';
+    toggle?.setAttribute('aria-label', jam ? (fretboardOn ? 'Toggle target map' : 'Turn target map on') : 'Toggle fretboard view');
+    const wrap = $('virtuoso_beta-fretboard-toggle-wrap');
+    if (wrap) wrap.title = jam
+      ? (fretboardOn ? 'Chord and target tones light on the neck while you jam.' : 'Turn the target map on to light the changes on the neck while you jam.')
+      : '';
+  }
+  function maybePrimeJamFretboardMap() {
+    let hasPref = false;
+    try { hasPref = localStorage.getItem('virtuoso_beta.fretboard') != null; } catch (_) {}
+    if (hasPref || !jamFretboardEligible()) return false;
+    if (!fretboardOn) fretboardOn = true;
+    syncFretboardUI();
+    return true;
   }
   // Reflect the keep-looping state onto its toggle (visibility is CSS, per mode).
   function syncKeepLoopUI() {
@@ -14288,8 +14497,13 @@
       // self-guards (null without a scorer, always null in Jam).
       const st = n.n ? ptGetNoteState(n.n) : null;
       if (st === 'hit' || st === 'active') {
-        ctx.globalAlpha = 1; ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2.2;
+        // credited hit → GREEN glow-ring on the live dot (reward-only; a miss
+        // paints nothing here — the strip is the honesty surface). Host green-hit
+        // grammar, consistent with the note renderers (tester report 2026-07-09).
+        ctx.globalAlpha = 1; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 10;
+        ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.arc(x, y, 10.5, 0, 6.2832); ctx.stroke();
+        ctx.shadowBlur = 0;
       }
       ctx.globalAlpha = 1;
     }
@@ -14841,6 +15055,7 @@
         ? Math.max(0, (audioCtx.currentTime - playAnchorCtx) * 1000)
         : Math.max(0, nowMs - playAnchorMs);
       currentPracticeTime = playAnchorChartTime + elapsedMs / 1000;
+      if (_jamPending && isJamMode()) syncJamPendingChip();
       if (currentPracticeTime > _runMaxChartTime) _runMaxChartTime = currentPracticeTime;   // recap reached-tracking (furthest this pass)
       if (_preRollUntil > 0 && currentPracticeTime >= _preRollUntil) _preRollUntil = 0;   // resume pre-roll done → normal play (notes audible, judge live)
       if (_preRollUntil === 0) maybeOfferDownshift();   // beginner mid-run offer (cheap: gated flags first, evaluates once per run)
@@ -14876,7 +15091,11 @@
           }
           _loopWraps++;
           const lc = $('virtuoso_beta-loop-count');
-          if (lc) { lc.hidden = false; lc.textContent = 'Loop ' + _loopWraps; }
+          if (lc) {
+            const showLoopCount = !isJamMode();
+            lc.hidden = !showLoopCount;
+            if (showLoopCount) lc.textContent = 'Loop ' + _loopWraps;
+          }
         }
       } else if (finiteRunActive()) {
         // Finite drill (Depth Ladder slice 1): the right-sized run plays ONCE, then
@@ -15496,6 +15715,9 @@
   // masterTrim. Full matrix + the other genres are the P1 roll-out; P0 ships the 3 exemplars.
   const MIX_BASE = { level: {}, pan: {}, carve: {}, send: {}, drumkit: null, masterTrim: 1 };
   const MIX_RECIPES = {
+    blues:   { level: { bass: 1.08, drums: 0.92, pad: 0.88 }, pan: { harmony: 0.18, pad: -0.14 },
+               carve: { harmonyHP: 145, bassLP: 2100 }, send: { harmony: 0.24, pad: 0.22, bass: 0.06, drums: 0.16 },
+               drumkit: { loShelf: { f: 105, dB: 1.5 }, hiShelf: { dB: -3 }, compRatio: 2.4, compThr: -16 }, masterTrim: 0.96 },
     country: { level: { bass: 1.12, drums: 0.9, pad: 0.9 }, pan: { harmony: 0.25, pad: -0.22 },
                carve: { harmonyHP: 150 }, send: { harmony: 0.24, pad: 0.26, drums: 0.16 },
                drumkit: { loShelf: { f: 120, dB: 2 }, hiShelf: { dB: -4 }, compRatio: 2.5, compThr: -16 }, masterTrim: 1 },
@@ -15505,6 +15727,24 @@
     jazz:    { level: { drums: 0.8, bass: 1.12, pad: 0.95 }, pan: { harmony: 0.2, pad: -0.18, drums: 0.1 },
                carve: { harmonyHP: 150 }, send: { harmony: 0.26, pad: 0.28, drums: 0.2 },
                drumkit: { loShelf: { f: 110, dB: 0 }, hiShelf: { dB: -2 }, compRatio: 2, compThr: -14 }, masterTrim: 1 },
+    funk:    { level: { bass: 1.12, drums: 1.02, pad: 0.82 }, pan: { harmony: 0.16, pad: -0.2, drums: 0.08 },
+               carve: { harmonyHP: 220, padHP: 260, bassLP: 1700 }, send: { harmony: 0.1, pad: 0.08, bass: 0.04, drums: 0.07 },
+               drumkit: { loShelf: { f: 95, dB: 1 }, hiShelf: { dB: 1.5 }, compRatio: 3.2, compThr: -18 }, masterTrim: 0.92 },
+    reggae:  { level: { bass: 1.2, drums: 0.82, pad: 0.84 }, pan: { harmony: 0.22, pad: -0.2 },
+               carve: { harmonyHP: 240, padHP: 220, bassLP: 1500 }, send: { harmony: 0.18, pad: 0.16, bass: 0.05, drums: 0.12 },
+               drumkit: { loShelf: { f: 90, dB: 1.2 }, hiShelf: { dB: -5 }, compRatio: 2.2, compThr: -15 }, masterTrim: 0.95 },
+    disco:   { level: { bass: 1.12, drums: 1.04, pad: 0.96 }, pan: { harmony: 0.22, pad: -0.24, drums: 0.1 },
+               carve: { harmonyHP: 190, padHP: 210, bassLP: 2200 }, send: { harmony: 0.14, pad: 0.16, bass: 0.05, drums: 0.08 },
+               drumkit: { loShelf: { f: 85, dB: 0.8 }, hiShelf: { dB: 3 }, compRatio: 3.4, compThr: -18 }, masterTrim: 0.9 },
+    pop:     { level: { bass: 1.02, drums: 0.98, pad: 1.0 }, pan: { harmony: 0.18, pad: -0.18, drums: 0.06 },
+               carve: { harmonyHP: 170, padHP: 190, bassLP: 2100 }, send: { harmony: 0.18, pad: 0.2, bass: 0.04, drums: 0.1 },
+               drumkit: { loShelf: { f: 95, dB: 0.5 }, hiShelf: { dB: 1 }, compRatio: 2.8, compThr: -17 }, masterTrim: 0.96 },
+    soul:    { level: { bass: 1.1, drums: 0.94, pad: 0.94 }, pan: { harmony: 0.16, pad: -0.14, drums: 0.06 },
+               carve: { harmonyHP: 180, padHP: 210, bassLP: 1850 }, send: { harmony: 0.22, pad: 0.24, bass: 0.05, drums: 0.14 },
+               drumkit: { loShelf: { f: 105, dB: 1 }, hiShelf: { dB: -2 }, compRatio: 2.6, compThr: -16 }, masterTrim: 0.96 },
+    synthwave: { level: { bass: 1.08, drums: 0.96, pad: 1.06 }, pan: { harmony: 0.28, pad: -0.3, drums: 0.12 },
+                 carve: { harmonyHP: 210, padHP: 240, bassLP: 2400 }, send: { harmony: 0.12, pad: 0.18, bass: 0.05, drums: 0.07 },
+                 drumkit: { loShelf: { f: 80, dB: 0.5 }, hiShelf: { dB: 4 }, compRatio: 3.2, compThr: -18 }, masterTrim: 0.88 },
   };
   function resolveMix(cfg) {
     const style = cfgAudioProfile(cfg || {});
@@ -16747,22 +16987,30 @@
     const root = $('virtuoso_beta-root'), body = $('virtuoso_beta-results-body'), title = $('virtuoso_beta-results-title');
     if (!root || !body) return;
     const m = _jamMirror;
-    if (!m || m.noteCount <= 0) return;   // nothing played → stop quietly, no recap
     const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const ms = (s && s.duration_ms) || 0;
     const mins = Math.floor(ms / 60000), secs = Math.round((ms % 60000) / 1000);
     const dur = ms >= 1000 ? `${mins}:${String(secs).padStart(2, '0')}` : 'a moment';
     const style = (s && s.style) || (STYLE_PALETTES[currentJamStyleId()] || {}).label || 'your style';
     const key = (($('virtuoso_beta-jam-key') || {}).value) || 'A';
-    const pcs = [...m.pcs].sort((a, b) => a - b).map(pcName);
-    const toneList = pcs.length ? pcs.join(' · ') : '—';
-    if (title) title.textContent = 'Nice jam.';
+    const prog = (s && s.progression) ? jamProgressionLabel(s.progression) : jamProgressionLabel((($('virtuoso_beta-jam-prog') || {}).value) || '');
+    const noteCount = m ? m.noteCount : 0;
+    const pcs = m ? [...m.pcs].sort((a, b) => a - b).map(pcName) : [];
+    const toneList = pcs.length ? pcs.join(' · ') : 'No pitch was detected.';
+    const analysis = noteCount > 0 ? jamRecapAnalysisLines() : [];
+    const analysisHtml = analysis.map(line => `<div class="virtuoso_beta-jam-recap-line">${esc(line)}</div>`).join('');
+    const intentLine = jamIntent ? `<div class="virtuoso_beta-jam-recap-line">Intent: <b>${esc(jamIntent)}</b></div>` : '';
+    if (title) title.textContent = 'Jam mirror';
     body.innerHTML =
       `<div class="virtuoso_beta-jam-recap">` +
-        `<div class="virtuoso_beta-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>.</div>` +
-        `<div class="virtuoso_beta-jam-recap-line">${m.noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>` +
+        `<div class="virtuoso_beta-jam-recap-line">You jammed <b>${esc(dur)}</b> over <b>${esc(style)}</b> in <b>${esc(key)}</b>${prog ? ` · <b>${esc(prog)}</b>` : ''}.</div>` +
+        intentLine +
+        (noteCount > 0
+          ? `<div class="virtuoso_beta-jam-recap-line">${noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>`
+          : `<div class="virtuoso_beta-jam-recap-line">No pitch was detected, so this stays a form-and-intent recap.</div>`) +
         `<div class="virtuoso_beta-jam-recap-tones">${esc(toneList)}</div>` +
-        `<div class="virtuoso_beta-jam-recap-sub">A mirror of what you played — no score, just what came out. Take any of those into the next one.</div>` +
+        analysisHtml +
+        `<div class="virtuoso_beta-jam-recap-sub">A mirror, never a score. Use the form, intent, tones, and targets as prompts for the next pass.</div>` +
         `<div class="virtuoso_beta-jam-recap-cta">` +
           `<button type="button" class="virtuoso_beta-results-primary" data-act="jam-again">Jam again</button>` +
           `<button type="button" class="virtuoso_beta-results-quiet" data-act="jam-done">Done</button>` +
@@ -16796,6 +17044,14 @@
     const earned = !!(s.proof || (ownTierFlip && !isFelt) || feltFlip || (s.depth && s.depth.travelRung));
     const rough = judged && pct < 65 && !earned && !isFelt;   // a felt run is never "rough" (no %)
     let xpOff = false; try { xpOff = (progressLoad().mode === 'off'); } catch (_) {}
+    // Mastery crest — the card's overall-standing seal (accent-family; stays accent even on an
+    // earned/green card, so a cleared run shows BOTH signals). Hidden at rank 0 / XP-Off.
+    const _crestEl = $('virtuoso_beta-results-crest');
+    if (_crestEl) {
+      const _cst = crestState();
+      if (_cst.rank) { _crestEl.innerHTML = crestSvg(_cst.rank); _crestEl.title = _cst.label + ' — ' + _cst.desc; _crestEl.hidden = false; }
+      else { _crestEl.hidden = true; _crestEl.innerHTML = ''; }
+    }
     // Workout RECAP branch (Tier 3): a multi-block Workout has no single grade — the
     // chapter list REPLACES the aggregate % and the verdict slot becomes a
     // descriptive session header (no earned-green edge). Built from s.chapters
@@ -16909,7 +17165,7 @@
       if (exempt > 0) {
         rows.push(`Judged: <strong>${info.judged}</strong> of <strong>${info.total}</strong> — the other ${exempt} were shown, not judged:${devTail(`(judged ${info.judged}/${info.total})`)}`);
         if (info.exemptChords) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptChords}</strong> chord notes — this ear hears one note at a time${devTail('(mono detector)')}</span>`);
-        if (info.exemptSubFloor) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptSubFloor}</strong> notes too low for the mic to hear — play them with the click; they never count against you${devTail('(&lt; 70 Hz floor)')}</span>`);
+        if (info.exemptSubFloor) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptSubFloor}</strong> notes too low for the mic to hear — play them with the click; they never count against you${devTail(`(&lt; ${DETECTOR_MIN_HZ} Hz floor)`)}</span>`);
         if (info.exemptMuted) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptMuted}</strong> muted ghost notes — a good mute has no pitch to judge${devTail('(mt, pitch-exempt)')}</span>`);
         if (info.exemptFast) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptFast}</strong> notes too fast for this ear to certify one-by-one — play them; the judged notes around them carry the proof${devTail(`(ring &lt; ${info.floorMs}ms floor)`)}</span>`);
         if (info.exemptLegato) rows.push(`<span class="virtuoso_beta-results-exrow">· <strong>${info.exemptLegato}</strong> slurred notes — the pick that starts each slur is judged; the slur itself has no attack to time${devTail('(ho/po, pick-frame judged)')}</span>`);
@@ -17107,6 +17363,21 @@
       card.classList.toggle('vir-has-hero', !!hero);   // the card widens only when a hero renders
       card.classList.remove('vir-enter'); void card.offsetWidth; card.classList.add('vir-enter');
     }
+    // Auto-save the card to the configured folder, once per run (opt-in; mirrors
+    // note_detect). A run signature guards against re-saving when the same card is
+    // re-opened. Best-effort + async (loads the display face first); silent on fail.
+    try {
+      if (localStorage.getItem('virtuoso_beta.autosaveCard') === '1') {
+        const sig = `${s.duration_ms || 0}|${s.bpm || 0}|${s.displayName || s.mode || ''}`;
+        if (showResultsModal._autoSig !== sig) {
+          showResultsModal._autoSig = sig;
+          (async () => {
+            try { await loadCardFonts(); } catch (_) {}
+            try { const cv = renderShareCardImage(s); if (cv) await saveCardToServer(cv, s, true); } catch (_) {}
+          })();
+        }
+      }
+    } catch (_) {}
     // Draw the hero AFTER the canvas is in the layout (size comes from CSS width).
     if (hero) requestAnimationFrame(() => { try { hero.draw(); } catch (_) {} });
     // The % count-up — the meter-settling idiom (an LCD landing on its value).
@@ -17335,7 +17606,12 @@
       const dots = (pw.tempoTiers || []).map((_, i) => `<span class="tree-tier-dot${i <= hi ? ' cleared' : ''}"></span>`).join('');
       return `<div class="virtuoso_beta-pm-row"><span>${pw.label}</span><span class="virtuoso_beta-pm-dots">${dots}</span></div>`;
     };
+    const _crest = crestState();
+    const crestHtml = _crest.rank
+      ? `<div class="virtuoso_beta-pm-crest"><span class="virtuoso_beta-crest cr-rank-${_crest.rank}">${crestSvg(_crest.rank)}</span><div><div class="virtuoso_beta-pm-crest-label">${_crest.label}</div><div class="virtuoso_beta-pm-crest-desc">${_crest.desc}</div></div></div>`
+      : '';
     body.innerHTML =
+      crestHtml +
       sessionSummaryCardHtml() +
       `<div class="virtuoso_beta-progress-sheet-section"><h4>Streak</h4>${streakLine}</div>` +
       woodshedSectionHtml() +
@@ -17405,7 +17681,9 @@
   }
   function applyTheme(name) {
     const root = $('virtuoso_beta-root'); if (!root) return;
-    root.classList.remove('vir-theme-ember', 'vir-theme-violet');
+    // Drop any accent-theme class generically so the picker stays data-driven —
+    // a new swatch (data-theme="…") + its .vir-theme-… CSS works with no edit here.
+    Array.from(root.classList).forEach(c => { if (c.indexOf('vir-theme-') === 0) root.classList.remove(c); });
     if (name) root.classList.add('vir-theme-' + name);
     try { localStorage.setItem('virtuoso_beta.theme', name || ''); } catch (_) {}
     document.querySelectorAll('#virtuoso_beta-theme-pick .virtuoso_beta-theme-swatch').forEach(b => b.classList.toggle('active', (b.dataset.theme || '') === (name || '')));
@@ -17433,6 +17711,219 @@
   function applyCountInGrid(val) {
     document.querySelectorAll('#virtuoso_beta-countin-grid .virtuoso_beta-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.grid === val));
   }
+  // Studio energy (settings → Studio energy): the host-parity "Lit" chrome treatment
+  // is one root class (.vir-lit, default ON). 'calm' reverts to EXACTLY the restrained
+  // base look — the user's toggle-back guarantee. Persisted; no playing-surface impact.
+  function applyEnergy(mode) {
+    const lit = mode !== 'calm';
+    const root = $('virtuoso_beta-root'); if (root) root.classList.toggle('vir-lit', lit);
+    try { localStorage.setItem('virtuoso_beta.energy', lit ? 'lit' : 'calm'); } catch (_) {}
+    document.querySelectorAll('#virtuoso_beta-energy-pick .virtuoso_beta-mini-btn').forEach(b => b.classList.toggle('active', b.dataset.energy === (lit ? 'lit' : 'calm')));
+  }
+  // Card theme (settings → Card theme): stamps data-vir-cardskin on the root — read ONLY
+  // by the results-card CSS + the copy-card canvas (renderShareCardImage), so the cockpit
+  // stays calm. 'signature' = today's default look (no attribute; follows the Accent +
+  // Lit/Calm). neon/esports/metal/warm/focus are opt-in note_detect-parity skins.
+  // Each non-Signature skin also owns its own colorway set; colorways change palette
+  // tokens only, never the skin's typography/shape/motion identity.
+  const VIR_THEME_RECIPES = {
+    signature: {
+      id: 'signature', label: 'Signature', role: 'Virtuoso baseline', mode: 'dark',
+      axes: ['host-native', 'calm', 'accent-led'],
+      typography: { displayFamily: 'var(--vir-font-display)', displayCase: 'mixed', tracking: 'normal' },
+      shape: { controlRadius: 8, panelRadius: 10, borderWeight: 1 },
+      material: { surface: 'graphite', treatment: 'quiet-raised' },
+      motion: { ring: 'lit-toggle', reducedMotion: 'static' },
+      stageFrame: { style: 'host-ring', animated: true },
+      preview: { surface:'#0d1424', frame:'#334155', text:'#f8fafc', a:'#2563eb', b:'#60a5fa', radius:'10px', shadow:'0 10px 26px rgba(0,0,0,0.34)' },
+      tones: [],
+    },
+    neon: {
+      id: 'neon', label: 'Neon', role: 'Synth arcade glass', mode: 'dark',
+      axes: ['glass', 'glow', 'animated'],
+      typography: { displayFamily: 'var(--vir-font-display)', displayCase: 'uppercase moments', tracking: 'wide' },
+      shape: { controlRadius: 12, panelRadius: 12, borderWeight: 1 },
+      material: { surface: 'dark glass', treatment: 'luminous-border' },
+      motion: { ring: 'spin', glow: 'cyan-magenta', reducedMotion: 'static' },
+      stageFrame: { style: 'chromatic-ring', animated: true },
+      preview: { surface:'#060a18', frame:'rgba(0,240,255,0.5)', text:'#e8f6ff', a:'#00f0ff', b:'#ff2ec4', radius:'12px', shadow:'0 0 22px rgba(0,240,255,0.18)' },
+      tones: [
+        { id:'default', label:'Arcade', a:'#00f0ff', b:'#ff2ec4' },
+        { id:'violet', label:'Violet', a:'#8b5cf6', b:'#22d3ee' },
+        { id:'acid', label:'Acid', a:'#39ff14', b:'#00f0ff' },
+        { id:'sunset', label:'Sunset', a:'#fb7185', b:'#facc15' },
+      ],
+    },
+    esports: {
+      id: 'esports', label: 'Esports', role: 'Broadcast HUD', mode: 'dark',
+      axes: ['flat', 'square', 'uppercase'],
+      typography: { displayFamily: 'VirtuosoEsports', displayCase: 'uppercase', tracking: 'wide' },
+      shape: { controlRadius: 0, panelRadius: 0, borderWeight: 1 },
+      material: { surface: 'matte black', treatment: 'hard-edge' },
+      motion: { ring: 'none', reducedMotion: 'static' },
+      stageFrame: { style: 'solid-frame', animated: false },
+      preview: { surface:'#0a0c0e', frame:'#e8b43a', text:'#f5f5f4', a:'#e8b43a', b:'#f5f5f4', radius:'0px', shadow:'none' },
+      tones: [
+        { id:'default', label:'Amber', a:'#e8b43a', b:'#f5f5f4' },
+        { id:'cobalt', label:'Cobalt', a:'#38bdf8', b:'#f5f5f4' },
+        { id:'crimson', label:'Crimson', a:'#f43f5e', b:'#f5f5f4' },
+        { id:'lime', label:'Lime', a:'#a3e635', b:'#f5f5f4' },
+      ],
+    },
+    metal: {
+      id: 'metal', label: 'Metal', role: 'Industrial plate', mode: 'dark',
+      axes: ['bevel', 'steel', 'ember'],
+      typography: { displayFamily: 'VirtuosoMetal', displayCase: 'uppercase', tracking: 'wide' },
+      shape: { controlRadius: 6, panelRadius: 6, borderWeight: 1 },
+      material: { surface: 'brushed steel', treatment: 'hard-bevel' },
+      motion: { ring: 'pulse', glow: 'ember', reducedMotion: 'static' },
+      stageFrame: { style: 'inset-ring', animated: true },
+      preview: { surface:'#24272c', frame:'rgba(255,179,71,0.42)', text:'#f3efe7', a:'#ffb347', b:'#ff6b35', radius:'6px', shadow:'inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(0,0,0,0.42)' },
+      tones: [
+        { id:'default', label:'Ember', a:'#ffb347', b:'#ff6b35' },
+        { id:'blood', label:'Blood', a:'#ef4444', b:'#f97316' },
+        { id:'steel', label:'Steel', a:'#93c5fd', b:'#cbd5e1' },
+        { id:'toxic', label:'Toxic', a:'#bef264', b:'#84cc16' },
+      ],
+    },
+    warm: {
+      id: 'warm', label: 'Warm', role: 'Analog studio', mode: 'dark',
+      axes: ['analog', 'soft-hardware', 'lamp'],
+      typography: { displayFamily: 'Rockwell/serif', displayCase: 'mixed', tracking: 'slight' },
+      shape: { controlRadius: 10, panelRadius: 10, borderWeight: 1 },
+      material: { surface: 'tolex/tweed', treatment: 'warm-matte' },
+      motion: { ring: 'slow-pulse', glow: 'pilot-lamp', reducedMotion: 'static' },
+      stageFrame: { style: 'warm-edge-light', animated: true },
+      preview: { surface:'#2a1d16', frame:'rgba(232,161,60,0.45)', text:'#f5ecd8', a:'#e8a13c', b:'#8a3324', radius:'10px', shadow:'inset 0 1px 0 rgba(245,236,216,0.10), 0 10px 24px rgba(0,0,0,0.38)' },
+      tones: [
+        { id:'default', label:'Amp', a:'#e8a13c', b:'#8a3324' },
+        { id:'ruby', label:'Ruby', a:'#d86b4f', b:'#8f2f2f' },
+        { id:'honey', label:'Honey', a:'#f2c56b', b:'#b7791f' },
+        { id:'olive', label:'Olive', a:'#a3a85c', b:'#6f6f38' },
+      ],
+    },
+    focus: {
+      id: 'focus', label: 'Focus', role: 'Low-stim clarity', mode: 'dark',
+      axes: ['flat', 'quiet', 'high-contrast'],
+      typography: { displayFamily: 'system-ui', displayCase: 'normal', tracking: 'normal' },
+      shape: { controlRadius: 8, panelRadius: 8, borderWeight: 1 },
+      material: { surface: 'matte slate', treatment: 'no-decoration' },
+      motion: { ring: 'none', reducedMotion: 'none' },
+      stageFrame: { style: 'quiet-solid', animated: false },
+      preview: { surface:'#0d1013', frame:'#4a555f', text:'#f4f7fa', a:'#93b7de', b:'#e8edf2', radius:'8px', shadow:'none' },
+      tones: [
+        { id:'default', label:'Slate', a:'#93b7de', b:'#e8edf2' },
+        { id:'blue', label:'Blue', a:'#7fb3d5', b:'#d6e7f2' },
+        { id:'sage', label:'Sage', a:'#9ab7a0', b:'#e0eadf' },
+        { id:'amber', label:'Amber', a:'#d6b66d', b:'#efe4c8' },
+      ],
+    },
+  };
+  const VIR_CARD_SKINS = ['signature', 'neon', 'esports', 'metal', 'warm', 'focus'];
+  const VIR_CARD_TONES = VIR_CARD_SKINS.reduce((acc, id) => {
+    const recipe = VIR_THEME_RECIPES[id];
+    if (recipe && recipe.tones && recipe.tones.length) acc[id] = recipe.tones;
+    return acc;
+  }, {});
+  function themeRecipeForSkin(skin) { return VIR_THEME_RECIPES[skin] || VIR_THEME_RECIPES.signature; }
+  function renderCardSkinPicker(activeSkin) {
+    const host = $('virtuoso_beta-cardskin-pick'); if (!host) return;
+    const active = VIR_CARD_SKINS.indexOf(activeSkin) !== -1 ? activeSkin : 'signature';
+    host.innerHTML = '';
+    VIR_CARD_SKINS.forEach(id => {
+      const r = themeRecipeForSkin(id), p = r.preview || {};
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'virtuoso_beta-skin-card' + (id === active ? ' active' : '');
+      b.dataset.cardskin = id;
+      b.title = r.role || r.label;
+      b.setAttribute('aria-label', r.label + ' theme');
+      b.style.setProperty('--skin-surface', p.surface || '#0d1424');
+      b.style.setProperty('--skin-frame', p.frame || '#334155');
+      b.style.setProperty('--skin-text', p.text || '#f8fafc');
+      b.style.setProperty('--skin-a', p.a || '#2563eb');
+      b.style.setProperty('--skin-b', p.b || '#60a5fa');
+      b.style.setProperty('--skin-radius', p.radius || '8px');
+      b.style.setProperty('--skin-shadow', p.shadow || 'none');
+      b.innerHTML = '<span class="virtuoso_beta-skin-card-visual" aria-hidden="true"><span></span><i></i><b></b></span>' +
+        '<span class="virtuoso_beta-skin-card-copy"><strong>' + r.label + '</strong><em>' + (r.role || '') + '</em></span>' +
+        '<span class="virtuoso_beta-skin-card-axes" aria-hidden="true">' + (r.axes || []).slice(0, 3).map(x => '<i>' + x + '</i>').join('') + '</span>';
+      b.addEventListener('click', () => applyCardSkin(id));
+      host.appendChild(b);
+    });
+  }
+  function cardToneForSkin(skin) {
+    if (!VIR_CARD_TONES[skin]) return 'default';
+    try {
+      const t = localStorage.getItem('virtuoso_beta.cardTone.' + skin) || 'default';
+      return VIR_CARD_TONES[skin].some(x => x.id === t) ? t : 'default';
+    } catch (_) { return 'default'; }
+  }
+  function renderCardTonePicker(skin, tone) {
+    const group = $('virtuoso_beta-cardtone-group'), host = $('virtuoso_beta-cardtone-pick'), label = $('virtuoso_beta-cardtone-label');
+    if (!group || !host) return;
+    const tones = VIR_CARD_TONES[skin] || [];
+    group.hidden = !tones.length;
+    group.classList.toggle('is-disabled', !tones.length);
+    if (label) label.textContent = tones.length ? `${skin[0].toUpperCase() + skin.slice(1)} color` : 'Theme color';
+    host.innerHTML = '';
+    tones.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'virtuoso_beta-cardtone-swatch' + (t.id === tone ? ' active' : '');
+      b.dataset.cardtone = t.id;
+      b.style.setProperty('--sw-a', t.a);
+      b.style.setProperty('--sw-b', t.b);
+      b.title = t.label;
+      b.setAttribute('aria-label', t.label);
+      b.addEventListener('click', () => applyCardTone(skin, t.id));
+      host.appendChild(b);
+    });
+  }
+  function applyCardTone(skin, tone) {
+    const root = $('virtuoso_beta-root'); if (!root) return;
+    const tones = VIR_CARD_TONES[skin] || [];
+    const id = tones.some(t => t.id === tone) ? tone : 'default';
+    if (tones.length && id !== 'default') root.setAttribute('data-vir-cardtone', id);
+    else root.removeAttribute('data-vir-cardtone');
+    if (tones.length) { try { localStorage.setItem('virtuoso_beta.cardTone.' + skin, id); } catch (_) {} }
+    renderCardTonePicker(skin, id);
+  }
+  function applyCardSkin(name) {
+    const root = $('virtuoso_beta-root'); if (!root) return;
+    const skin = VIR_CARD_SKINS.indexOf(name) !== -1 ? name : 'signature';
+    const recipe = themeRecipeForSkin(skin);
+    if (skin === 'signature') {
+      root.removeAttribute('data-vir-cardskin'); root.removeAttribute('data-vir-cardtone'); root.removeAttribute('data-vir-stageframe');
+    } else {
+      root.setAttribute('data-vir-cardskin', skin);
+      root.setAttribute('data-vir-stageframe', recipe.stageFrame?.style || skin);
+    }
+    try { localStorage.setItem('virtuoso_beta.cardSkin', skin); } catch (_) {}
+    renderCardSkinPicker(skin);
+    if (skin === 'signature') renderCardTonePicker(skin, 'default');
+    else applyCardTone(skin, cardToneForSkin(skin));
+    try { syncSkinScopeAvail(); } catch (_) {}
+  }
+  // Card-theme REACH (settings → Apply theme): whether the chosen skin also skins the whole
+  // cockpit. Stamps data-vir-skincockpit on the root — read by the cockpit-extension CSS,
+  // which remaps the shell's --vir-accent* to the skin's --vir-card-* when ON. Default 'card'
+  // = calm cockpit (byte-identical). A no-op for Signature (no data-vir-cardskin → no bleed).
+  function applySkinScope(scope) {
+    const root = $('virtuoso_beta-root'); if (!root) return;
+    const on = scope === 'cockpit';
+    if (on) root.setAttribute('data-vir-skincockpit', 'on');
+    else root.removeAttribute('data-vir-skincockpit');
+    try { localStorage.setItem('virtuoso_beta.skinCockpit', on ? 'cockpit' : 'card'); } catch (_) {}
+    document.querySelectorAll('#virtuoso_beta-skinscope-pick .virtuoso_beta-mini-btn').forEach(b => b.classList.toggle('active', (b.dataset.skinscope || '') === (on ? 'cockpit' : 'card')));
+  }
+  // Grey the "Apply theme" toggle when the active Card theme is Signature — nothing to extend
+  // (Signature already follows the Accent picker; the cockpit bleed only applies to a real skin).
+  function syncSkinScopeAvail() {
+    let skin = 'signature'; try { skin = localStorage.getItem('virtuoso_beta.cardSkin') || 'signature'; } catch (_) {}
+    const grp = $('virtuoso_beta-skinscope-group');
+    if (grp) grp.classList.toggle('is-disabled', skin === 'signature');
+  }
   function applyCountInDefault(val) {
     const bars = Math.max(1, Math.min(8, parseInt(val, 10) || 1));
     setFieldSilent('countIn', String(bars));   // the field is the source; syncTransport reflects the segments
@@ -17453,6 +17944,12 @@
     const sel = $('virtuoso_beta-countin-default');
     if (sel) sel.value = ci;
     applyCountInGrid(countInGridOn() ? 'on' : 'off');
+    let energy = 'lit'; try { energy = localStorage.getItem('virtuoso_beta.energy') || 'lit'; } catch (_) {}
+    applyEnergy(energy);
+    let cardSkin = 'signature'; try { cardSkin = localStorage.getItem('virtuoso_beta.cardSkin') || 'signature'; } catch (_) {}
+    applyCardSkin(cardSkin);
+    let skinScope = 'card'; try { skinScope = localStorage.getItem('virtuoso_beta.skinCockpit') || 'card'; } catch (_) {}
+    applySkinScope(skinScope);
   }
 
   function schedulePluckedString(ctx, when, freq, dur, instrument, gainScale, bendSemis) {
@@ -18798,7 +19295,11 @@
     $('virtuoso_beta-loop-a')?.classList.toggle('active', tpA != null);
     $('virtuoso_beta-loop-b')?.classList.toggle('active', tpB != null);
     const lc = $('virtuoso_beta-loop-count');
-    if (lc) { const active = segmentLoopA != null && segmentLoopB != null; lc.hidden = !active || _loopWraps < 1; lc.textContent = 'Loop ' + _loopWraps; }
+    if (lc) {
+      const active = segmentLoopA != null && segmentLoopB != null && !isJamMode();
+      lc.hidden = !active || _loopWraps < 1;
+      if (active) lc.textContent = 'Loop ' + _loopWraps;
+    }
     const lr = $('virtuoso_beta-loop-range');
     if (lr) { const txt = loopReadoutText(); lr.hidden = !txt; lr.textContent = txt || ''; }
     syncFeelControl();
@@ -19006,17 +19507,49 @@
       ].join('');
     }
     const bars = measureSeconds(cfg) > 0 ? Math.round(c.duration / measureSeconds(cfg)) : 0;
-    // Key cell doubles as the identity: chromatic has no key/scale, so name the pattern.
-    const keyCell = cfg.mode === 'chromatic'
-      ? cell('Pattern', CHROMATIC_PATTERN_LABELS[cfg.chromaticPattern] || cfg.chromaticPattern)
-      : cell('Key', `${cfg.key} ${String(cfg.scale || '').replace(/_/g, ' ')}`);
+    // ── Editable LCD cells (DAW transport convention) ──────────────────────────
+    // Key · Meter · Count-in join Tempo as in-place edits: each is a quiet <select>
+    // that reads like the readout, commits via the delegated handler in bind()
+    // (writes the Inspector field → regenerate). Works as a live OVERRIDE in any
+    // mode, exactly like the editable Tempo cell.
+    const opt = (value, label, cur) => `<option value="${esc(value)}"${String(value) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+    const lcdSel = (id, label, inner, title) =>
+      `<div class="virtuoso_beta-lcd-cell"><span class="virtuoso_beta-lcd-lbl">${esc(label)}</span><span class="virtuoso_beta-lcd-val"><select id="${id}" class="virtuoso_beta-lcd-select" aria-label="${esc(title)}" title="${esc(title)}">${inner}</select></span></div>`;
+    // Key — root note editable; the scale name stays a static suffix. chromatic has
+    // no key/scale, so it keeps a static Pattern identity cell.
+    let keyCell;
+    if (cfg.mode === 'chromatic') {
+      keyCell = cell('Pattern', CHROMATIC_PATTERN_LABELS[cfg.chromaticPattern] || cfg.chromaticPattern);
+    } else {
+      const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const scaleName = String(cfg.scale || '').replace(/_/g, ' ');
+      keyCell = `<div class="virtuoso_beta-lcd-cell"><span class="virtuoso_beta-lcd-lbl">Key</span><span class="virtuoso_beta-lcd-val"><select id="virtuoso_beta-lcd-key" class="virtuoso_beta-lcd-select" aria-label="Key — root note" title="Key — root note">${NOTES.map(n => opt(n, n, cfg.key)).join('')}</select> ${esc(scaleName)}</span></div>`;
+    }
+    // Meter — mirror the Inspector meter <select> options (zero drift) with compact
+    // n/d labels; editable here even when that Inspector field is Custom-only-hidden.
+    const curMeterVal = (cfg.meter.grouping && cfg.meter.grouping.length > 1)
+      ? `${cfg.meter.numerator}/${cfg.meter.denominator}:${cfg.meter.grouping.join('+')}`
+      : `${cfg.meter.numerator}/${cfg.meter.denominator}`;
+    const formMeter = document.querySelector('#virtuoso_beta-controls [name="meter"]');
+    const meterCell = formMeter
+      ? lcdSel('virtuoso_beta-lcd-meter', 'Meter', Array.from(formMeter.options).map(o => {
+          const m = parseMeter(o.value);
+          const short = m.grouping.length > 1 ? `${m.numerator}/${m.denominator} ${m.grouping.join('+')}` : `${m.numerator}/${m.denominator}`;
+          return opt(o.value, short, curMeterVal);
+        }).join(''), 'Meter')
+      : cell('Meter', `${cfg.meter.numerator}/${cfg.meter.denominator}`);
+    // Count-in — bars of lead-in (mirrors the Inspector Count-in select).
+    const ciCur = cfg.countInBars != null ? cfg.countInBars : 1;
+    const countInCell = lcdSel('virtuoso_beta-lcd-countin', 'Count-in',
+      [1, 2, 4].map(n => opt(n, n === 1 ? '1 bar' : n + ' bars', ciCur)).join(''), 'Count-in bars');
     return [
       keyCell,
       // Tempo is an editable LCD cell (DAW transport convention): same glyphs as
       // a readout, commits via the delegated handler in bind() (two-way with the
       // Inspector BPM field). Sessions (above) keep no tempo cell — mixed tempos.
       `<div class="virtuoso_beta-lcd-cell"><span class="virtuoso_beta-lcd-lbl">Tempo</span><span class="virtuoso_beta-lcd-val"><input id="virtuoso_beta-lcd-bpm" class="virtuoso_beta-lcd-input" type="number" min="30" max="260" step="1" value="${esc(cfg.bpm)}" aria-label="Tempo (BPM)" title="Click to edit the tempo — applies on Enter"> BPM</span></div>`,
-      cell('Meter', `${cfg.meter.numerator}/${cfg.meter.denominator}`),
+      meterCell,
+      countInCell,
       cell('Bars', bars),
       cell('Length', len),
       cell('Notes', c.notes.length)
@@ -19057,6 +19590,8 @@
       summary.innerHTML = summarize(exercise);
       await attachRenderer(exercise);
       prewarmVoices(activeBundle);  // start the sampled-voice load now so Play starts on WAF, not the oscillator
+      syncJamHighlightUI();
+      syncFretboardUI();
       refreshStatusFromState();
     } catch (e) {
       showStatus(`Error: ${e.message || e}`);
@@ -19855,10 +20390,12 @@
     const activeId = currentJamStyleId();
     const q = _jamPickerQuery.trim().toLowerCase();
     const pickStyle = (id) => {
+      if (!STYLE_PALETTES[id] || id === activeId) return;
       setJamStyleId(id);
-      syncJamStyleDetails(id);                 // Changes picker + Band strip + intents
-      if (playing && isJamMode()) jamPlay();   // a genre change = a NEW band → switch now (its count-in is the entrance)
+      syncJamStyleDetails(id);                 // Updates picker + Band strip + intents immediately
+      if (playing && isJamMode()) jamQueueChange();   // Jam live-edits land at the wrap, style included
       renderJamStyles();
+    syncJamHighlightUI();
     };
     const mkChip = (id) => {
       const btn = document.createElement('button');
@@ -19934,7 +20471,7 @@
   function renderJamIntents(styleId) {
     const host = $('virtuoso_beta-jam-intents');
     if (!host) return;
-    const list = isBassCfg(readConfig()) ? JAM_INTENTS_BASS : (JAM_INTENTS[styleId] || []);
+    const list = isBassCfg(readConfig()) ? jamBassIntents(styleId) : (JAM_INTENTS[styleId] || []);
     const items = (_jamDeviceIntent ? [_jamDeviceIntent] : []).concat(list);
     if (jamIntent && !items.includes(jamIntent)) jamIntent = '';   // stale pick (style/instrument switch)
     host.innerHTML = '';
@@ -20008,6 +20545,62 @@
   // each jamPlay (a new session); NOT reset on a wrap hot-swap (same session).
   const JAM_PLAYED_FADE_MS = 1400;
   function jamMirrorReset() { _jamPlayed = []; _jamMirror = { noteCount: 0, pcs: new Set(), lastPc: -1, lastMs: 0 }; }
+  function jamMirrorDebugAdd(pc, chartT) {
+    if (!_jamMirror) jamMirrorReset();
+    const p = ((pc % 12) + 12) % 12;
+    _jamMirror.noteCount++;
+    _jamMirror.pcs.add(p);
+    _jamPlayed.push({ pc: p, midi: pcAtOrAbove(p, jamIsBassContext() ? 36 : 60), t: performance.now(), chartT: Number(chartT) || 0 });
+    if (_jamPlayed.length > 192) _jamPlayed.shift();
+  }
+  function jamTimelineEventsForRecap() {
+    if (!activeBundle) return [];
+    return activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline) || [];
+  }
+  function jamRecapAnalysisLines() {
+    if (!_jamMirror || !_jamPlayed.length || !activeBundle) return [];
+    const played = _jamPlayed.filter(p => Number.isFinite(p.chartT));
+    if (!played.length) return [];
+    const lines = [];
+    let seen = 0, chord = 0, guide = 0, roots = 0;
+    for (const p of played) {
+      const info = jamCarrierInfo(p.chartT);
+      if (!info || !info.cur) continue;
+      seen++;
+      if (Array.isArray(info.cur.cpcs) && info.cur.cpcs.includes(p.pc)) chord++;
+      if (Array.isArray(info.cur.gpcs) && info.cur.gpcs.includes(p.pc)) guide++;
+      if (info.cur.rootPc === p.pc) roots++;
+    }
+    if (!seen) return [];
+    if (jamIsBassContext()) {
+      const tl = jamTimelineEventsForRecap();
+      const lead = activeBundle.leadIn || 0;
+      const beat = chartBeatSeconds(activeBundle) || 0.5;
+      let changes = 0, rootDownbeats = 0, approaches = 0;
+      for (let i = 0; i < tl.length; i++) {
+        const ev = tl[i], prev = tl[i - 1] || null;
+        if (ev.rootPc == null) continue;
+        const changed = !prev || prev.rootPc !== ev.rootPc || prev.quality !== ev.quality;
+        if (!changed) continue;
+        const start = lead + (ev.startSec != null ? ev.startSec : (ev.t || 0));
+        const root = ((ev.rootPc % 12) + 12) % 12;
+        changes++;
+        if (played.some(p => p.chartT >= start - 0.05 && p.chartT <= start + beat * 0.75 && p.pc === root)) rootDownbeats++;
+        if (i > 0) {
+          const lo = (root + 11) % 12, hi = (root + 1) % 12;
+          if (played.some(p => p.chartT >= start - beat && p.chartT < start && (p.pc === lo || p.pc === hi))) approaches++;
+        }
+      }
+      lines.push(`Root focus: ${roots} of ${seen} detected notes were roots of the chord under them.`);
+      if (changes) lines.push(`Change landings: ${rootDownbeats} of ${changes} chord changes had a detected root near the downbeat.`);
+      if (approaches) lines.push(`Approach motion: heard half-step motion into ${approaches} change${approaches === 1 ? '' : 's'}.`);
+    } else {
+      lines.push(`Chord-tone choices: ${chord} of ${seen} detected notes matched the chord under them.`);
+      if (guide) lines.push(`Guide-tone color: ${guide} detected notes were 3rds or 7ths.`);
+      if (roots) lines.push(`Root resets: ${roots} detected root landing${roots === 1 ? '' : 's'} anchored the form.`);
+    }
+    return lines;
+  }
   function jamMirrorCapture(freqHz) {
     if (!_jamMirror || !(freqHz > 0)) return;
     const midi = Math.round(69 + 12 * Math.log2(freqHz / 440));
@@ -20019,8 +20612,8 @@
     if (!isNew) return;
     _jamMirror.noteCount++;
     _jamMirror.pcs.add(pc);
-    _jamPlayed.push({ pc, midi, t: now });
-    if (_jamPlayed.length > 48) _jamPlayed.shift();
+    _jamPlayed.push({ pc, midi, t: now, chartT: currentPracticeTime });
+    if (_jamPlayed.length > 192) _jamPlayed.shift();
   }
   function jamPanelState() {
     return {
@@ -20035,6 +20628,23 @@
       energy: jamEnergy,
       spotlight: jamSpotlight,
     };
+  }
+  function jamPendingCountdownText() {
+    if (!playing || !isJamMode() || segmentLoopA == null || segmentLoopB == null || !activeBundle) return '';
+    const beatSec = chartBeatSeconds(activeBundle) || 0;
+    if (!(beatSec > 0.02)) return '';
+    const remain = Math.max(0, segmentLoopB - currentPracticeTime);
+    const beatsLeft = Math.max(1, Math.ceil(remain / beatSec - 1e-3));
+    return beatsLeft <= 1 ? 'next beat' : ('in ' + beatsLeft + ' beats');
+  }
+  function syncJamPendingChip() {
+    const chip = $('virtuoso_beta-jam-pending');
+    if (!chip) return;
+    chip.hidden = !_jamPending;
+    if (_jamPending) {
+      const when = jamPendingCountdownText();
+      chip.textContent = '↻ At the wrap' + (when ? ' ' + when : '') + ': ' + _jamPendingParts.join(' · ');
+    }
   }
   // Called by every jam-panel control while a jam is running: diff against the
   // pass's snapshot, show/refresh (or clear) the pending chip. Changing a value
@@ -20053,14 +20663,12 @@
     if (now.energy !== was.energy) parts.push(now.energy === 'auto' ? 'auto-energy' : now.energy + ' energy');
     if (now.spotlight !== was.spotlight) parts.push(now.spotlight ? 'spotlight: trade solos' : 'spotlight off');
     _jamPending = parts.length > 0;
-    const chip = $('virtuoso_beta-jam-pending');
-    if (chip) {
-      chip.hidden = !_jamPending;
-      if (_jamPending) chip.textContent = '↻ At the wrap: ' + parts.join(' · ');
-    }
+    _jamPendingParts = parts;
+    syncJamPendingChip();
   }
   function jamPendingClear() {
     _jamPending = false;
+    _jamPendingParts = [];
     const chip = $('virtuoso_beta-jam-pending'); if (chip) chip.hidden = true;
   }
 
@@ -20235,6 +20843,10 @@
       syncSessionMode('single');
       setPathwayModeClass(false);          // clears pathway-mode (calls syncModeBar)
       if (root) root.classList.add('virtuoso_beta-jam-mode');
+      const primedMap = maybePrimeJamFretboardMap();
+      syncJamHighlightUI();
+      syncFretboardUI();
+      if (primedMap) refitStageDuring(340);
       syncModeBar();                       // re-derive now that jam-mode is set
       return;
     }
@@ -20531,21 +21143,36 @@
     if (playerSetup.openMidis.length !== rungSetup.openMidis.length) return;
     const effective = instrumentStoreMidis(inst);
     if (!effective) return;
-    // The player's tuning must be a tagged OFFSET-kind preset (intent, never
-    // midis arithmetic — see the TUNING_PRESETS tag comment).
+    // Player already IS in the rung's coded tuning → nothing to adapt.
+    if (effective.every((m, i) => m === rungSetup.openMidis[i])) return;
+    // (A) TAGGED uniform detune (Eb / D-standard — a small `offset`-kind preset,
+    // by INTENT not midis arithmetic; see the TUNING_PRESETS tag comment) with a
+    // UNIFORM delta vs the rung: transpose key + opens together. The engine is
+    // transposition-covariant, so frets come out identical (fingering pedagogy
+    // preserved) while labels/detector/backing land on the player's sounding key.
     const fam = `${playerSetup.instrument}_${effective.length}`;
     const preset = (TUNING_PRESETS[fam] || []).find(p => p.midis.length === effective.length && p.midis.every((m, i) => m === effective[i]));
-    if (!preset || !preset.offset) return;
-    // …and a UNIFORM delta against the rung's coded tuning (a drop-D-coded rung
-    // vs a D-standard player is non-uniform on the low string → Phase 2).
     const d0 = effective[0] - rungSetup.openMidis[0];
-    if (d0 === 0) return;
-    if (!effective.every((m, i) => m - rungSetup.openMidis[i] === d0)) return;
-    const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
-    cfg.keyNominal = cfg.key;
-    cfg.tuningOffset = d0;
-    cfg.tuningLabel = preset.label;
-    cfg.key = NOTE_NAMES[((keyPc + d0) % 12 + 12) % 12];     // sharp names — matches the key <select> options
+    const uniform = effective.every((m, i) => m - rungSetup.openMidis[i] === d0);
+    if (preset && preset.offset && uniform && d0 !== 0) {
+      const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
+      cfg.keyNominal = cfg.key;
+      cfg.tuningOffset = d0;
+      cfg.tuningLabel = preset.label;
+      cfg.key = NOTE_NAMES[((keyPc + d0) % 12 + 12) % 12];   // sharp names — matches the key <select> options
+      cfg.customOpenMidis = effective.join(',');
+      return;
+    }
+    // (B) STRUCTURAL / large / untagged re-stringing (drop-*, B-standard, BEAD,
+    // high-C, DADGAD, open tunings): chart on the player's REAL opens at CONCERT
+    // pitch — KEEP the rung's key, and let the degree-driven resolver re-finger
+    // the concert line onto the physical strings. Without this the chart stayed
+    // on the rung's STANDARD opens while the player was re-strung, so every note
+    // mis-targeted the verifier = catastrophic mis-score (the "B-standard → 24%"
+    // tester bug, 2026-07-09). A structural re-stringing is concert-pitch, never
+    // a uniform transpose (bass-pedagogy ruling 2026-07-05: a B string is a B,
+    // not "everything down a 4th"). keyNominal/tuningOffset stay unset (no Travel
+    // double-credit); the label shows the concert key the line actually sounds.
     cfg.customOpenMidis = effective.join(',');
   }
 
@@ -22365,7 +22992,12 @@
         if (arc) m.sub = arc;
       } catch (_) {}
       const cleared = (s.chapters || []).filter(c => c.earned).length;
-      stat('BLOCKS', s.chapters.length); stat('TIME', dur); if (cleared > 0) stat('CLEARED', cleared);
+      const longest = (s.chapters || []).reduce((a, c) => (c && c.durSec > (a ? a.durSec : -1)) ? c : a, null);
+      stat('BLOCKS', s.chapters.length);
+      stat('CLEARED', `${cleared}/${s.chapters.length}`);
+      stat('TIME', dur);
+      if (longest && (longest.name || longest.role)) stat('TOP BLOCK', longest.name || longest.role);
+      if (s.streak > 0) stat('DAY', String(s.streak));
       return m;
     }
     // LADDER / CUSTOM — earned-led (green) or honest descriptive
@@ -22396,6 +23028,19 @@
       m.hero = `${_scaleLabel(s.scale) || (s.displayName || 'Practice')}${s.key ? ` in ${s.key}` : ''}`;
       stat('TEMPO', s.bpm ? s.bpm + ' BPM' : null); stat('KEY', s.key); stat('TIME', dur);
     }
+    // Performance facts — always present for a graded (non-felt) run so the card
+    // carries real info even on a 0-hit run: ACCURACY + HITS LEAD the row (note_detect
+    // parity). Jam/Workout already returned with their own stats; felt runs stay
+    // felt-not-scored (no %). A clean-run PB / day-streak rounds the row out to ~6.
+    if (!(s.feltResult && s.feltResult.flip)) {
+      const r = s.results || {};
+      if (r.judgedPassed > 0) {
+        m.stats.unshift({ label: 'HITS', value: `${r.hits}/${r.judgedPassed}` });
+        m.stats.unshift({ label: 'ACCURACY', value: `${Math.round((r.hits / r.judgedPassed) * 100)}%` });
+      }
+      if (s.recognizer && s.recognizer.bpm) m.stats.push({ label: 'BEST', value: `${s.recognizer.bpm} BPM` });
+      else if (s.streak > 0) m.stats.push({ label: 'DAY', value: String(s.streak) });
+    }
     // Secondary earned ✓ lines (text card only — the image keeps one hero).
     if (s.depth && s.depth.travelKey && !s.depth.travelRung) m.extra.push(`Travels — first clean run in ${s.depth.travelKey}`);
     if (s.depth && s.depth.cleanRung) m.extra.push('Clean — a supports-off pass');
@@ -22425,61 +23070,250 @@
     let t = text; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
     return t + '…';
   }
+  // Ensure the ACTIVE card theme's display face is resident before the canvas rasterizes
+  // (the DOM card gets it via CSS font-display; the canvas needs it loaded, or it falls
+  // back to a system font). Signature/Neon use VirtuosoDisplay (Orbitron); Esports adds
+  // Rajdhani; Metal adds Russo One (both lazy-served from /font — first render fetches them).
+  async function loadCardFonts() {
+    if (!(document.fonts && document.fonts.load)) return;
+    let skin = 'signature'; try { skin = $('virtuoso_beta-root')?.getAttribute('data-vir-cardskin') || 'signature'; } catch (_) {}
+    const faces = ["700 64px 'VirtuosoDisplay'", "700 18px 'VirtuosoDisplay'"];
+    // Load the exact weights the canvas draws (800 wordmark, 700 hero/labels) so the strict
+    // canvas font-match resolves to the skin face instead of dropping to VirtuosoDisplay.
+    if (skin === 'esports') faces.push("800 64px 'VirtuosoEsports'", "700 64px 'VirtuosoEsports'", "700 18px 'VirtuosoEsports'");
+    else if (skin === 'metal') faces.push("800 64px 'VirtuosoMetal'", "700 64px 'VirtuosoMetal'", "700 18px 'VirtuosoMetal'");
+    try { await Promise.all(faces.map(f => document.fonts.load(f))); } catch (_) {}
+    // Await full readiness — canvas font-matching drops a not-yet-ready face to the next
+    // family in the stack, so the skin font can otherwise lose the first paint after load.
+    try { if (document.fonts.ready) await document.fonts.ready; } catch (_) {}
+    // Warm the canvas font cache: the FIRST canvas draw with a just-readied face can still
+    // miss it (Chromium caches per 2d context), so prime a throwaway context with each face
+    // before renderShareCardImage draws for real. Cheap; makes the skin font deterministic.
+    try {
+      const wc = document.createElement('canvas').getContext('2d');
+      if (wc) faces.forEach(f => { wc.font = f; wc.fillText('Mg', -50, -50); });
+    } catch (_) {}
+  }
   // The card IMAGE — a canvas render of the SAME model (ux spec: 1200×630, verdict-led,
-  // green ✓ only on a true clear, theme accent read live, system fonts so no webfont
-  // race; same-origin → toBlob won't taint). Returns the canvas, or null.
+  // green ✓ only on a true clear, theme palette/font read live off --vir-card-*; same-origin
+  // → toBlob won't taint). Returns the canvas, or null.
+  // LOCAL FALLBACK ONLY: shareCardAction prefers note_detect's canonical card
+  // (window.noteDetect.renderResultsCard) and uses this when it's absent.
   function renderShareCardImage(s) {
     const m = shareCardModel(s); if (!m) return null;
     const W = 1200, H = 630, P = 64;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d'); if (!ctx) return null;
-    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)';
-    try { const root = $('virtuoso_beta-root'); if (root) { const cs = getComputedStyle(root);
-      const ae = cs.getPropertyValue('--vir-accent-edge').trim(); if (ae) accent = ae;
-      const as = cs.getPropertyValue('--vir-accent-soft').trim(); if (as) accentSoft = as; } } catch (_) {}
-    const GREEN = '#22c55e', TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
+    // Card THEME (settings → Card theme). Signature = today's look (the original path,
+    // reading --vir-accent-*); neon/esports/metal read the SAME --vir-card-* contract the
+    // DOM card uses, so the copy card matches the on-screen card. Green stays cleared-only.
+    const GREEN = '#22c55e';
+    let accent = '#60a5fa', accentSoft = 'rgba(96,165,250,0.18)', cardBg = null;
+    let skin = 'signature', glow = true, radius = 18;
+    let TXT = '#f8fafc', DIM = '#cbd5e1', MUT = '#94a3b8', FAINT = '#64748b';
     const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
     const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-    const font = (px, w, mono) => ctx.font = `${w} ${px}px ${mono ? MONO : SANS}`;
+    let DISP = `'VirtuosoDisplay', 'Orbitron', ${SANS}`;
+    try {
+      const root = $('virtuoso_beta-root');
+      if (root) {
+        const cs = getComputedStyle(root);
+        skin = root.getAttribute('data-vir-cardskin') || 'signature';
+        const gv = (n, f) => { const v = cs.getPropertyValue(n).trim(); return v || f; };
+        if (skin === 'signature') {
+          accent = gv('--vir-accent-edge', accent);
+          accentSoft = gv('--vir-accent-soft', accentSoft);
+        } else {
+          accent = gv('--vir-card-accent', accent);
+          accentSoft = gv('--vir-card-accent-soft', accentSoft);
+          cardBg = gv('--vir-card-bg', null);
+          TXT = gv('--vir-card-text', TXT);
+          DIM = gv('--vir-card-dim', DIM);
+          MUT = gv('--vir-card-faint', MUT); FAINT = MUT;
+          glow = gv('--vir-card-glow', '1') !== '0';
+          radius = parseInt(gv('--vir-card-radius', '18'), 10); if (!isFinite(radius)) radius = 18;
+          // Plain, NAMESPACED family names — the DOM font token nests a var() the canvas
+          // can't parse, and the namespaced names avoid colliding with note_detect's faces.
+          // NB: do NOT list VirtuosoDisplay as the fallback — canvas prefers the always-ready
+          // base64-inline face over a URL-loaded first font, so the skin face would lose.
+          // A plain sans fallback lets the (warmed) skin face win; it only shows if the
+          // skin font genuinely failed to load.
+          const CF = { neon: "'VirtuosoDisplay'", esports: "'VirtuosoEsports'", metal: "'VirtuosoMetal'", warm: "'Rockwell','Roboto Slab','Zilla Slab',Georgia,serif" };
+          DISP = CF[skin] ? `${CF[skin]}, ${SANS}` : SANS;   // focus has no display face → base sans
+        }
+      }
+    } catch (_) {}
+    // A skin forces its display face on the whole card (identity); Signature keeps the
+    // toggle-back rule (display face in Lit only, system face in Calm).
+    let lit = false; try { lit = !!$('virtuoso_beta-root')?.classList.contains('vir-lit'); } catch (_) {}
+    const HEAD = (skin !== 'signature' || lit) ? 'disp' : false;
+    const font = (px, w, m) => ctx.font = `${w} ${px}px ${m === 'disp' ? DISP : m ? MONO : SANS}`;
     const pill = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = accent; ctx.fillRect(0, 0, W, 5);                                   // accent spine
-    ctx.strokeStyle = 'rgba(148,163,184,0.16)'; ctx.lineWidth = 1; ctx.strokeRect(24.5, 24.5, W - 49, H - 49);
+    // Background: Signature keeps its subtle gradient; Metal paints a brushed-steel
+    // gradient (the feTurbulence grunge is DOM-only); other skins paint an opaque base
+    // then their panel color (the skin bg tokens are translucent → no see-through PNG).
+    if (skin === 'metal') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3a3f46'); g.addColorStop(0.55, '#24272c'); g.addColorStop(1, '#1a1c20');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin === 'warm') {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#34241a'); g.addColorStop(0.55, '#2a1d16'); g.addColorStop(1, '#201510');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (skin !== 'signature') {
+      ctx.fillStyle = '#0a0e1a'; ctx.fillRect(0, 0, W, H);
+      if (cardBg) { ctx.fillStyle = cardBg; ctx.fillRect(0, 0, W, H); }
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#080812'); bg.addColorStop(1, '#0d0d18');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    }
+    // Frame — the live card's glow-ring recipe MIRRORed onto the canvas: an earned card
+    // frames in meter-green (the cleared-only color), otherwise the theme accent. A soft
+    // corner bloom adds depth (skipped for the glow-less esports skin); big readouts stay
+    // crisp (no glow on the text itself — legibility over spectacle).
+    const frameC = m.heroGreen ? GREEN : accent;
+    if (glow) {
+      const cg = ctx.createRadialGradient(150, 130, 0, 150, 130, 560);
+      cg.addColorStop(0, m.heroGreen ? 'rgba(34,197,94,0.16)' : accentSoft); cg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.fillStyle = frameC; ctx.fillRect(0, 0, W, 5);                                   // accent spine (earned → green)
+    ctx.save();
+    ctx.shadowColor = frameC; ctx.shadowBlur = glow ? 26 : 0; ctx.lineWidth = 2; ctx.strokeStyle = frameC;
+    pill(26, 26, W - 52, H - 52, radius); ctx.stroke();                                 // frame (glowing unless the skin is glow-less; square when radius 0)
+    ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    pill(29, 29, W - 58, H - 58, Math.max(0, radius - 2)); ctx.stroke();                // inner bevel hairline
+    ctx.restore();
     ctx.textBaseline = 'alphabetic';
     // Brand strip
     ctx.fillStyle = accent; pill(P, 70, 6, 40, 3); ctx.fill();
-    ctx.fillStyle = TXT; font(40, 800); ctx.fillText('Virtuoso', P + 22, 104);
-    font(15, 700); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
+    ctx.fillStyle = TXT; font(40, 800, HEAD); ctx.fillText('Virtuoso', P + 22, 104);
+    // Mastery crest — a small accent seal after the wordmark (never green; omitted at rank 0 / XP-Off).
+    try { const _cr = crestState(); if (_cr.rank) drawCrestCanvas(ctx, P + 22 + ctx.measureText('Virtuoso').width + 26, 90, 30, accent, _cr.rank); } catch (_) {}
+    font(15, 700, HEAD); const pT = m.lane, pW = ctx.measureText(pT).width + 28, pX = W - P - pW;
     ctx.fillStyle = accentSoft; pill(pX, 72, pW, 34, 17); ctx.fill();
     ctx.strokeStyle = accent; ctx.lineWidth = 1.5; pill(pX, 72, pW, 34, 17); ctx.stroke();
     ctx.fillStyle = accent; ctx.fillText(pT, pX + 14, 95);
     // Eyebrow + hero
-    ctx.fillStyle = accent; font(18, 700); ctx.fillText(m.eyebrow.toUpperCase(), P, 212);
+    ctx.fillStyle = accent; font(18, 700, HEAD); ctx.letterSpacing = '3px'; ctx.fillText(m.eyebrow.toUpperCase(), P, 212); ctx.letterSpacing = '0px';
     const heroMaxW = W - P * 2;
-    let hs = 64; font(hs, 700); if (ctx.measureText((m.heroGreen ? '✓ ' : '') + m.hero).width > heroMaxW) { hs = 50; font(hs, 700); }
+    let hs = 64; font(hs, 700, HEAD); if (ctx.measureText((m.heroGreen ? '✓ ' : '') + m.hero).width > heroMaxW) { hs = 50; font(hs, 700, HEAD); }
     let hx = P; const hy = 296;
-    if (m.heroGreen) { ctx.fillStyle = GREEN; ctx.fillText('✓', hx, hy); hx += ctx.measureText('✓  ').width; font(hs, 700); }
+    if (m.heroGreen) { ctx.fillStyle = GREEN; ctx.fillText('✓', hx, hy); hx += ctx.measureText('✓  ').width; font(hs, 700, HEAD); }
     ctx.fillStyle = TXT; ctx.fillText(_fitCanvasText(ctx, m.hero, heroMaxW - (hx - P)), hx, hy);
     if (m.sub) { ctx.fillStyle = DIM; font(23, 500); ctx.fillText(_fitCanvasText(ctx, m.sub, heroMaxW), P, hy + 42); }
-    // Stats row
-    let sx = P; const sy = 452;
-    for (const st of m.stats.slice(0, 4)) {
-      ctx.fillStyle = MUT; font(13, 600); ctx.fillText(st.label.toUpperCase(), sx, sy);
-      ctx.fillStyle = TXT; font(27, 700, /\d/.test(st.value)); ctx.fillText(st.value, sx, sy + 38);
-      sx += Math.max(ctx.measureText(st.value).width, 70) + 54;
-    }
-    ctx.fillStyle = FAINT; font(14, 500); ctx.fillText('virtuoso_beta · practice studio for guitar & bass', P, H - 42);
+    // Stats row — up to 6 even columns (note_detect parity): tracked display-face
+    // labels + display-face, color-coded values. Green stays cleared-only (never a
+    // stat), so the pop comes from the accent on TEMPO/BEST. No marketing footer —
+    // the wordmark already brands the card.
+    const cols = m.stats.slice(0, 6), sy = 470;
+    const colW = cols.length ? (W - P * 2) / cols.length : 0;
+    const valColor = (label) => (label === 'TEMPO' || label === 'BEST') ? accent : (label === 'TIME' || label === 'DAY') ? MUT : TXT;
+    cols.forEach((st, i) => {
+      const cx = P + i * colW;
+      ctx.fillStyle = MUT; font(12, 700, HEAD); ctx.letterSpacing = '1.5px'; ctx.fillText(st.label.toUpperCase(), cx, sy); ctx.letterSpacing = '0px';
+      ctx.fillStyle = valColor(st.label); font(28, 700, HEAD); ctx.fillText(st.value, cx, sy + 42);
+    });
     return cv;
   }
-  // Copy/download with the host-checked fallback ladder (feedback-compatibility):
-  // image→clipboard (Promise to keep the click activation) → download PNG → text.
+  // A safe "Virtuoso - <hero> - <date>.png" basename for the saved card (mirrors
+  // note_detect's "Artist - Title - date.png" convention, adapted to practice).
+  function shareCardFilename(s) {
+    let what = 'Practice';
+    try { const m = shareCardModel(s); what = (m && (m.hero || m.lane)) || what; } catch (_) {}
+    const d = new Date();
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `Virtuoso - ${what} - ${date}.png`.replace(/[<>:"/\\|?* -]/g, '-');
+  }
+  // Save the card PNG to the user's configured folder via the local server route —
+  // the save FOLDER is SHARED with note_detect (localStorage slopsmith_notedetect_save_dir),
+  // so both plugins write their cards to the same place. Returns the server result,
+  // or null when the route/server isn't there (caller falls back to a download).
+  // auto=true preserves every take (the server never overwrites on a name clash).
+  async function saveCardToServer(cv, s, auto) {
+    if (!cv) return null;
+    let dir = ''; try { dir = localStorage.getItem('slopsmith_notedetect_save_dir') || ''; } catch (_) {}
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    if (!blob) return null;
+    const q = `dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(shareCardFilename(s))}${auto ? '&auto=1' : ''}`;
+    try {
+      const resp = await fetch(`/api/plugins/virtuoso_beta/save-card?${q}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+      if (!resp.ok) return null;
+      const j = await resp.json().catch(() => null);
+      return (j && j.ok) ? j : null;
+    } catch (_) { return null; }
+  }
+  // ── Consume note_detect's ONE canonical results card when present (don't
+  // duplicate it). note_detect (PR #43, ≥1.18) exposes window.noteDetect.
+  // renderResultsCard / copyResultsCard / saveResultsCard so plugins reuse a
+  // single card implementation; we FEED Virtuoso's data + its --vir palette
+  // (via a passed overlay element) and FEATURE-DETECT — renderShareCardImage
+  // above stays a thin local fallback so Virtuoso still runs with note_detect
+  // absent (must not hard-depend).
+  function _ndCardApi() {
+    const nd = (typeof window !== 'undefined') ? window.noteDetect : null;
+    return (nd && typeof nd.renderResultsCard === 'function'
+      && typeof nd.copyResultsCard === 'function'
+      && typeof nd.saveResultsCard === 'function') ? nd : null;
+  }
+  // Map Virtuoso's share-card model → note_detect's card `data`. The stats[]
+  // override drives our non-note_detect layout; eyebrow/hero/sub/brand are all
+  // overridden so the shared renderer reproduces Virtuoso's card from its data.
+  function _resultsCardData(s) {
+    const m = shareCardModel(s); if (!m) return null;
+    return {
+      eyebrow: m.eyebrow,
+      hero: (m.heroGreen ? '✓ ' : '') + m.hero,
+      artist: m.sub || undefined,        // descriptive line → the card's sub
+      instrument: m.lane,                // LADDER / CUSTOM / JAM / WORKOUT
+      stats: (m.stats || []).slice(0, 4),
+      brand: 'virtuoso_beta · practice studio for guitar & bass',
+    };
+  }
+  // A detached element carrying Virtuoso's palette as the --nd-* vars the shared
+  // renderer reads off opts.overlayEl. Attached under #virtuoso_beta-root so
+  // getComputedStyle resolves; the caller removes it after the render.
+  function _virCardOverlay() {
+    let accent = '#60a5fa';
+    try { const root = $('virtuoso_beta-root'); if (root) { const v = getComputedStyle(root).getPropertyValue('--vir-accent-edge').trim(); if (v) accent = v; } } catch (_) {}
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:0;height:0;pointer-events:none;';
+    const set = (k, v) => el.style.setProperty(k, v);
+    set('--nd-accent', accent); set('--nd-accent2', accent);
+    set('--nd-hit', '#22c55e'); set('--nd-miss', '#ef4444');
+    set('--nd-text', '#f8fafc'); set('--nd-dim', '#94a3b8'); set('--nd-warn', '#fbbf24');
+    set('--nd-bg', 'rgba(8,8,18,0.96)');
+    set('--nd-font-display', 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+    ($('virtuoso_beta-root') || document.body).appendChild(el);
+    return el;
+  }
+  // Copy/download. PREFER note_detect's canonical card+ladder; else the local
+  // host-checked fallback ladder (feedback-compatibility): image→clipboard
+  // (Promise to keep the click activation) → download PNG → text.
   // Returns 'copied' | 'saved' | 'copied-text' | 'failed'.
   async function shareCardAction(s, action) {
+    const nd = _ndCardApi();
+    if (nd) {
+      const data = _resultsCardData(s);
+      if (data) {
+        const overlay = _virCardOverlay();
+        try {
+          if (action === 'download') { const r = await nd.saveResultsCard(data, { overlayEl: overlay }); return (r && r.ok) ? 'saved' : 'failed'; }
+          return (await nd.copyResultsCard(data, { overlayEl: overlay })) || 'failed';
+        } catch (_) { /* fall through to the local fallback below */ }
+        finally { try { overlay.remove(); } catch (_) {} }
+      }
+    }
+    // Ensure the active theme's display face is loaded before the canvas rasterizes
+    // (the DOM card gets it via CSS font-display; the canvas needs it resident).
+    await loadCardFonts();
     const cv = renderShareCardImage(s);
     const toBlob = () => new Promise(r => cv.toBlob(r, 'image/png'));
-    const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = 'virtuoso_beta-card.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
-    if (action === 'download') { if (cv && await download()) return 'saved'; }
+    const download = async () => { const b = await toBlob(); if (!b) return false; const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = shareCardFilename(s); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return true; };
+    if (action === 'download') {
+      // Save to the configured (shared) folder via the local server; fall back to a
+      // browser download if the route/server isn't available.
+      if (cv) { const saved = await saveCardToServer(cv, s, false); if (saved) return 'saved'; }
+      if (cv && await download()) return 'saved';
+    }
     else {
       try { if (cv && navigator.clipboard && window.ClipboardItem && window.isSecureContext) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': toBlob() })]); return 'copied'; } } catch (_) {}
       try { if (cv && await download()) return 'saved'; } catch (_) {}
@@ -22794,6 +23628,109 @@
     for (const id of computeBadges()) if (!store.badges[id]) { store.badges[id] = Date.now(); fresh.push(id); }
     if (fresh.length) progressSave(store);
     return { newBadges: fresh.map(badgeMeta), all: Object.keys(store.badges).map(badgeMeta) };
+  }
+
+  // ── Mastery CREST — earned-standing emblem (Proven → Versed → Fluent) ──────────
+  // Gamification-ratified: a DERIVED, additive view of competency already earned — never a
+  // new grind currency, never a count shown, never gated, never expiring. Rank is monotonic
+  // (latched high-water — a downgradeable crest in the always-visible chip would be
+  // loss-aversion, forbidden). XP-Off → rank 0 (no crest). The descriptor names the SKILL
+  // built, never the tally. The three routes to each rank (badges / depth rungs / breadth)
+  // are parallel by design — no per-badge weighting (that would smuggle in a hidden score).
+  const CREST_META = {
+    1: { label: 'Proven', desc: 'You’ve proven your first real skill.' },
+    2: { label: 'Versed', desc: 'You’re versed across several skills.' },
+    3: { label: 'Fluent', desc: 'Broad command across the map.' },
+  };
+  function crestRankCompute() {
+    const store = progressLoad();
+    if (store.mode === 'off') return 0;
+    const bc = badgeContext();
+    const badgeCount = Object.keys(store.badges || {}).length;
+    let masteredRungs = 0;
+    const byNode = store.byNode || {};
+    for (const id of Object.keys(byNode)) {
+      const n = byNode[id] || {}, d = n.depth || {};
+      if (d.travel || d.clean || d.eyesOff || n.masteredAt) masteredRungs++;
+    }
+    let rank = 0;
+    if (badgeCount >= 1 || masteredRungs >= 1) rank = 1;
+    if (badgeCount >= 3 || bc.pushPathways >= 1 || masteredRungs >= 3) rank = 2;
+    if (bc.clearedPathways >= 5 || badgeCount >= 6 || bc.pushPathways >= 3) rank = 3;
+    return rank;
+  }
+  // Displayed rank = monotonic high-water of the derived rank.
+  function crestState() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, label: '', desc: '' };
+    const rank = Math.max(crestRankCompute(), store.crestRank || 0);
+    return Object.assign({ rank }, rank ? CREST_META[rank] : { label: '', desc: '' });
+  }
+  // Persist the high-water AFTER the run's competency is credited; return whether it ROSE
+  // (the earn-moment trigger). Called from sessionEnd after creditBadges/advanceDepthLadder.
+  function crestCommit() {
+    const store = progressLoad();
+    if (store.mode === 'off') return { rank: 0, rose: false };
+    const prev = store.crestRank || 0;
+    const rank = Math.max(crestRankCompute(), prev);
+    if (rank > prev) { store.crestRank = rank; progressSave(store); return { rank, rose: true }; }
+    return { rank, rose: false };
+  }
+  // The emblem — an aegis/laurel that elaborates by rank (accent-family via currentColor;
+  // NEVER --vir-meter). Rank 1 hollow aegis + spark · 2 filled + laurel sprigs · 3 full wreath.
+  const CREST_STAR = '<path d="M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z" fill="currentColor"/>';
+  const CREST_SHIELD = 'M12 2.4l7 2.5v5.3c0 4.6-2.9 8.1-7 10.4-4.1-2.3-7-5.8-7-10.4V4.9z';
+  function crestSvg(rank) {
+    if (!rank) return '';
+    let inner = '';
+    if (rank === 1) {
+      inner = `<path d="${CREST_SHIELD}" fill="none" stroke="currentColor" stroke-width="1.5"/>` + CREST_STAR;
+    } else if (rank === 2) {
+      inner = `<path d="${CREST_SHIELD}" fill="currentColor" fill-opacity="0.20" stroke="currentColor" stroke-width="1.5"/>`
+        + CREST_STAR
+        + '<g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M5.5 17.6c1.7.2 3 1.1 3.7 2.6"/><path d="M18.5 17.6c-1.7.2-3 1.1-3.7 2.6"/></g>';
+    } else {
+      inner = '<g fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6"/>'
+        + '<path d="M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6"/>'
+        + '<path d="M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8"/><path d="M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8"/></g>'
+        + CREST_STAR;
+    }
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+  }
+  // Canvas twin for the copy-card PNG (same paths → same emblem). color = accent (never green).
+  function drawCrestCanvas(ctx, cx, cy, size, color, rank) {
+    if (!rank || typeof Path2D === 'undefined') return;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(size / 24, size / 24); ctx.translate(-12, -12);
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const shield = new Path2D(CREST_SHIELD);
+    if (rank >= 2) { ctx.globalAlpha = 0.20; ctx.fill(shield); ctx.globalAlpha = 1; }
+    if (rank <= 2) { ctx.lineWidth = 1.5; ctx.stroke(shield); }
+    if (rank >= 3) {
+      ctx.lineWidth = 1.35;
+      ['M11 21.4C6.6 20.7 3.6 17 3.7 12.3c1.9 1 3.4 2.6 4.2 4.6',
+       'M13 21.4c4.4-.7 7.4-4.4 7.3-9.1-1.9 1-3.4 2.6-4.2 4.6',
+       'M4.4 9.6c1.8.3 3.2 1.3 4.2 2.8', 'M19.6 9.6c-1.8.3-3.2 1.3-4.2 2.8'].forEach(d => ctx.stroke(new Path2D(d)));
+    } else if (rank >= 2) {
+      ctx.lineWidth = 1.3;
+      ctx.stroke(new Path2D('M5.5 17.6c1.7.2 3 1.1 3.7 2.6'));
+      ctx.stroke(new Path2D('M18.5 17.6c-1.7.2-3 1.1-3.7 2.6'));
+    }
+    ctx.fill(new Path2D('M12 6l1.3 3.3 3.6.2-2.8 2.3 1 3.5-3.1-2-3.1 2 1-3.5L7.1 9.5l3.6-.2z'));
+    ctx.restore();
+  }
+  // Paint the header-chip crest (leading child of #virtuoso_beta-progress-strip). rose=true adds
+  // the one-shot earn-bloom (Lit only; RM/Calm just show the new rank). Hidden at rank 0.
+  function syncCrest(rose) {
+    const el = $('virtuoso_beta-crest'); if (!el) return;
+    const st = crestState();
+    if (!st.rank) { el.hidden = true; el.innerHTML = ''; el.className = 'virtuoso_beta-crest'; el.removeAttribute('title'); return; }
+    el.innerHTML = crestSvg(st.rank);
+    el.className = 'virtuoso_beta-crest cr-rank-' + st.rank + (rose ? ' cr-earned' : '');
+    el.title = st.label + ' — ' + st.desc;
+    el.hidden = false;
+    if (rose) { try { el.addEventListener('animationend', () => el.classList.remove('cr-earned'), { once: true }); } catch (_) {} }
   }
 
   function sessionBegin() {
@@ -23168,6 +24105,7 @@
     // have written the ledger, so a badge earned via a Workout block fires the same
     // run. Null in Off mode. Gained-only diff.
     const badgeGain = creditBadges();
+    const crestGain = crestCommit();   // monotonic high-water; rose === this run lifted the crest rank
     _lastEndedSession = {
       mode: _activeSession.mode, scale: _activeSession.scale, key: _activeSession.key,
       bpm: _activeSession.bpm, bpm_tier: _activeSession.bpm_tier,
@@ -23209,6 +24147,7 @@
     _activeSession = null;
     if (unlock) { _newlyUnlockedTier = unlock.tier; syncTempoTierButtons(); renderSkillTree(); _newlyUnlockedTier = null; }
     syncProgressStrip();
+    if (crestGain && crestGain.rose) syncCrest(true);   // earn-moment: bloom the chip crest (Lit/RM-aware in CSS)
     presentSessionSummary();
   }
 
@@ -23249,6 +24188,7 @@
   }
 
   function syncProgressStrip() {
+    try { syncCrest(); } catch (_) {}
     const sessions = sessionsLoad();
     const streak = streakCount(sessions);
     const numEl = $('virtuoso_beta-streak-num');
@@ -23818,16 +24758,30 @@
       lcdHost.addEventListener('keydown', (e) => {
         if (e.target && e.target.id === 'virtuoso_beta-lcd-bpm' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
       });
+      // LCD select cells (Key · Meter · Count-in) commit the same way the Tempo
+      // input does: write the (possibly Custom-only-hidden) Inspector field,
+      // dispatch change so dependent logic runs, regenerate — a live override in
+      // any mode. Map the LCD id → form field name.
+      const LCD_SELECT_FIELD = { 'virtuoso_beta-lcd-key': 'key', 'virtuoso_beta-lcd-meter': 'meter', 'virtuoso_beta-lcd-countin': 'countIn' };
       lcdHost.addEventListener('change', (e) => {
-        if (!e.target || e.target.id !== 'virtuoso_beta-lcd-bpm') return;
-        const v = Math.max(30, Math.min(260, parseInt(e.target.value, 10) || 0));
-        if (!v || !formBpm) { if (formBpm) e.target.value = formBpm.value; return; }
-        e.target.value = String(v);
-        if (String(formBpm.value) !== String(v)) {
-          formBpm.value = String(v);
-          formBpm.dispatchEvent(new Event('change', { bubbles: true }));
-          onGenerate();
+        const id = e.target && e.target.id;
+        if (id === 'virtuoso_beta-lcd-bpm') {
+          const v = Math.max(30, Math.min(260, parseInt(e.target.value, 10) || 0));
+          if (!v || !formBpm) { if (formBpm) e.target.value = formBpm.value; return; }
+          e.target.value = String(v);
+          if (String(formBpm.value) !== String(v)) {
+            formBpm.value = String(v);
+            formBpm.dispatchEvent(new Event('change', { bubbles: true }));
+            onGenerate();
+          }
+          return;
         }
+        const name = LCD_SELECT_FIELD[id]; if (!name) return;
+        const field = document.querySelector('#virtuoso_beta-controls [name="' + name + '"]');
+        if (!field || String(field.value) === String(e.target.value)) return;
+        field.value = e.target.value;
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        onGenerate();
       });
       // Mirror Inspector→LCD live, so the two boxes always agree between generates.
       formBpm?.addEventListener('input', () => {
@@ -24276,6 +25230,7 @@
     $('virtuoso_beta-fretboard-system')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
     $('virtuoso_beta-controls')?.querySelector('[name="key"]')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
     $('virtuoso_beta-controls')?.querySelector('[name="scale"]')?.addEventListener('change', () => { syncShapeDropdown(); syncShapeDropdownSelectionToHidden(); updatePositionStepper(); });
+    $('virtuoso_beta-controls')?.querySelector('[name="stringSetup"]')?.addEventListener('change', () => { syncJamHighlightUI(); syncFretboardUI(); });
     const pathwaySelect = $('virtuoso_beta-pathway');
     pathwaySelect?.addEventListener('change', () => {
       applyPathwayById(pathwaySelect.value);
@@ -24372,10 +25327,9 @@
     document.querySelectorAll('#virtuoso_beta-jam-hl .virtuoso_beta-jam-hl-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.hl === jamHighlightMode);
       b.addEventListener('click', () => {
-        document.querySelectorAll('#virtuoso_beta-jam-hl .virtuoso_beta-jam-hl-btn').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
         jamHighlightMode = b.dataset.hl || 'chord';
         try { localStorage.setItem('virtuoso_beta.jamHighlight', jamHighlightMode); } catch (_) {}
+        syncJamHighlightUI();
         drawOnce();
       });
     });
@@ -24640,6 +25594,9 @@
     document.querySelectorAll('#virtuoso_beta-xp-mode .virtuoso_beta-mini-btn').forEach(b => b.addEventListener('click', () => applyXpModeDefault(b.dataset.xp)));
     $('virtuoso_beta-countin-default')?.addEventListener('change', (e) => { try { localStorage.setItem('virtuoso_beta.countInDefault', e.target.value); } catch (_) {} applyCountInDefault(e.target.value); });
     document.querySelectorAll('#virtuoso_beta-countin-grid .virtuoso_beta-mini-btn').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('virtuoso_beta.countInGrid', b.dataset.grid); } catch (_) {} applyCountInGrid(b.dataset.grid); }));
+    document.querySelectorAll('#virtuoso_beta-energy-pick .virtuoso_beta-mini-btn').forEach(b => b.addEventListener('click', () => applyEnergy(b.dataset.energy)));
+    renderCardSkinPicker('signature');
+    document.querySelectorAll('#virtuoso_beta-skinscope-pick .virtuoso_beta-mini-btn').forEach(b => b.addEventListener('click', () => applySkinScope(b.dataset.skinscope)));
     loadSettingsPrefs();
     document.addEventListener('click', (e) => {
       const menu = $('virtuoso_beta-settings-menu'); if (!menu || !menu.classList.contains('vir-open')) return;
@@ -24816,7 +25773,7 @@
     jamArmFromDrill, jamTargetPcs, jamNextGuidePcs,
     getActiveBundleInfo: () => activeBundle ? { config: activeBundle.config, duration: activeBundle.songInfo && activeBundle.songInfo.duration, leadIn: activeBundle.leadIn } : null,
     sgStats: () => { const out = { ready: 0, loading: 0, failed: 0 }; for (const k of Object.keys(sgBuffers)) out[sgBuffers[k].state] = (out[sgBuffers[k].state] || 0) + 1; return out; } };
-  if (typeof globalThis !== 'undefined' && globalThis.__SS_HARNESS__) globalThis.__ss_debug = { STRING_SETUPS, resolveCAGEDShape, resolveThreeNPSPosition, NOTE_ALIASES, chordRootForDegree, nearestPositionForPc, compileChordTimeline, MOTIF_CELLS, resolveMotifCell, buildMotifExercise, applyTimelinePush, resolveHumanSeed, parseMeter, BASS_FIGURES, bassFigureForConfig, DRUM_GROOVES, DRUM_PIECE_GAIN, resolveGroove, ARRANGEMENT_RECIPES, resolveArrangement, compCellForConfig, DRUMKIT_BANKS, KIT_REGISTRY, resolveDrumKit, recipeTracks, resolveHumanSeed, buildCompCellHits, activeBundleBacking: () => activeBundle ? activeBundle.backingEvents : null, activeBundleChords: () => activeBundle ? activeBundle.chords : null, activeBundleCfg: () => activeBundle ? activeBundle.config : null, irState: () => Object.fromEntries(Object.entries(_irBufs).map(([k, v]) => [k, v.state])), rigState: () => JSON.parse(JSON.stringify(rigState)), buildDrumEvents, drawHeatmapHero, drawLeanStripHero, buildResultsHero, countInSubTicks, blockFeltInfo, ptPracticeTime: () => currentPracticeTime, preRollUntil: () => _preRollUntil, wrapAnim: () => _wrapAnim, ptWindows: () => _ptWin, ptRunInfo: () => _ptRunInfo, ptPreviewJudgeCounts, ptSpeakBudget, ptScoredUnits: () => _ptScoredUnits, lvlMode: () => _lvlMode, ndContainedMode: () => _ndContainedMode, ndContainedFallback: () => _ndContainedFallback, ndVerifyMode: () => _ndVerifyMode, ptCalibrateOffsetMs, ptLatency, pickSinkMatch, sinkTokens, applyHostSink, sinkState: () => ({ appliedId: _sinkAppliedId, mismatch: _sinkMismatch, outs: _sinkLastOuts }), audioCtxRef: () => audioCtx, resolveAudioProfile, resolveMix, resolveAmpId, sgNotesWanted, sgHarmWanted, sgPadWanted, applyStyleMixerDefaults, sgFilesFor, bankDesc, bankLayerTag, SAMPLE_BANKS, compTargetMidis, COMP_GROOVES, wafGmTrim, WAF_GM_TRIM, TONE_GM, liveInstrumentReady, prewarmMixerCandidates, jamApplyToken: () => _jamApplyToken, mixerStateRef: () => mixerState, jamMirrorCapture, jamMirrorReset, jamMirror: () => _jamMirror ? { noteCount: _jamMirror.noteCount, pcs: [..._jamMirror.pcs] } : null, jamPlayedLen: () => _jamPlayed.length, jamSpotlightTurn, activeBundleNotes: () => activeBundle ? activeBundle.notes : null,
+  if (typeof globalThis !== 'undefined' && globalThis.__SS_HARNESS__) globalThis.__ss_debug = { STRING_SETUPS, resolveCAGEDShape, resolveThreeNPSPosition, NOTE_ALIASES, chordRootForDegree, nearestPositionForPc, compileChordTimeline, MOTIF_CELLS, resolveMotifCell, buildMotifExercise, applyTimelinePush, resolveHumanSeed, parseMeter, BASS_FIGURES, bassFigureForConfig, DRUM_GROOVES, DRUM_PIECE_GAIN, resolveGroove, ARRANGEMENT_RECIPES, resolveArrangement, compCellForConfig, DRUMKIT_BANKS, KIT_REGISTRY, resolveDrumKit, recipeTracks, resolveHumanSeed, buildCompCellHits, activeBundleBacking: () => activeBundle ? activeBundle.backingEvents : null, activeBundleChords: () => activeBundle ? activeBundle.chords : null, activeBundleCfg: () => activeBundle ? activeBundle.config : null, activeBundleTimeline: () => activeBundle ? (activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline)) : null, irState: () => Object.fromEntries(Object.entries(_irBufs).map(([k, v]) => [k, v.state])), rigState: () => JSON.parse(JSON.stringify(rigState)), buildDrumEvents, drawHeatmapHero, drawLeanStripHero, buildResultsHero, countInSubTicks, blockFeltInfo, ptPracticeTime: () => currentPracticeTime, preRollUntil: () => _preRollUntil, wrapAnim: () => _wrapAnim, ptWindows: () => _ptWin, ptRunInfo: () => _ptRunInfo, ptPreviewJudgeCounts, ptSpeakBudget, ptScoredUnits: () => _ptScoredUnits, lvlMode: () => _lvlMode, ndContainedMode: () => _ndContainedMode, ndContainedFallback: () => _ndContainedFallback, ndVerifyMode: () => _ndVerifyMode, ptCalibrateOffsetMs, ptLatency, pickSinkMatch, sinkTokens, applyHostSink, sinkState: () => ({ appliedId: _sinkAppliedId, mismatch: _sinkMismatch, outs: _sinkLastOuts }), audioCtxRef: () => audioCtx, resolveAudioProfile, resolveMix, resolveAmpId, sgNotesWanted, sgHarmWanted, sgPadWanted, applyStyleMixerDefaults, sgFilesFor, bankDesc, bankLayerTag, SAMPLE_BANKS, compTargetMidis, COMP_GROOVES, wafGmTrim, WAF_GM_TRIM, TONE_GM, liveInstrumentReady, prewarmMixerCandidates, jamApplyToken: () => _jamApplyToken, mixerStateRef: () => mixerState, jamMirrorCapture, jamMirrorReset, jamMirrorDebugAdd, jamRecapAnalysisLines, jamBassIntents, jamSpotlightPhraseNotes, jamMirror: () => _jamMirror ? { noteCount: _jamMirror.noteCount, pcs: [..._jamMirror.pcs] } : null, jamPlayedLen: () => _jamPlayed.length, jamSpotlightTurn, activeBundleNotes: () => activeBundle ? activeBundle.notes : null,
     busRms: () => { const out = {}; if (audioBus && audioBus.analysers) { for (const k in audioBus.analysers) { const an = audioBus.analysers[k]; const buf = new Float32Array(an.fftSize); an.getFloatTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; out[k] = Math.sqrt(s / buf.length); } } return out; },
     busGains: () => { const out = {}; if (audioBus && audioBus.tracks) { for (const k in audioBus.tracks) out[k] = audioBus.tracks[k].gain.value; } return out; }, ampState: () => ({ want: { ..._ampWant }, wired: audioBus && audioBus.amps ? Object.fromEntries(Object.entries(audioBus.amps).map(([k, v]) => [k, v.id])) : null }), avSync: () => (audioCtx ? { ctxNow: audioCtx.currentTime, perfNow: performance.now(), outputLatency: Number(audioCtx.outputLatency) || 0, baseLatency: Number(audioCtx.baseLatency) || 0, scheduledUntilCtx, schedChartPos, playAnchorMs, playAnchorChartTime, playAnchorCtx, practiceTime: currentPracticeTime, playing, paused } : null) };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once:true }); else boot();
