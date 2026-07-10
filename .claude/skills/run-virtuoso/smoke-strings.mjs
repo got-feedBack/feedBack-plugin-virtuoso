@@ -306,6 +306,83 @@ try {
   ok(fg.n > 0 && fg.ho && fg.po, "bass legato generates slurs (hammer-ons + pull-offs)", `n=${fg.n} ho=${fg.ho} po=${fg.po}`);
   ok(fg.fgs.includes(4), "legato carries fg incl. the PINKY (fg 4) — the bass pinky drill works", `fgs=[${fg.fgs.join(",")}]`);
 
+  console.log("-- (12) DEFAULT fretboard-system routing is instrument/count-aware (string-count fix, 2026-07-10) --");
+  // Beginner mode used to force 'caged' for EVERYTHING — on 7/8-string the box
+  // anchors top-six (rows 5/6, correct for CAGED itself) so the extra strings
+  // never sounded (the "switched to 8-string and nothing changed" report), and
+  // bass got guitar-shape geometry (bass-pedagogy: bass never uses CAGED).
+  // defaultFretboardSystem: bass → position, guitar N>6 → 3nps, guitar 6 → caged;
+  // an explicit advanced-mode pick still wins.
+  const d8 = await page.evaluate(() => {
+    window.__t.setAdvanced(false); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "guitar_8_standard", practiceType: "scale", scale: "major", key: "C" });
+    const cfg = window.Virtuoso.readConfig();
+    const ex = window.Virtuoso.generateExercise(cfg);
+    const opens = [30, 35, 40, 45, 50, 55, 59, 64];   // guitar_8_standard
+    const strings = [...new Set(ex.chart.notes.map(n => n.s))].sort((a, b) => a - b);
+    const midis = [...new Set(ex.chart.notes.map(n => `${n.s}:${n.f}`))].map(k => { const [s, f] = k.split(":").map(Number); return opens[s] + f; });
+    return { sys: cfg.fretboardSystem, n: ex.chart.notes.length, strings, unison: midis.length !== new Set(midis).size };
+  });
+  ok(d8.sys === "3nps", "(12a) 8-string beginner default = 3nps (the extended-range scale system)", d8.sys);
+  ok(d8.n > 0 && d8.strings.includes(0) && d8.strings.includes(1), "(12b) default 8-string scale run REACHES the low F#/B (s=0,1)", `[${d8.strings.join(",")}]`);
+  ok(!d8.unison, "(12c) the extended default path holds the no-unison rule (unique position = unique pitch)");
+  const d6 = await page.evaluate(() => {
+    window.__t.setForm({ stringSetup: "guitar_6_standard", practiceType: "scale", scale: "major", key: "C" });
+    return window.Virtuoso.readConfig().fretboardSystem;
+  });
+  ok(d6 === "caged", "(12d) 6-string guitar beginner default stays caged (unchanged)", d6);
+  const dExplicit = await page.evaluate(() => {
+    window.__t.setAdvanced(true);
+    window.__t.setForm({ stringSetup: "guitar_8_standard", practiceType: "scale", scale: "major", key: "C", fretboardSystem: "caged", shape: "E" });
+    const cfg = window.Virtuoso.readConfig();
+    window.__t.setAdvanced(false);
+    return cfg.fretboardSystem;
+  });
+  ok(dExplicit === "caged", "(12e) an EXPLICIT advanced-mode caged pick on 8-string is preserved (default only fills the unset case)", dExplicit);
+  console.log("-- (13) BASS never routes through a guitar shape system (6-string bass passed the old count-only guards) --");
+  // Face 1: beginner Custom bass got CAGED-derived geometry (pathways already
+  // coded 'position'). Face 2 (latent, pitch-wrong): a 6-STRING bass satisfies
+  // stringCount>=6, but the CAGED templates bake EADGBE's G→B major 3rd — on an
+  // all-4ths bass the top two strings land a semitone flat (a real wrong pitch).
+  // Guards are now instrument-first at every layer (resolveCurrentShape,
+  // cagedShapeNotesForChord, templateFromShape, sweep wantShape).
+  for (const su of ["bass_4_standard", "bass_5_standard", "bass_6_standard"]) {
+    const r = await page.evaluate((s) => {
+      window.__t.setAdvanced(false); window.__t.setTuning(null);
+      window.__t.setForm({ stringSetup: s, practiceType: "scale", scale: "major", key: "C" });
+      const cfg = window.Virtuoso.readConfig();
+      return { sys: cfg.fretboardSystem, hasShape: !!(cfg.shapeNotes && cfg.shapeNotes.length) };
+    }, su);
+    ok(r.sys === "position" && !r.hasShape, `(13) ${su} beginner default = position, no resolved shape`, `sys=${r.sys} shape=${r.hasShape}`);
+  }
+  const b6 = await page.evaluate(() => {
+    // Force the hostile config: a 6-string bass shoved INTO caged sweep territory.
+    // wantShape must refuse (instrument guard) and fall to the interval-derived
+    // path, so every emitted pitch stays a chord/scale tone of C major.
+    window.__t.setAdvanced(true); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "bass_6_standard", practiceType: "sweep_arpeggios", scale: "major", key: "C", fretboardSystem: "caged", shape: "E" });
+    const ex = window.Virtuoso.generateExercise(window.Virtuoso.readConfig());
+    const opens = [23, 28, 33, 38, 43, 48];   // bass_6_standard (all 4ths — no G→B 3rd)
+    const pcs = [...new Set(ex.chart.notes.map(n => ((opens[n.s] + n.f) % 12 + 12) % 12))].sort((a, b) => a - b);
+    const cMajor = new Set([0, 2, 4, 5, 7, 9, 11]);
+    window.__t.setAdvanced(false);
+    return { n: ex.chart.notes.length, offKey: pcs.filter(pc => !cMajor.has(pc)) };
+  });
+  ok(b6.n > 0 && b6.offKey.length === 0, "(13b) 6-string bass forced at caged sweeps: every pitch stays diatonic (no semitone-flat template leak)", `n=${b6.n} offKey=[${b6.offKey.join(",")}]`);
+  const lowB = await page.evaluate(() => {
+    window.__t.setAdvanced(false); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "bass_5_standard", practiceType: "scale", scale: "major", key: "E" });
+    const ex = window.Virtuoso.generateExercise(window.Virtuoso.readConfig());
+    const strings = [...new Set(ex.chart.notes.map(n => n.s))].sort((a, b) => a - b);
+    window.__t.setForm({ stringSetup: "guitar_6_standard" });   // self-clean
+    return { n: ex.chart.notes.length, strings };
+  });
+  // The B string (s=0) must be PLAYED — a root-anchored run legitimately starts
+  // AT the root (E sits on the B string, fret 5), so assert string usage, not
+  // sub-E pitch. Reaching BELOW the root (the low-fifth idiom) is the deferred
+  // bassRootGrip downward-reach feature (ROADMAP open thread), not this fix.
+  ok(lowB.n > 0 && lowB.strings.includes(0), "(13c) 5-string bass scale actually plays ON the low B string (s=0)", `strings=[${lowB.strings.join(",")}]`);
+
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  strings/tuning: ${fails} failure(s)`);
   process.exit(fails ? 1 : 0);

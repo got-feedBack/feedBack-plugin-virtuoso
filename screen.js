@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.11';
+  const VIRTUOSO_VERSION = '0.1.12';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -3096,6 +3096,22 @@
   // fretMin/fretMax handling.
   const SHAPE_AWARE_SYSTEMS = new Set(['caged', '3nps', 'open']);
   function isShapeAwareSystem(system) { return SHAPE_AWARE_SYSTEMS.has(system); }
+  // Default fretboard system per instrument profile (string-count fix, 2026-07-10;
+  // guitar-pedagogy + bass-pedagogy panel):
+  // - bass → 'position': bass NEVER uses the guitar shape systems (CAGED/Open/3NPS
+  //   are EADGBE artifacts; the movable position box is bass's system — the pathway
+  //   path already coded this at apply time, this aligns Custom/beginner + sessions).
+  // - guitar N>6 → '3nps': THE extended-range scale system — it tiles every string
+  //   uniformly, so a 7/8-string exercise actually uses the low B/F#. A caged
+  //   default anchors the top-six and leaves the extra strings dead (the
+  //   "switched to 8-string and nothing changed" bug). CAGED itself deliberately
+  //   stays a top-six system (no re-rooted mega-box — no method teaches one).
+  // - guitar 6 → 'caged' (unchanged).
+  // An EXPLICIT user/rung choice always wins — this is only the unset default.
+  function defaultFretboardSystem(instrument, stringCount) {
+    if (instrument === 'bass') return 'position';
+    return (stringCount || 6) > 6 ? '3nps' : 'caged';
+  }
 
   // Sensible default shape for a system + key.
   function defaultShapeForSystem(system, keyPc, scale, openMidis) {
@@ -3191,6 +3207,12 @@
   // isn't shape-aware (callers should fall back to raw fretMin/fretMax).
   function resolveCurrentShape(cfg, openMidis) {
     if (!isShapeAwareSystem(cfg.fretboardSystem)) return null;
+    // Bass never resolves a guitar shape system (defense-in-depth: the count
+    // guards alone pass a 6-string bass, whose all-4ths tuning breaks the
+    // EADGBE-interval templates — notes land a semitone flat on the top two
+    // strings; bass-pedagogy 2026-07-10). The UI hides shape controls for bass,
+    // but a programmatic config (preset import, host sync) must be safe too.
+    if (cfg.instrument === 'bass') return null;
     const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
     let shape = cfg.shape;
     // Coerce numeric shape ids for 3NPS (form values are strings).
@@ -4268,11 +4290,13 @@
     let fretMax = Math.min(MAX_FRET, Math.max(fretMin + 1, parseInt(_fretVal('fretMax', '5'), 10) || 5));
     const practiceType = data.get('practiceType') || data.get('mode') || 'scale';
     const advancedMode = data.get('advancedMode') === 'on';
-    // Default fretboard system is CAGED in beginner mode and whatever the user
-    // picks in advanced mode. The shape-aware systems (caged/3nps/open) drive
+    // Default fretboard system is instrument/count-aware (defaultFretboardSystem:
+    // bass → position, guitar 7/8 → 3nps, guitar 6 → caged); an advanced-mode
+    // explicit pick wins. The shape-aware systems (caged/3nps/open) drive
     // fretMin/fretMax via the resolved shape; raw fretMin/fretMax inputs only
     // matter for the 'position' / 'single_string' / 'full_neck' legacy paths.
-    const fretboardSystem = advancedMode ? (data.get('fretboardSystem') || 'caged') : 'caged';
+    const fretboardSystem = (advancedMode && data.get('fretboardSystem'))
+      || defaultFretboardSystem(setup.instrument, setup.openMidis.length);
     let shape = data.get('shape');
     let shapeNotes = null, shapeDisplayName = null;
     // Frame-window types (the chromatic warmup, the fingerstyle spider) take
@@ -4282,7 +4306,7 @@
     // 2026-06-12 building the spider, whose whole walk rides the window).
     const frameWindowType = practiceType === 'chromatic' || practiceType === 'spider';
     if (isShapeAwareSystem(fretboardSystem) && !frameWindowType) {
-      const resolved = resolveCurrentShape({ fretboardSystem, key: data.get('key') || 'C', scale: data.get('scale') || 'major', shape }, effectiveOpenMidis);
+      const resolved = resolveCurrentShape({ fretboardSystem, instrument: setup.instrument, key: data.get('key') || 'C', scale: data.get('scale') || 'major', shape }, effectiveOpenMidis);
       if (resolved) {
         shape = resolved.shape;
         shapeNotes = resolved.resolved.notes;
@@ -6384,10 +6408,13 @@
   }
 
   function cagedShapeNotesForChord(cfg, shape, quality, rootFret) {
-    // CAGED chord-tone templates are a 6-string (EADGBE) system. Need ≥6 strings;
-    // bass 4/5 (<6) → return null so the caller falls back. On a 7/8-string the
+    // CAGED chord-tone templates are a 6-string (EADGBE) system. Need ≥6 GUITAR
+    // strings; bass 4/5 (<6) → null so the caller falls back — and bass at ANY
+    // count → null: a 6-string bass passes the count guard but is all-4ths (no
+    // G→B major 3rd), so the interval-baked template lands a semitone flat on the
+    // top two strings (bass-pedagogy 2026-07-10). On a 7/8-string guitar the
     // template anchors on the TOP SIX strings (off = N-6), mirroring resolveCAGEDShape.
-    if (cfg.stringCount < 6) return null;
+    if (cfg.instrument === 'bass' || cfg.stringCount < 6) return null;
     const def = CAGED_SHAPES[shape];
     if (!def) return null;
     const tmpl = def.chordTemplates[cagedShapeQualityKey(quality)];
@@ -6953,9 +6980,11 @@
   // chord voicing (all strings the shape covers, not just the strings the
   // generator happened to play) with sensible fingerings.
   function templateFromShape(name, shape, quality, rootFret, cfg, arp) {
-    // 6-string (EADGBE) template; need ≥6 strings. On 7/8 it sits on the top-six
-    // (off = N-6) so the chord box matches the anchored CAGED shape.
-    if (cfg.stringCount < 6) return null;
+    // 6-string (EADGBE) template; need ≥6 GUITAR strings (a 6-string bass passes
+    // the count but its all-4ths tuning breaks the template intervals — see
+    // cagedShapeNotesForChord). On 7/8 it sits on the top-six (off = N-6) so the
+    // chord box matches the anchored CAGED shape.
+    if (cfg.instrument === 'bass' || cfg.stringCount < 6) return null;
     const def = CAGED_SHAPES[shape];
     if (!def) return null;
     const tmpl = def.chordTemplates[cagedShapeQualityKey(quality)];
@@ -9272,11 +9301,12 @@
     // carries fingering by construction (the standard CAGED arpeggio shapes).
     // pickShapeRootFret walks the chosen shape up/down the neck per chord.
     const shape = cfg.shape || cfg.cagedShape;
-    // ≥6 strings: a 7/8-string can host the 6-string CAGED sweep template on its
-    // top-six (anchored via `off` in pickShapeRootFret/cagedShapeNotesForChord),
+    // ≥6 GUITAR strings: a 7/8-string can host the 6-string CAGED sweep template
+    // on its top-six (anchored via `off` in pickShapeRootFret/cagedShapeNotesForChord),
     // so the extended-range sweep keeps by-construction fingering instead of the
-    // greedy all-string rake. <6 (bass) → falls to sweepArpeggioPositions.
-    const wantShape = cfg.stringCount >= 6 && !!CAGED_SHAPES[shape];
+    // greedy all-string rake. <6 OR bass (a 6-string bass passes the count but
+    // breaks the EADGBE template intervals) → falls to sweepArpeggioPositions.
+    const wantShape = cfg.instrument !== 'bass' && cfg.stringCount >= 6 && !!CAGED_SHAPES[shape];
     // The CAGED chordTemplates carry only TRIADS (maj/min/dim) — cagedShapeQualityKey
     // collapses min7→min and maj7/dom7→maj, so a seventh sweep through the template
     // would silently drop the 7th (its whole color). Route seventh sweeps to the
@@ -11756,7 +11786,10 @@
       // Structural defaults
       key:'C', scale:'major', bpm:80, bars:4, direction:'up_down', sequence:'none',
       meter:'4/4',   // safety-net default so a meter-less config never yields meter.denominator undefined
-      subdivision:'eighth', fretboardSystem:'caged', shape:'E', fretMin:0, fretMax:5,
+      // fretboardSystem: instrument/count-aware (bass → position, guitar 7/8 →
+      // 3nps, guitar 6 → caged); a segment's own coded system still wins (a rung
+      // that TEACHES a CAGED shape stays a CAGED lesson on its coded strings).
+      subdivision:'eighth', fretboardSystem: defaultFretboardSystem(setup.instrument, setup.openMidis.length), shape:'E', fretMin:0, fretMax:5,
       chordDepth:'seventh', progression:'ii-V-I', chordOverride:'auto',
       chordScaleStrategy:'mode_of_moment', chromaticPattern:'1234', keyCycle:'none',
       repeatCount:1, advancedMode:true, voices:'thirds_only', renderer:'highway_3d',
@@ -11780,7 +11813,7 @@
     // Resolve CAGED / 3NPS / Open shape into fretMin/fretMax + shapeNotes
     raw.shapeNotes = null; raw.shapeDisplayName = null;
     if (isShapeAwareSystem(raw.fretboardSystem)) {
-      const resolved = resolveCurrentShape({ fretboardSystem:raw.fretboardSystem, key:raw.key, scale:raw.scale, shape:raw.shape }, effectiveOpenMidis);
+      const resolved = resolveCurrentShape({ fretboardSystem:raw.fretboardSystem, instrument:raw.instrument, key:raw.key, scale:raw.scale, shape:raw.shape }, effectiveOpenMidis);
       if (resolved) {
         raw.shape = resolved.shape;
         raw.shapeNotes = resolved.resolved.notes;
