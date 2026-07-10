@@ -191,6 +191,39 @@ try {
   ok(adapt.midis === "38,43,48,53,57,62", "(8c) chart opens = the player's D-standard midis (detector + audio concert-faithful)", adapt.midis);
   ok(adapt.baseRootPc != null && adapt.adaptRootPc === ((adapt.baseRootPc + 10) % 12), "(8d) chart.timeline (the backing's chord source) roots shift −2 with the player", `rootPc ${adapt.baseRootPc} -> ${adapt.adaptRootPc}`);
 
+  console.log("-- (8-struct) STRUCTURAL tunings on a KEYED rung chart on the player's REAL opens, not standard (the 'B-standard scored 24%' grading bug, 2026-07-09) --");
+  // Row 8 covers UNIFORM tagged detunes (Eb/D → transpose). A STRUCTURAL
+  // re-stringing (drop-*, B-standard, BEAD, DADGAD, open) on a keyed rung must
+  // NOT fall back to the rung's STANDARD opens — the contained-verifier targets
+  // have to land on the strings the player actually has, or every note mis-scores.
+  // applyTuningAdaptL1's structural branch charts on the player's opens at concert
+  // pitch. This guards a real-detector-path bug the mock-based scoring suites
+  // (smoke-contained-verifier / smoke-scoring-e2e) structurally cannot catch.
+  const struct = await page.evaluate(() => {
+    const S = window.Virtuoso;
+    const selPathway = (id) => { const sel = document.querySelector("#virtuoso-pathway"); sel.value = id; sel.dispatchEvent(new Event("change", { bubbles: true })); };
+    const tsel = document.querySelector("#virtuoso-tuning-select");
+    const run = (val) => {
+      localStorage.removeItem("virtuoso.instrument");
+      tsel.value = val; tsel.dispatchEvent(new Event("change", { bubbles: true }));
+      selPathway("pent_foundation");   // re-apply the keyed rung → applyTuningAdaptL1 composes
+      const cfg = S.readConfig();
+      const ex = S.generateExercise(cfg);
+      const strings = [...new Set(ex.chart.notes.map((n) => n.s))].sort((a, b) => a - b);
+      return { midis: (cfg.customOpenMidis || []).toString(), n: ex.chart.notes.length, strings };
+    };
+    const out = { dropD: run("drop_d"), dropC: run("drop_c") };
+    // self-clean for later rows / suites
+    tsel.value = "standard"; tsel.dispatchEvent(new Event("change", { bubbles: true }));
+    localStorage.removeItem("virtuoso.instrument");
+    selPathway("pent_foundation");
+    return out;
+  });
+  ok(struct.dropD.midis === "38,45,50,55,59,64" && struct.dropD.n > 0 && struct.dropD.strings.every((s) => s >= 0 && s < 6),
+     "(8-struct-a) drop-D player: keyed rung charts on the drop-D opens (not standard E)", `opens=${struct.dropD.midis} notes=${struct.dropD.n} strings=[${struct.dropD.strings}]`);
+  ok(struct.dropC.midis === "36,43,48,53,57,62" && struct.dropC.n > 0,
+     "(8-struct-b) drop-C player: keyed rung charts on the drop-C opens (every string shifted, was 24%)", `opens=${struct.dropC.midis} notes=${struct.dropC.n}`);
+
   console.log("-- (9) ANCHOR rungs (keyless-anchor model 2026-06-06): the key is DERIVED from the player's lowest string --");
   // Anchor rungs (pulse_muting, the djent ladder, metalcore_chug…) code NO key:
   // anchor:'open_lowest' + anchorFret derive it, so the pedal lands at the
