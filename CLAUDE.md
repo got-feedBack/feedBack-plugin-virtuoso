@@ -126,6 +126,8 @@ To exercise backend routes directly, hit them via curl or the browser while Feed
 
 # ─── Part 2 — Architecture & Code Map ───
 
+> **Version / commit-hash convention (relaunch).** Virtuoso relaunched at **v0.1.0** as a clean-history rebrand — pre-0.1.0 development lives only in the private archive repo (see `ROADMAP.md`). So **any commit hash or Virtuoso version token written in this file's narrative predates the relaunch and does NOT resolve in the current git history** (`git show <hash>` will fail) — read them as historical dates / archive-repo breadcrumbs, not lookup-able refs. The live plugin version is `plugin.json` `version` (mirrored by `VIRTUOSO_VERSION` in `screen.js`). Host-app/desktop versions (e.g. FeedBack Desktop v0.2.9, host viz v0.3.0) are the host's own numbering and are unaffected.
+
 ## Architecture
 
 ### The core data flow
@@ -145,9 +147,9 @@ The renderers in `screen.js` are the **actual playback surface**, not just previ
 
 ### The four-mode DAW shell (current UI)
 
-The UI is **one DAW-style shell with four modes** (shipped 2026-05-31, commits `bf197c8`→`aca34d8`) — switching modes is a single root-class swap (`ss-mode-*`); the persistent furniture (header top-bar, ruler/transport, stage, Inspector frame) never rebuilds and there is **no second player**. `MODE_META` drives the modes and `selectMode(mode)` does the swap:
+The UI is **one DAW-style shell with four modes** (shipped 2026-05-31) — switching modes is a single root-class swap (`ss-mode-*`); the persistent furniture (header top-bar, ruler/transport, stage, Inspector frame) never rebuilds and there is **no second player**. `MODE_META` drives the modes and `selectMode(mode)` does the swap:
 
-- **Ladder** (user-facing label as of v0.7.1; **internal token is `data-mode="guided"`** — a *labels-only* rename of the former "Pathways"/"Guided", `673db57`; the picker header reads **"Skill Ladder"**. `MODE_META.guided.label`/`ss-mode-pathways`/`virtuoso-pathway-*`/`PATHWAYS`/`renderPathwayList`/`virtuoso.lastPathway` are all UNCHANGED — in code it's still "pathways/guided") — the curated `PATHWAYS`, presented via the **pathway picker** (`PATHWAY_BANDS` 6-band map + `renderPathwayList()` + `nodeProgressState()`); the old SVG skill-tree is shelved behind it (`renderSkillTree()` early-returns).
+- **Ladder** (user-facing label as of v0.7.1; **internal token is `data-mode="guided"`** — a *labels-only* rename of the former "Pathways"/"Guided"; the picker header reads **"Skill Ladder"**. `MODE_META.guided.label`/`ss-mode-pathways`/`virtuoso-pathway-*`/`PATHWAYS`/`renderPathwayList`/`virtuoso.lastPathway` are all UNCHANGED — in code it's still "pathways/guided") — the curated `PATHWAYS`, presented via the **pathway picker** (`PATHWAY_BANDS` 6-band map + `renderPathwayList()` + `nodeProgressState()`); the old SVG skill-tree is shelved behind it (`renderSkillTree()` early-returns).
 - **Custom** — full manual control; any Custom config is a saveable Workout block.
 - **Workout** — timed multi-block sessions, the wall-clock evolution of `generateSession()`/`BUILT_IN_SESSIONS`. The base time primitive is `targetSec` + `fillBlockToDuration()` (tiles whole repetitions to a wall-clock duration, overshooting to the next whole cell — never cutting a run mid-phrase); wired into `buildSessionChart` and `generateExercise`, no-op when absent. The Workout is an **editable working-draft** (`_workoutDraft`, a deep clone — never mutates `BUILT_IN_SESSIONS`): an editable block timeline (reorder/duplicate/remove/re-roll), a slide-up library drawer over `SEGMENT_TEMPLATES`, and a `↻ Refresh` that re-rolls template-ref slots via `refreshWorkout`. **Pacing (2026-06-02):** `interBlockBreakBars()` inserts a tempo-locked count-in BREAK for the incoming block (doubles as the per-block verdict beat; `auto`/`always`/`off`), and `applyLengthPreset()` (Quick/Standard/Woodshed) distributes a total across blocks proportional to natural cell duration → a setup readout, never a countdown.
 - **Jam** — pick a style, play along immediately over a looping backing. `jamPlay()` builds a config from `stylePaletteConfig(styleId)` and loops it through the contained player. **Jam is a MIRROR, not a judge** — no score/combo/rank; feedback is a live chord-tone/guide-tone highlight on the fretboard strip (`jamTargetPcs()` + enriched `backingEvents`/`chordHighlightPcs`).
@@ -158,7 +160,7 @@ Shell furniture: a **header top-bar** (title · Setup popover `Guitar · Standar
 
 ### The two-lane transport (the DAW arrangement view)
 
-Built 2026-06-02 (commits `c616e72`→`d8281bf`); all modes share `#virtuoso-ruler-canvas`. It is **two lanes**, and matches a real DAW rather than inventing a counter:
+Built 2026-06-02; all modes share `#virtuoso-ruler-canvas`. It is **two lanes**, and matches a real DAW rather than inventing a counter:
 
 1. **Scrolling bars|beats working ruler** — LOCKED to the note renderers' window (`rulerWindow`/`rulerMap` off `chartBeatSeconds` + `AHEAD`/`BEHIND`), playhead fixed ~22% from the left, bars pixel-aligned with the falling notes, ~7 bars on screen so it stays legible at any tempo/length (no decimation). Drawn by `drawRulerFrame()`.
 2. **Whole-session overview / marker strip** — `drawOverviewFrame()`/`overviewBands` from `segmentBounds`, each band **role-tinted and NAMED** = the DAW arrangement track (mirrors the host **Section Map** plugin; nothing borrowable, so build-but-mirror). It owns A–B loop **authoring** (drag), click-seek, and a viewport box; the working ruler reflects the loop + off-screen edge chevrons.
@@ -194,7 +196,7 @@ In **Jam** (`isJamMode`) the overview becomes the **chord loop** — function-ti
 
 ## Contained playback (current model)
 
-**Virtuoso runs as a fully self-contained player; "Play" never launches the host player.** This is a deliberate decision (2026-05-30, commit `e62d02a`) that supersedes the "Launch in Main 3D Player" UX described in older `docs/architecture.md` prose. Practice plays back inside the plugin via `startPlayback()` (own RAF clock + Web Audio + pitch tracker) across the renderers selected by `resolveRendererFactory()`.
+**Virtuoso runs as a fully self-contained player; "Play" never launches the host player.** This is a deliberate decision (2026-05-30) that supersedes the "Launch in Main 3D Player" UX described in older `docs/architecture.md` prose. Practice plays back inside the plugin via `startPlayback()` (own RAF clock + Web Audio + pitch tracker) across the renderers selected by `resolveRendererFactory()`.
 
 Consequence: `screen.js` does **not** call `fetch('/api/plugins/virtuoso/temp-sloppak')` or `window.playSong`. The `POST /temp-sloppak` route in `routes.py` (and the field-translation / sloppak-format machinery documented above) still exists but is **dormant** — kept for reference and possible future re-enablement, not on the live path. Don't "fix" the frontend to call it without confirming the contained-playback decision has been reversed (check `ROADMAP.md` and project memory first).
 
