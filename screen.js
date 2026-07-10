@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.10';
+  const VIRTUOSO_VERSION = '0.1.11';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -85,7 +85,12 @@
     guitar_6_standard: { label:'6-string guitar — standard', instrument:'guitar', openMidis:[40,45,50,55,59,64], tuning:[0,0,0,0,0,0] },
     guitar_6_drop_d: { label:'6-string guitar — Drop D', instrument:'guitar', openMidis:[38,45,50,55,59,64], tuning:[-2,0,0,0,0,0] },
     guitar_7_standard: { label:'7-string guitar — standard', instrument:'guitar', openMidis:[35,40,45,50,55,59,64], tuning:[0,0,0,0,0,0,0] },
-    guitar_8_standard: { label:'8-string guitar — standard', instrument:'guitar', openMidis:[30,35,40,45,50,55,59,64], tuning:[2,0,0,0,0,0,0,0] },
+    // tuning was [2,0,…] — internally inconsistent metadata (implied a nonsense E
+    // base for string 0; the 8-string family standard IS F#, offset 0 — matches the
+    // host's STANDARD_OPEN_MIDIS["guitar-8"]). Inert for playback (openMidisForConfig
+    // never reads .tuning) but live in chart.tuning: a host round-trip through that
+    // offset would detune string 0 a whole step. Fixed 2026-07-10 (guitar-pedagogy).
+    guitar_8_standard: { label:'8-string guitar — standard', instrument:'guitar', openMidis:[30,35,40,45,50,55,59,64], tuning:[0,0,0,0,0,0,0,0] },
     bass_4_standard: { label:'4-string bass — standard', instrument:'bass', openMidis:[28,33,38,43], tuning:[0,0,0,0] },
     bass_5_standard: { label:'5-string bass — standard low B', instrument:'bass', openMidis:[23,28,33,38,43], tuning:[0,0,0,0,0] },
     bass_6_standard: { label:'6-string bass — standard (B-E-A-D-G-C)', instrument:'bass', openMidis:[23,28,33,38,43,48], tuning:[0,0,0,0,0,0] }
@@ -113,6 +118,12 @@
       { id:'drop_b',       label:'Drop B (B F# B E G# C#)',     midis:[35,42,47,52,56,61] },
       { id:'eb_standard',  label:'Eb Standard (down ½ step)',   midis:[39,44,49,54,58,63], offset:true },
       { id:'d_standard',   label:'D Standard (down 1 step)',    midis:[38,43,48,53,57,62], offset:true },
+      // Host-parity uniform standards (2026-07-10): the host tuning table names
+      // these; tagging them offset:true here keeps applyTuningAdaptL1's transpose
+      // path working when they arrive via the host selector sync ("add a tagged
+      // preset, don't grow a delta heuristic" — bass-pedagogy ruling).
+      { id:'cs_standard',  label:'C# Standard (down 1½ steps)', midis:[37,42,47,52,56,61], offset:true },
+      { id:'c_standard',   label:'C Standard (down 2 steps)',   midis:[36,41,46,51,55,60], offset:true },
       { id:'dadgad',       label:'DADGAD',                       midis:[38,45,50,55,57,62] },
       { id:'open_g',       label:'Open G (D G D G B D)',        midis:[38,43,50,55,59,62] },
       { id:'open_d',       label:'Open D (D A D F# A D)',       midis:[38,45,50,54,57,62] },
@@ -120,10 +131,15 @@
     guitar_7: [
       { id:'standard',     label:'Standard (B E A D G B E)',    midis:[35,40,45,50,55,59,64], offset:true },
       { id:'drop_a',       label:'Drop A (A E A D G B E)',      midis:[33,40,45,50,55,59,64] },
+      // Host-parity uniform standards (see the guitar_6 note).
+      { id:'bb_standard',  label:'Bb Standard (down ½ step)',   midis:[34,39,44,49,54,58,63], offset:true },
+      { id:'a_standard',   label:'A Standard (down 1 step)',    midis:[33,38,43,48,53,57,62], offset:true },
     ],
     guitar_8: [
       { id:'standard',     label:'Standard (F# B E A D G B E)', midis:[30,35,40,45,50,55,59,64], offset:true },
       { id:'drop_e',       label:'Drop E (E B E A D G B E)',    midis:[28,35,40,45,50,55,59,64] },
+      // Host-parity uniform standards (see the guitar_6 note).
+      { id:'e_standard',   label:'E Standard (down 1 step)',    midis:[28,33,38,43,48,53,57,62], offset:true },
     ],
     bass_4: [
       { id:'standard',     label:'Standard (E A D G)',          midis:[28,33,38,43], offset:true },
@@ -17633,7 +17649,9 @@
     if (tun && tun.selectedOptions && tun.selectedOptions[0]) {
       tuning = tun.selectedOptions[0].textContent.replace(/\s*\(.*\)\s*/, '').trim();
     }
-    return tuning ? `${instr} · ${tuning}` : instr;
+    // Host-badge content hierarchy: instrument · strings · tuning (topbar parity).
+    const count = currentStringCount();
+    return tuning ? `${instr} · ${count} · ${tuning}` : `${instr} · ${count}`;
   }
   function updateSetupButton() {
     const lbl = $('virtuoso-setup-label');
@@ -17656,17 +17674,280 @@
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     // The Tune… row needs the host scoring SDK (the mic detector) — sync its
     // visibility on every open so a host without it never shows a dead button.
-    // The courtesy button rides the same sync: shown only when the third-party
-    // floating-tuner plugin's public API is present (feature-detect, no dependency).
+    // (The old courtesy "Floating tuner ↗" button retired 2026-07-10: the header
+    // Tuner badge is that affordance now, in the host's own topbar position.)
     if (open) {
       const row = $('virtuoso-tune-row');
-      const extOk = typeof window.tuner?.toggle === 'function';
-      if (row) row.style.display = (ptAvailable() || ndVerifyAvailable() || extOk) ? '' : 'none';
+      if (row) row.style.display = (ptAvailable() || ndVerifyAvailable()) ? '' : 'none';
       const tuneBtn = $('virtuoso-tune-btn');
       if (tuneBtn) tuneBtn.style.display = ptAvailable() ? '' : 'none';
-      const ext = $('virtuoso-tuner-ext');
-      if (ext) ext.style.display = extOk ? '' : 'none';
     }
+  }
+  // ── Host topbar parity: tuner + profile badges & instrument-settings sync ───
+  // (docs/topbar-host-parity.md, 2026-07-10.) Virtuoso's "fullscreen":true hides
+  // the host topbar on this screen, so the header mirrors its three badges. HOST
+  // CHECK verdicts: tuner = BORROW the launch (window.tuner.toggle) + MIRROR the
+  // card; instrument = BORROW persistence (/api/settings + /api/tunings +
+  // workingTuning + instrument:changed) + MIRROR the badge; profile = MIRROR the
+  // chip + LINK (goScreen('v3-profile')). Host settings are the source of truth
+  // for the player's guitar/bass identity; piano (gated) NEVER posts — the host
+  // model has no piano. Per-rung tuning overrides (applyPathwayConfig /
+  // setFieldSilent paths) never reach hostSettingsWrite — only user-driven panel
+  // changes funnel through instrumentStoreSave. All host paths fail silent so
+  // the standalone/degraded behavior is exactly the pre-parity plugin.
+  // NOTE (notedetect-expert, load-bearing): note_detect reads NEITHER
+  // workingTuning nor /api/settings — the verifier's tuning reference is solely
+  // the per-call ctx Virtuoso already passes. This sync must never replace it.
+  let _hostTuningsByKey = null;   // {'guitar-6': {name: [hz,…]}} from GET /api/tunings
+  let _hostTuningsRef = 440;      // referencePitch the hz table was scaled to
+  let _hostSettingsCache = null;  // last GET /api/settings body (pathway echo)
+  let _hostApplying = false;      // true while applying host → panel (no write echo)
+  let _hostSelfEmit = false;      // true around our own instrument:changed emit
+  let _hostWriteTimer = null;
+  function hostStandardMidisFor(family, count) {
+    return (STRING_SETUPS[`${family}_${count}_standard`] || {}).openMidis || null;
+  }
+  // The host serves tunings as FREQUENCIES scaled to its reference pitch; recover
+  // absolute midis against that same reference (A4 = 69 at referencePitch).
+  function hostTuningEntries(family, count) {
+    const table = _hostTuningsByKey && _hostTuningsByKey[`${family}-${count}`];
+    if (!table) return [];
+    const ref = _hostTuningsRef || 440;
+    const out = [];
+    for (const [name, freqs] of Object.entries(table)) {
+      if (!Array.isArray(freqs) || freqs.length !== count) continue;
+      const midis = freqs.map(hz => Math.round(69 + 12 * Math.log2(hz / ref)));
+      if (midis.every(m => Number.isFinite(m) && m >= 0 && m <= 127)) out.push({ name, midis });
+    }
+    return out;
+  }
+  function hostTuningNameForMidis(family, count, midis) {
+    const hit = hostTuningEntries(family, count)
+      .find(e => e.midis.length === midis.length && e.midis.every((m, i) => m === midis[i]));
+    return hit ? hit.name : null;
+  }
+  async function loadHostTunings() {
+    try {
+      const r = await fetch('/api/tunings');
+      if (!r.ok) return;
+      const d = await r.json();
+      _hostTuningsByKey = (d && d.tunings) || null;
+      _hostTuningsRef = Number(d && d.referencePitch) || 440;
+      syncTuningOptions();   // repaint the dropdown with the host named group
+    } catch (_) { /* older host / offline — Virtuoso presets only */ }
+  }
+  // The panel's currently-effective open midis (custom override else the setup's).
+  function effectiveMidisNow() {
+    const count = currentStringCount();
+    const hidden = $('virtuoso-custom-open-midis');
+    const custom = (hidden?.value || '').split(',').map(Number).filter(Number.isFinite);
+    if (custom.length === count) return custom;
+    const setup = document.querySelector('[name="stringSetup"]');
+    return ((STRING_SETUPS[setup?.value] || {}).openMidis || []).slice();
+  }
+  // Write-through: user panel change → POST /api/settings (host commit discipline:
+  // adopt only on an accepted response — /api/settings can return {error} with
+  // HTTP 200), then workingTuning + instrument:changed + the tuner-config push,
+  // exactly the host badge's own saveSettings sequence. Named tunings round-trip
+  // by NAME; everything else as a custom offset array vs the family standard
+  // (interop always maps through ABSOLUTE midis — never reconcile via .tuning).
+  function hostSettingsWriteSoon() {
+    if (_hostApplying) return;   // applying host → panel; don't echo it back
+    if (_hostWriteTimer) clearTimeout(_hostWriteTimer);
+    _hostWriteTimer = setTimeout(() => { _hostWriteTimer = null; hostSettingsWriteNow(); }, 150);
+  }
+  async function hostSettingsWriteNow() {
+    const instrEl = document.querySelector('[name="instrument"]');
+    if (!instrEl || instrEl.value === 'piano') return;   // no piano in the host model
+    const family = currentFamily();
+    const count = currentStringCount();
+    const std = hostStandardMidisFor(family, count);
+    const midis = effectiveMidisNow();
+    if (!std || midis.length !== std.length) return;
+    const named = hostTuningNameForMidis(family, count, midis);
+    const tuning = named || midis.map((m, i) => m - std[i]);
+    let accepted = false;
+    try {
+      const r = await fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instrument: family, string_count: count, tuning }),
+      });
+      if (r.ok) { const body = await r.json().catch(() => ({})); accepted = !(body && body.error); }
+    } catch (_) { /* host settings unreachable — Virtuoso persistence still holds */ }
+    if (!accepted) return;
+    try { hostBus()?.workingTuning?.setCurrentInstrument?.(family, count); } catch (_) {}
+    _hostSelfEmit = true;
+    try {
+      hostBus()?.emit?.('instrument:changed', {
+        instrument: family, stringCount: count, tuning,
+        pathway: (_hostSettingsCache && _hostSettingsCache.pathway) || 'songs',   // echo, control dropped
+      });
+    } catch (_) {}
+    setTimeout(() => { _hostSelfEmit = false; }, 250);
+    // Tuner-config push only when the tuner plugin is actually present (its
+    // global is the cheap detect for its routes — a blind POST 404s and the
+    // console noise trips the smoke suites' console-error guards).
+    if (typeof window.tuner?.toggle === 'function') {
+      try {
+        const body = { lastInstrument: `${family}-${count}` };
+        if (typeof tuning === 'string') body.lastTuning = tuning;   // custom arrays have no name — skip
+        await fetch('/api/plugins/tuner/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (typeof window._tunerReloadConfig === 'function') await window._tunerReloadConfig();
+      } catch (_) { /* tuner plugin config route absent */ }
+    }
+  }
+  // Resolve a host settings body to {inst, count, midis} (absolute midis — the
+  // interop currency; never reconcile via offsets alone).
+  function hostSettingsResolve(s) {
+    const inst = s.instrument === 'bass' ? 'bass' : 'guitar';
+    const counts = inst === 'bass' ? [4, 5, 6] : [6, 7, 8];
+    let count = Number(s.string_count);
+    if (!counts.includes(count)) count = counts[0];
+    const std = hostStandardMidisFor(inst, count);
+    if (!std) return null;
+    let midis;
+    if (typeof s.tuning === 'string') {
+      const named = hostTuningEntries(inst, count).find(e => e.name === s.tuning);
+      midis = named ? named.midis.slice() : std.slice();
+    } else if (Array.isArray(s.tuning) && s.tuning.length === std.length) {
+      midis = std.map((m, i) => m + (Number(s.tuning[i]) || 0));
+    } else {
+      midis = std.slice();
+    }
+    return { inst, count, midis };
+  }
+  function hostStateMatchesPanel(res) {
+    const cur = effectiveMidisNow();
+    return currentFamily() === res.inst && currentStringCount() === res.count
+      && cur.length === res.midis.length && cur.every((m, i) => m === res.midis[i]);
+  }
+  // Apply host → panel (a PULL: fresh install, or a live instrument:changed from
+  // the host badge / another screen). Applies via the normal setup-change path so
+  // pathway repaint/regenerate behave exactly like a user change — _hostApplying
+  // suppresses only the write-back echo.
+  function applyHostInstrument(s) {
+    const res = hostSettingsResolve(s);
+    if (!res) return;
+    if (hostStateMatchesPanel(res)) return;   // already showing it (breaks the react loop)
+    const { inst, count, midis } = res;
+    const instrEl = document.querySelector('[name="instrument"]');
+    const setupEl = document.querySelector('[name="stringSetup"]');
+    const hidden = $('virtuoso-custom-open-midis');
+    if (!instrEl || !setupEl) return;
+    // Exact built-in setup match else custom override vs the family standard.
+    let setupName = null;
+    for (const [k, v] of Object.entries(STRING_SETUPS)) {
+      if (v.instrument === inst && v.openMidis.length === midis.length
+          && v.openMidis.every((m, i) => m === midis[i])) { setupName = k; break; }
+    }
+    _hostApplying = true;
+    try {
+      instrEl.value = inst;
+      if (setupName) { setupEl.value = setupName; if (hidden) hidden.value = ''; }
+      else { setupEl.value = `${inst}_${count}_standard`; if (hidden) hidden.value = midis.join(','); }
+      syncInstrumentFamilyButtons();
+      // The full user-path handler: syncs, L1 store save, pathway repaint, regenerate.
+      setupEl.dispatchEvent(new Event('change', { bubbles: true }));
+      syncCustomTuningInputs();
+    } finally { _hostApplying = false; }
+  }
+  async function hostSettingsFetch() {
+    try {
+      const r = await fetch('/api/settings');
+      if (!r.ok) return null;
+      const s = await r.json();
+      if (!s || typeof s !== 'object') return null;
+      _hostSettingsCache = s;
+      return (s.instrument === 'guitar' || s.instrument === 'bass') ? s : null;
+    } catch (_) { return null; /* older host / offline */ }
+  }
+  // Boot-time reconcile. Direction matters: while this plugin is resident it
+  // tracks host changes LIVE (the instrument:changed subscription), so at boot a
+  // divergence means the LOCAL declaration is the survivor to trust — a pre-merge
+  // player's tuning lives only in the L1 store, and the host side may still be
+  // factory default ("chose Standard" and "never touched" are indistinguishable).
+  // Local wins and is pushed host-ward; a fresh install (no L1 store) adopts the
+  // host. Live external changes always PULL (the event handler below).
+  async function hostSettingsRead() {
+    const s = await hostSettingsFetch();
+    if (!s) return;
+    const res = hostSettingsResolve(s);
+    if (!res || hostStateMatchesPanel(res)) return;   // in sync — nothing to do
+    if (!instrumentStoreLoad()) { applyHostInstrument(s); return; }
+    hostSettingsWriteNow();
+  }
+  // Tuner badge: launch is the host's own action; display is a passive mirror of
+  // the bus 'tuner:frame' stream ({note, cents, freq, hasSignal}). Never draws on
+  // the tuner's surfaces or re-implements detection (the borrow boundary).
+  function syncTunerBadge() {
+    const b = $('virtuoso-tuner-badge');
+    if (b) b.hidden = typeof window.tuner?.toggle !== 'function';
+  }
+  function applyTunerFrame(d) {
+    const note = $('virtuoso-tuner-note'), meter = $('virtuoso-tuner-meter');
+    if (!note || !meter) return;
+    const has = d && d.hasSignal !== false && d.note;
+    note.textContent = has ? String(d.note) : 'Tuner';
+    const segs = meter.children;
+    const cents = has && Number.isFinite(Number(d.cents)) ? Number(d.cents) : null;
+    // 5 segments ≈ the host's 11-bar meter at our scale: lit segment tracks cents
+    // (±25¢ range), green in tune, amber off-pitch.
+    const lit = cents == null ? -1 : Math.max(0, Math.min(4, Math.round(cents / 10) + 2));
+    for (let i = 0; i < segs.length; i++) {
+      segs[i].classList.toggle('on', i === lit);
+      segs[i].classList.toggle('off-pitch', i === lit && Math.abs(cents) > 5);
+    }
+  }
+  // Profile badge: compact mirror (avatar + streak + rank) + LINK. Renders nothing
+  // unless the profile endpoint answers AND the player is onboarded (host rule).
+  async function loadProfileBadge() {
+    const btn = $('virtuoso-profile-badge');
+    if (!btn || !btn.hidden) return;   // absent or already rendered
+    try {
+      const r = await fetch('/api/profile');
+      if (!r.ok) return;
+      const p = await r.json();
+      if (!p || !p.onboarded) return;
+      let prog = null;
+      try { const r2 = await fetch('/api/profile/progress'); if (r2.ok) prog = await r2.json(); } catch (_) {}
+      let rank = '';
+      try { rank = String(window.v3Progression?.get?.()?.mastery_rank || ''); } catch (_) {}
+      const av = $('virtuoso-profile-avatar');
+      if (av && p.avatar_url) { av.src = p.avatar_url; av.hidden = false; }
+      const streak = Number(prog && prog.current_streak) || 0;
+      const bits = [];
+      if (streak > 0) bits.push(`${streak}🔥`);
+      if (rank) bits.push(rank);
+      if (!bits.length) bits.push(p.display_name || 'Profile');
+      const txt = $('virtuoso-profile-text');
+      if (txt) txt.textContent = bits.join(' · ');
+      btn.title = [p.display_name, rank, streak ? `${streak}-day streak` : '']
+        .filter(Boolean).join(' · ') || 'Profile';
+      btn.hidden = false;
+    } catch (_) { /* endpoint absent (web/smoke oddity) — badge stays hidden */ }
+  }
+  // One idempotent init: feature-detects each badge, loads host state, subscribes
+  // the bus streams. Called from bind() + a delayed retry (plugin load order — the
+  // tuner plugin / bus may register after us, mirroring the ptShowIdleStrip retry).
+  let _hostTopbarSubscribed = false;
+  function initHostTopbar() {
+    syncTunerBadge();
+    loadProfileBadge();
+    if (_hostTopbarSubscribed) return;
+    const bus = hostBus();
+    if (!bus || typeof bus.on !== 'function') return;
+    _hostTopbarSubscribed = true;
+    try { bus.on('tuner:frame', (e) => applyTunerFrame((e && e.detail) || e)); } catch (_) {}
+    try {
+      bus.on('instrument:changed', async () => {
+        if (_hostSelfEmit) return;   // our own emit bouncing back
+        // External change (host badge, another screen) — always a PULL.
+        const s = await hostSettingsFetch();
+        if (s) applyHostInstrument(s);
+      });
+    } catch (_) {}
   }
   // Header settings menu (⚙) + its prefs: accent theme (live), default XP mode (a
   // stored default — ready for the unbuilt XP store), default count-in (seeds the
@@ -19751,6 +20032,12 @@
         customOpenMidis: (hidden?.value || '').trim(),
       }));
     } catch (_) {}
+    // Host write-through (topbar parity): this function IS the user-driven L1
+    // declaration funnel — every call site is a real user panel change (pathway/
+    // programmatic writes go through setFieldSilent and never land here), so it is
+    // exactly the anti-leak boundary the host sync must respect. Debounced;
+    // no-ops while applying host → panel and on every host failure.
+    hostSettingsWriteSoon();
   }
   function instrumentStoreLoad() {
     try {
@@ -19844,7 +20131,11 @@
       ? customMidis
       : ((STRING_SETUPS[setupName] || {}).openMidis || []);
     let activeId = null;
-    // Built-in presets (Standard, Drop D, DADGAD, …).
+    // Built-in presets (Standard, Drop D, DADGAD, …). These keep their STABLE ids
+    // (`standard`, `d_standard`, …) — tests, stored prefs, and the L1 adapt paths
+    // key off them, so the host merge must never remove or rename them (deliberate
+    // deviation from the spec's "host name wins": id stability beats label
+    // provenance; the labels are near-identical anyway).
     const presetGroup = document.createElement('optgroup');
     presetGroup.label = 'Built-in';
     for (const p of presets) {
@@ -19858,6 +20149,29 @@
       }
     }
     sel.appendChild(presetGroup);
+    // Host named tunings the curated set doesn't carry (topbar parity): the host
+    // tuning table is the fuller catalog (Drop A/Ab, Open E, …) — midis-duplicates
+    // of a built-in preset are skipped. Round-tripping to the host by NAME is
+    // unaffected by which option the user picks (hostTuningNameForMidis matches by
+    // resolved midis), as is the offset:true intent tag (applyTuningAdaptL1
+    // matches TUNING_PRESETS by midis).
+    const hostEntries = hostTuningEntries(family, count)
+      .filter(e => !presets.some(p => p.midis.length === e.midis.length && p.midis.every((m, i) => m === e.midis[i])));
+    if (hostEntries.length) {
+      const hostGroup = document.createElement('optgroup');
+      hostGroup.label = 'FeedBack';
+      for (const e of hostEntries) {
+        const opt = document.createElement('option');
+        opt.value = `host:${e.name}`;
+        opt.textContent = e.name;
+        opt.dataset.midis = e.midis.join(',');
+        hostGroup.appendChild(opt);
+        if (!activeId && effective.length === e.midis.length && effective.every((m, i) => m === e.midis[i])) {
+          activeId = `host:${e.name}`;
+        }
+      }
+      sel.appendChild(hostGroup);
+    }
     // Saved tunings filtered to the current family + string count.
     const mine = savedTunings.filter(t => t.family === family && t.string_count === count);
     if (mine.length) {
@@ -19882,7 +20196,9 @@
     customOpt.textContent = 'Custom…';
     sel.appendChild(customOpt);
     if (!activeId && customMidis && customMidis.length === count) activeId = 'custom';
-    sel.value = activeId || (presets[0] && presets[0].id) || 'custom';
+    // Fallback = the first listed option (the host group may have absorbed the
+    // built-in Standard entry, so presets[0].id can be absent from the DOM).
+    sel.value = activeId || (sel.options[0] && sel.options[0].value) || 'custom';
     syncCustomTuningInputs();
     updateSetupButton();   // header Setup button shows the live instrument + tuning
   }
@@ -19979,10 +20295,10 @@
   function onTuningPresetChange() {
     const sel = $('virtuoso-tuning-select'); if (!sel) return;
     const hidden = $('virtuoso-custom-open-midis');
-    // Saved tunings come back as `saved:<id>`; the midis live on the option's
-    // dataset.midis (set by syncTuningOptions). Apply them as a custom
-    // override against the family's standard stringSetup.
-    if (sel.value && sel.value.startsWith('saved:')) {
+    // Saved tunings come back as `saved:<id>`, host named tunings as `host:<name>`;
+    // the midis live on the option's dataset.midis (set by syncTuningOptions).
+    // Apply them as a custom override against the family's standard stringSetup.
+    if (sel.value && (sel.value.startsWith('saved:') || sel.value.startsWith('host:'))) {
       const opt = sel.options[sel.selectedIndex];
       const midis = (opt?.dataset.midis || '').split(',').map(Number).filter(Number.isFinite);
       if (midis.length) {
@@ -25604,13 +25920,22 @@
     ptShowIdleStrip();
     setTimeout(ptShowIdleStrip, 2000);
     $('virtuoso-tuner-done')?.addEventListener('click', () => stopTuner());
-    // Courtesy hook for the third-party floating tuner (never touch its DOM —
-    // its own public API only; the click is impossible unless feature-detect
-    // showed the button).
-    $('virtuoso-tuner-ext')?.addEventListener('click', () => {
-      toggleSetupPopover(false);
+    // Header tuner badge (topbar parity) — the host topbar card's exact action.
+    // Feature-detected by initHostTopbar/syncTunerBadge; never touches the tuner's
+    // DOM, its own public API only.
+    $('virtuoso-tuner-badge')?.addEventListener('click', () => {
       try { window.tuner?.toggle?.(); } catch (_) {}
     });
+    // Header profile badge → the host profile screen (LINK, never a second
+    // profile implementation).
+    $('virtuoso-profile-badge')?.addEventListener('click', () => goScreen('v3-profile'));
+    // Host topbar parity init: badges + /api/tunings + host-settings read (host
+    // wins over the L1 restore above for the player's guitar/bass identity) +
+    // bus subscriptions. Delayed retry covers plugin load order — the tuner
+    // plugin / bus may register after us (mirrors the ptShowIdleStrip retry).
+    loadHostTunings().then(() => hostSettingsRead());
+    initHostTopbar();
+    setTimeout(initHostTopbar, 2000);
     $('virtuoso-tuning-select')?.addEventListener('change', updateSetupButton);
     document.addEventListener('click', (e) => {
       const pop = $('virtuoso-setup-popover'); if (!pop || pop.hidden) return;
@@ -25620,6 +25945,9 @@
     updateSetupButton();
     // Header settings menu (⚙): toggle, items, close-on-outside-click.
     $('virtuoso-settings-btn')?.addEventListener('click', (e) => { e.stopPropagation(); toggleSettingsMenu(); });
+    // P-sheet affordance (the header progress chip is hidden pending the
+    // profile-merge design; P hotkey + session-end auto-present stay primary).
+    $('virtuoso-settings-progress')?.addEventListener('click', () => { toggleSettingsMenu(false); toggleProgressSheet(true); });
     $('virtuoso-settings-shortcuts')?.addEventListener('click', () => { toggleSettingsMenu(false); toggleCheatSheet(true); });
     $('virtuoso-settings-host')?.addEventListener('click', () => {
       toggleSettingsMenu(false);
