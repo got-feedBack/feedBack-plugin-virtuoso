@@ -13816,10 +13816,21 @@
       const f = await borrowHostViz('jumpingtab', '/api/plugins/jumpingtab/screen.js');
       return f ? { factory:f, label:'Jumping Tab' } : { factory:makeBuiltin2DRenderer, label:'2D Highway (fallback)' };
     }
-    // The in-tree 2D highway, DIRECTLY selectable (view dropdown, 2026-07-10).
-    // Historically only the builtin_2d/highway_3d fallback; 'highway_2d' is its
-    // first-class slot. No host borrow — always available, any string count.
-    if (kind === 'highway_2d') return { factory:makeBuiltin2DRenderer, label:'2D Highway' };
+    // 'highway_2d' = the 2D Highway slot (view dropdown, 2026-07-10). The
+    // TARGET is the host's "Classic 2D Highway" (Byron's), but that renderer is
+    // host-CORE, not borrowable today — HOST CHECK 2026-07-10: it's the private
+    // _defaultRenderer inside createHighway() (static/highway.js), picker id
+    // 'default' (RESERVED), no feedBackViz factory, closure-fed (no bundle) and
+    // websocket-fed (no chart setter). Verdict MIRROR; flips to BORROW when the
+    // host ships a bundle-driven feedBackViz_highway_2d factory (asked via host
+    // issue). Borrow-FIRST probe (factory global only — no speculative script
+    // fetch, its URL doesn't exist yet and a blind 404 trips the smoke
+    // console-guards): the moment the host registers the factory this slot
+    // upgrades itself; until then the in-tree 2D highway renders.
+    if (kind === 'highway_2d') {
+      const f = vizFactoryFor('highway_2d');
+      return f ? { factory:f, label:'2D Highway (host)' } : { factory:makeBuiltin2DRenderer, label:'2D Highway' };
+    }
     if (kind === 'tab_2d') return { factory:makeBuiltin2DTabRenderer, label:'Tab' };
     if (kind === 'notation_2d') return { factory:makeBuiltin2DNotationRenderer, label:'Notation' };
     // Piano Roll — groundwork; borrows the host Piano Highway viz. Reachable
