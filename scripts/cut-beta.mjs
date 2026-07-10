@@ -126,6 +126,12 @@ function writeTree(root) {
   // static/** verbatim
   for (const p of listTracked(SOURCE, 'static')) out(root, p, show(SOURCE, p, 'buffer'));
 
+  // assets/** verbatim — the nav icon (plugin.json `icon`) + the self-hosted
+  // card-skin fonts under assets/fonts/, served by routes.py's /font route.
+  // Omitting them (prior cuts only copied static/) 404'd every skin font and
+  // dropped the beta's nav icon.
+  for (const p of listTracked(SOURCE, 'assets')) out(root, p, show(SOURCE, p, 'buffer'));
+
   // license/readme verbatim (if tracked)
   const tracked = new Set(listTracked(SOURCE));
   for (const p of COPY_VERBATIM) if (tracked.has(p)) out(root, p, show(SOURCE, p, 'buffer'));
