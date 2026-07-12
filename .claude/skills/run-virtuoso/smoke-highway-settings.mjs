@@ -38,6 +38,13 @@ async function main() {
   try {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
     page.on("pageerror", (e) => failures.push(`pageerror: ${e.message}`));
 
     // Load + activate Virtuoso.

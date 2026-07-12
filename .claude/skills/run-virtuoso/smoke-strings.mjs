@@ -25,6 +25,13 @@ const browser = await chromium.launch({ headless: true });
 try {
   await ensureHost();
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
   const pageErrs = [];
   page.on("pageerror", e => pageErrs.push(e.message));
   await page.goto(`${HOST}/`, { waitUntil: "domcontentloaded" });
@@ -382,6 +389,38 @@ try {
   // sub-E pitch. Reaching BELOW the root (the low-fifth idiom) is the deferred
   // bassRootGrip downward-reach feature (ROADMAP open thread), not this fix.
   ok(lowB.n > 0 && lowB.strings.includes(0), "(13c) 5-string bass scale actually plays ON the low B string (s=0)", `strings=[${lowB.strings.join(",")}]`);
+
+  console.log("-- (14) power-chord grip is INTERVAL-aware: drop tuning collapses to the same-fret barre --");
+  // powerChordGrip hardcoded +2 on s1/s2 (standard-4ths assumption) — in every
+  // drop-X/DADGAD/Open-D tuning (s0→s1 = a FIFTH) that sounded root + MAJOR 6TH
+  // instead of root+5th (guitar-pedagogy 2026-07-12). Fixed by-pitch: drop-D
+  // 5oct = the iconic one-finger barre {s0:F, s1:F, s2:F} = root·5th·octave;
+  // standard keeps {F, F+2, F+2}. Drives strum_comp with chordOverride=5oct.
+  const pchord = await page.evaluate(() => {
+    const run = (su) => {
+      window.__t.setAdvanced(true); window.__t.setTuning(null);
+      window.__t.setForm({ stringSetup: su, practiceType: "strum_comp", key: "D", chordOverride: "5oct" });
+      const cfg = window.Virtuoso.readConfig();
+      const ex = window.Virtuoso.generateExercise(cfg);
+      const t0 = Math.min(...ex.chart.notes.map(n => n.t));
+      // Strum notes are ROLL-staggered a few ms per string — collect the first
+      // chord within a strum window, one note per string.
+      const first = [];
+      for (const n of ex.chart.notes.filter(n => n.t < t0 + 0.09 && n.s <= 2).sort((a, b) => a.s - b.s)) {
+        if (!first.some(p => p.s === n.s)) first.push({ s: n.s, f: n.f });
+      }
+      const opens = su === "guitar_6_drop_d" ? [38, 45, 50, 55, 59, 64] : [40, 45, 50, 55, 59, 64];
+      const midis = first.map(p => opens[p.s] + p.f);
+      return { first, ivs: midis.slice(1).map(m => m - midis[0]) };
+    };
+    const out = { drop: run("guitar_6_drop_d"), std: run("guitar_6_standard") };
+    window.__t.setAdvanced(false); window.__t.setForm({ stringSetup: "guitar_6_standard" });  // self-clean
+    return out;
+  });
+  ok(pchord.drop.first.length === 3 && pchord.drop.first.every(p => p.f === pchord.drop.first[0].f),
+     "(14a) drop-D 5oct power chord = SAME-FRET barre across s0/s1/s2", JSON.stringify(pchord.drop.first));
+  ok(pchord.drop.ivs.join(",") === "7,12", "(14b) drop-D barre sounds root·5th·octave (was root·MAJOR-6TH·octave)", `ivs=[${pchord.drop.ivs}]`);
+  ok(pchord.std.ivs.join(",") === "7,12", "(14c) standard-tuning grip still sounds root·5th·octave (F/F+2/F+2 unchanged)", `ivs=[${pchord.std.ivs}] frets=${JSON.stringify(pchord.std.first)}`);
 
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  strings/tuning: ${fails} failure(s)`);
