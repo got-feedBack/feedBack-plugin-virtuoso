@@ -18508,6 +18508,7 @@
   // workingTuning nor /api/settings — the verifier's tuning reference is solely
   // the per-call ctx Virtuoso already passes. This sync must never replace it.
   let _hostTuningsByKey = null;   // {'guitar-6': {name: [hz,…]}} from GET /api/tunings
+  let _hostTuningMidis = null;    // {'guitar-6': {name: [midi,…]}} — exact integers (host ≥ #829)
   let _hostTuningsRef = 440;      // referencePitch the hz table was scaled to
   let _hostSettingsCache = null;  // last GET /api/settings body (pathway echo)
   let _hostApplying = false;      // true while applying host → panel (no write echo)
@@ -18516,16 +18517,23 @@
   function hostStandardMidisFor(family, count) {
     return (STRING_SETUPS[`${family}_${count}_standard`] || {}).openMidis || null;
   }
-  // The host serves tunings as FREQUENCIES scaled to its reference pitch; recover
-  // absolute midis against that same reference (A4 = 69 at referencePitch).
+  // Host tunings → absolute midis. Prefer the exact integers the host serves
+  // (`tuningMidis`, host #829 — no float round-trip); fall back to recovering
+  // them from the FREQUENCY table against its reference pitch (A4 = 69 at
+  // referencePitch) for hosts predating #829.
   function hostTuningEntries(family, count) {
-    const table = _hostTuningsByKey && _hostTuningsByKey[`${family}-${count}`];
+    const key = `${family}-${count}`;
+    const table = _hostTuningsByKey && _hostTuningsByKey[key];
     if (!table) return [];
+    const exact = (_hostTuningMidis && _hostTuningMidis[key]) || {};
     const ref = _hostTuningsRef || 440;
     const out = [];
     for (const [name, freqs] of Object.entries(table)) {
-      if (!Array.isArray(freqs) || freqs.length !== count) continue;
-      const midis = freqs.map(hz => Math.round(69 + 12 * Math.log2(hz / ref)));
+      let midis = exact[name];
+      if (!Array.isArray(midis) || midis.length !== count) {
+        if (!Array.isArray(freqs) || freqs.length !== count) continue;
+        midis = freqs.map(hz => Math.round(69 + 12 * Math.log2(hz / ref)));
+      }
       if (midis.every(m => Number.isFinite(m) && m >= 0 && m <= 127)) out.push({ name, midis });
     }
     return out;
@@ -18541,6 +18549,7 @@
       if (!r.ok) return;
       const d = await r.json();
       _hostTuningsByKey = (d && d.tunings) || null;
+      _hostTuningMidis = (d && d.tuningMidis) || null;   // exact integers (host #829); null on older hosts
       _hostTuningsRef = Number(d && d.referencePitch) || 440;
       syncTuningOptions();   // repaint the dropdown with the host named group
     } catch (_) { /* older host / offline — Virtuoso presets only */ }
