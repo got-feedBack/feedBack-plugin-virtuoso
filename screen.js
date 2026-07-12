@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.14';
+  const VIRTUOSO_VERSION = '0.1.15';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -1264,8 +1264,12 @@
       goal:'The foundational bass box: root, fifth, octave, fifth, anchored on each chord. Before scales, a bassist owns this shape — it outlines any chord and lays the harmonic floor under the band. The skill is finding the root and reaching the 5th/octave by feel in any key.',
       scales:['major','natural_minor'],
       tempoTiers:[60, 80, 100, 120],
-      base:{ practiceType:'root_fifth_octave', scale:'major', progression:'I-IV-V', chordDepth:'triad', chordOverride:'auto', meter:'4/4', subdivision:'quarter', bpm:80, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'position', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'C', fretMin:0, fretMax:5 },
-      vary:[ { key:'C', progression:'I-IV-V' }, { key:'G', progression:'I-IV-V' }, { key:'A', progression:'i-VII-VI-VII', scale:'natural_minor' }, { key:'E', progression:'I-V-vi-IV' }, { key:'D', progression:'I-IV-V' } ]
+      base:{ practiceType:'root_fifth_octave', scale:'major', progression:'I-IV-V', chordDepth:'triad', chordOverride:'auto', meter:'4/4', subdivision:'quarter', bpm:80, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'position', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'C', fretMin:0, fretMax:5, rfoPattern:'r5o' },
+      // Final vary = the low-fifth reach (R–low5–5–8): the same box, now also
+      // dropping BELOW the root — the move the low string exists for (and the
+      // whole point of a 5-string's B). rfoPattern is coded explicitly in base
+      // ('r5o') so the variant never leaks across this rung's own vary steps.
+      vary:[ { key:'C', progression:'I-IV-V' }, { key:'G', progression:'I-IV-V' }, { key:'A', progression:'i-VII-VI-VII', scale:'natural_minor' }, { key:'E', progression:'I-V-vi-IV' }, { key:'D', progression:'I-IV-V' }, { key:'C', progression:'I-IV-V', rfoPattern:'low5', fretMin:0, fretMax:7 } ]
     },
     bass_octave_groove: {
       label:'Octave Groove',
@@ -4454,6 +4458,10 @@
       // rhTechMode (Bass Groove & Right-Hand ladder): pulse|crossing|rake|three_finger.
       // Pathway-driven hidden field; absent = 'pulse' (the back-compatible default).
       rhTechMode: data.get('rhTechMode') || 'pulse',
+      // rfoPattern (root_fifth_octave): 'r5o' (default R-5-8-5, the canonical box)
+      // | 'low5' (R–low5–5–8, the fifth-below reach — bass-pedagogy 2026-07-12).
+      // Pathway-driven hidden field; absent = the untouched default.
+      rfoPattern: data.get('rfoPattern') || 'r5o',
       // walkApproach (Bass Lines & Changes ladder): how the walking line targets the
       // NEXT chord on the bar's last beat — scale (current scale-walk) | chromatic
       // (½-step into the next root) | dominant (the 5th of the next chord, V→I) |
@@ -11308,7 +11316,18 @@
       while (opens[s] + f < targetMidi - 6 && f + 12 <= 17) f += 12;
       return { s, f, midi: opens[s] + f };
     };
-    return { root, fifth: onString(root.s + 1, root.midi + 7), octave: onString(root.s + 2, root.midi + 12) };
+    // lowFifth — the P5 BELOW the root on the string below (the "why own a
+    // 5-string" reach; bass-pedagogy spec 2026-07-12). Guards: root.s>=1 (a
+    // string exists below) AND root.f>=2 (at f0/f1 the pc-math octave-push
+    // wraps the note UP a 4th — the opposite of the intent), plus an exact
+    // pitch check (never trust pc arithmetic alone on a custom tuning). Null
+    // when unavailable — consumers degrade to the upper fifth.
+    let lowFifth = null;
+    if (root.s >= 1 && root.f >= 2) {
+      const cand = onString(root.s - 1, root.midi - 7);
+      if (cand.midi === root.midi - 7 && cand.f >= 0) lowFifth = cand;
+    }
+    return { root, fifth: onString(root.s + 1, root.midi + 7), octave: onString(root.s + 2, root.midi + 12), lowFifth };
   }
 
   // right_hand_technique — pitch-INVISIBLE plucking-hand stamina (alternating i-m /
@@ -11371,7 +11390,15 @@
     while (t < totalTime - 0.001) {
       const grip = bassRootGrip(cfg, chordRootForDegree(cfg, degrees[bar % degrees.length]), prevMidi);
       if (grip) {
-        const seq = [grip.root, grip.fifth, grip.octave, grip.fifth];   // R-5-8-5
+        // Default R-5-8-5 — the canonical pre-scales box, deliberately untouched.
+        // rfoPattern 'low5' (opt-in, bass-pedagogy spec 2026-07-12) = R–low5–5–8:
+        // root on the downbeat, then the fifth BELOW on the string below (the
+        // 5-string reach), traversing both fifths + the octave. When the low
+        // fifth is unreachable (root on the lowest string / low fret) the grip
+        // degrades to the upper fifth — the pattern stays playable everywhere.
+        const seq = (cfg.rfoPattern === 'low5')
+          ? [grip.root, grip.lowFifth || grip.fifth, grip.fifth, grip.octave]
+          : [grip.root, grip.fifth, grip.octave, grip.fifth];   // R-5-8-5
         for (let b = 0; b < beatsPerBar; b++) {
           const p = seq[b % seq.length], nt = t + b * beatSec;
           if (nt < totalTime) notes.push(noteDefaults({ t:Number(nt.toFixed(6)), s:p.s, f:p.f, sus, ac:(b === 0) }));

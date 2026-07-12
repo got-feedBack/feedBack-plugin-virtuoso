@@ -422,6 +422,51 @@ try {
   ok(pchord.drop.ivs.join(",") === "7,12", "(14b) drop-D barre sounds root·5th·octave (was root·MAJOR-6TH·octave)", `ivs=[${pchord.drop.ivs}]`);
   ok(pchord.std.ivs.join(",") === "7,12", "(14c) standard-tuning grip still sounds root·5th·octave (F/F+2/F+2 unchanged)", `ivs=[${pchord.std.ivs}] frets=${JSON.stringify(pchord.std.first)}`);
 
+  console.log("-- (15) bass low-fifth reach (rfoPattern='low5', bass-pedagogy 2026-07-12) --");
+  // R–low5–5–8: the fifth BELOW the root on the string below (the reach the low
+  // string exists for). Default R-5-8-5 must be BYTE-IDENTICAL with the field
+  // absent (the canonical pre-scales box never changes under a beginner);
+  // unreachable low fifth (root on the lowest string) degrades to the upper 5th.
+  const rfo = await page.evaluate(() => {
+    const run = (su, pattern, key, fretMax) => {
+      window.__t.setAdvanced(true); window.__t.setTuning(null);
+      // Bass-native practice types only enter the select once the FAMILY is
+      // bass — dispatch a real setup change first (mirrors row 10), else the
+      // silent practiceType set falls back to a scale exercise.
+      const setup = document.querySelector('#virtuoso-controls [name="stringSetup"]');
+      setup.value = su; setup.dispatchEvent(new Event("change", { bubbles: true }));
+      const pt = document.querySelector('[name="practiceType"]');
+      pt.value = "root_fifth_octave"; pt.dispatchEvent(new Event("change", { bubbles: true }));
+      const rp = document.querySelector('[name="rfoPattern"]'); if (rp) rp.value = pattern || "";
+      window.__t.setForm({ key, progression: "I-IV-V", fretMin: 0, fretMax: fretMax || 7 });
+      const cfg = window.Virtuoso.readConfig();
+      if (cfg.mode !== "root_fifth_octave") return `WRONG-MODE:${cfg.mode}`;
+      const ex = window.Virtuoso.generateExercise(cfg);
+      return ex.chart.notes.map(n => `${n.t.toFixed(3)}:${n.s}:${n.f}`).join("|");
+    };
+    const opens5 = [23, 28, 33, 38, 43];
+    const firstBar = (sig) => sig.split("|").slice(0, 4).map(k => { const [, s, f] = k.split(":").map(Number); return { s, f }; });
+    // (a) geometry on 5-string, key C (root lands fretted above the low B).
+    const low5 = firstBar(run("bass_5_standard", "low5", "C"));
+    const midis = low5.map(p => opens5[p.s] + p.f);
+    // (b) default parity: no pattern field vs explicit 'r5o' — identical charts.
+    const def = run("bass_5_standard", "", "C");
+    const r5o = run("bass_5_standard", "r5o", "C");
+    // (c) null-degrade: 4-string key E root sits on the lowest string (s0) →
+    //     low fifth unreachable → the low5 chart equals swapping in the UPPER 5th.
+    const deg = firstBar(run("bass_4_standard", "low5", "E", 5));
+    const opens4 = [28, 33, 38, 43];
+    const degMidis = deg.map(p => opens4[p.s] + p.f);
+    const rp = document.querySelector('[name="rfoPattern"]'); if (rp) rp.value = "";   // self-clean
+    window.__t.setAdvanced(false); window.__t.setForm({ stringSetup: "guitar_6_standard" });
+    return { midis, defEqualsR5o: def === r5o, defSig: def.split("|").length, degMidis };
+  });
+  ok(rfo.midis.length === 4 && rfo.midis[1] === rfo.midis[0] - 7 && rfo.midis[2] === rfo.midis[0] + 7 && rfo.midis[3] === rfo.midis[0] + 12,
+     "(15a) low5 bar = R, low-5th (root−7, the string below), 5th, octave", `midis=[${rfo.midis}]`);
+  ok(rfo.defEqualsR5o && rfo.defSig > 0, "(15b) default R-5-8-5 chart is BYTE-IDENTICAL with the field absent vs 'r5o' (no leak into the canonical box)");
+  ok(rfo.degMidis.length === 4 && rfo.degMidis[1] === rfo.degMidis[0] + 7,
+     "(15c) unreachable low fifth (4-string, root on the lowest string) degrades to the UPPER 5th", `midis=[${rfo.degMidis}]`);
+
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  strings/tuning: ${fails} failure(s)`);
   process.exit(fails ? 1 : 0);
