@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.13';
+  const VIRTUOSO_VERSION = '0.1.14';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -10876,7 +10876,16 @@
   }
   // A movable power-chord grip (root + 5th [+ octave]) on the low string-set —
   // built directly from the interval geometry (CAGED has no power-chord template).
-  // Standard 4ths between the low strings: 5th = next string +2 frets, oct = +2 up two strings.
+  // Fret offsets are computed BY PITCH against the actual open-string intervals,
+  // not hardcoded (+2 assumed standard 4ths — WRONG in drop tunings, where the
+  // s0→s1 fifth collapses the grip to the iconic SAME-FRET one-finger barre:
+  // {s0:F, s1:F, s2:F} = root·5th·octave. The old +2 sounded root + MAJOR 6TH
+  // in every drop-X/DADGAD/Open-D tuning — a real wrong pitch. Guitar-pedagogy
+  // 2026-07-12: gate on the interval (opens[1]-opens[0] === 7 collapses; DADGAD
+  // and Open D are TRUE positives — the barre is the idiomatic voicing there),
+  // apply by default (in a drop tuning the barre is the only correct voicing),
+  // F=0 = a valid open voicing. templateFromPositions fingers a same-fret row
+  // as a shared-finger barre (fg 1) by construction.
   function powerChordGrip(cfg, rootPc, quality, prevRootFret) {
     const opens = openMidisForConfig(cfg);
     if (opens.length < 3) return null;
@@ -10884,8 +10893,13 @@
     let f = (((rootPc - open0) % 12) + 12) % 12;                 // 0..11 on the lowest string
     if (prevRootFret != null && prevRootFret >= 0 && f + 12 <= 12 &&
         Math.abs((f + 12) - prevRootFret) < Math.abs(f - prevRootFret)) f += 12;
-    const gripNotes = [{ s:0, f, midi:opens[0] + f }, { s:1, f:f + 2, midi:opens[1] + f + 2 }];
-    if (quality === '5oct') gripNotes.push({ s:2, f:f + 2, midi:opens[2] + f + 2 });
+    const fifthF = f + 7 - (opens[1] - opens[0]);                // 5th above root, on s1
+    if (fifthF < 0) return null;                                 // hostile custom tuning — no grippable 5th
+    const gripNotes = [{ s:0, f, midi:opens[0] + f }, { s:1, f:fifthF, midi:opens[1] + fifthF }];
+    if (quality === '5oct') {
+      const octF = f + 12 - (opens[2] - opens[0]);               // octave above root, on s2
+      if (octF >= 0) gripNotes.push({ s:2, f:octF, midi:opens[2] + octF });
+    }
     const name = chordName(rootPc, quality);
     return { shape:'power', rootFret:f, gripNotes, template:templateFromPositions(name, gripNotes, cfg, false) };
   }
