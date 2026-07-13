@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.9';
+  const VIRTUOSO_VERSION = '0.2.0';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -16999,6 +16999,27 @@
     const toneList = pcs.length ? pcs.join(' · ') : 'No pitch was detected.';
     const analysis = noteCount > 0 ? jamRecapAnalysisLines() : [];
     const analysisHtml = analysis.map(line => `<div class="virtuoso-jam-recap-line">${esc(line)}</div>`).join('');
+    // Gold rung (career passports): the comb-verified conformity readout,
+    // always shown when notes were confirmed — observability before gating —
+    // and the mint moment when the whole bar clears (gained-only).
+    const gold = goldEvaluate(s);
+    let goldHtml = '';
+    if (gold) {
+      const ear = gold.verifier === 'comb'
+        ? 'verified by the harmonic-comb ear'
+        : 'heard by the browser ear — Gold listens through the desktop verifier';
+      goldHtml = `<div class="virtuoso-jam-recap-line">Verified: <b>${Math.round(gold.inKeyPct * 100)}%</b> in key · <b>${Math.round(gold.inChordPct * 100)}%</b> chord tones · over <b>${gold.chordHops}</b> chord change${gold.chordHops === 1 ? '' : 's'} <span class="virtuoso-jam-recap-sub">(${esc(ear)})</span></div>`;
+      if (gold.met) {
+        const styleId = currentJamStyleId();
+        const minted = goldStore(styleId, gold);
+        emitProgress('gold_improv', styleId, {
+          style: styleId, durationMs: gold.durationMs,
+          inKeyPct: Math.round(gold.inKeyPct * 100) / 100,
+          chords: gold.chordHops, pcs: gold.pcs, verifier: gold.verifier,
+        });
+        goldHtml += `<div class="virtuoso-jam-recap-line virtuoso-jam-recap-gold">🏅 <b>GOLD</b> — ${minted ? 'a verified improv: this style\'s gold rung is yours.' : 'another gold-bar jam (already minted).'}</div>`;
+      }
+    }
     const intentLine = jamIntent ? `<div class="virtuoso-jam-recap-line">Intent: <b>${esc(jamIntent)}</b></div>` : '';
     if (title) title.textContent = 'Jam mirror';
     body.innerHTML =
@@ -17009,7 +17030,7 @@
           ? `<div class="virtuoso-jam-recap-line">${noteCount} notes — you moved through <b>${pcs.length}</b> tone${pcs.length === 1 ? '' : 's'}:</div>`
           : `<div class="virtuoso-jam-recap-line">No pitch was detected, so this stays a form-and-intent recap.</div>`) +
         `<div class="virtuoso-jam-recap-tones">${esc(toneList)}</div>` +
-        analysisHtml +
+        analysisHtml + goldHtml +
         `<div class="virtuoso-jam-recap-sub">A mirror, never a score. Use the form, intent, tones, and targets as prompts for the next pass.</div>` +
         `<div class="virtuoso-jam-recap-cta">` +
           `<button type="button" class="virtuoso-results-primary" data-act="jam-again">Jam again</button>` +
@@ -20544,7 +20565,7 @@
   // accumulator feeds the warm, no-score recap at a deliberate jam stop. Reset
   // each jamPlay (a new session); NOT reset on a wrap hot-swap (same session).
   const JAM_PLAYED_FADE_MS = 1400;
-  function jamMirrorReset() { _jamPlayed = []; _jamMirror = { noteCount: 0, pcs: new Set(), lastPc: -1, lastMs: 0 }; }
+  function jamMirrorReset() { _jamPlayed = []; _jamMirror = { noteCount: 0, pcs: new Set(), lastPc: -1, lastMs: 0 }; goldReset(); }
   function jamMirrorDebugAdd(pc, chartT) {
     if (!_jamMirror) jamMirrorReset();
     const p = ((pc % 12) + 12) % 12;
@@ -20614,7 +20635,135 @@
     _jamMirror.pcs.add(pc);
     _jamPlayed.push({ pc, midi, t: now, chartT: currentPracticeTime });
     if (_jamPlayed.length > 192) _jamPlayed.shift();
+    goldPropose(midi, pc);   // comb-confirm (or YIN-classify) for the Gold rung
   }
+  // ── Gold improv verifier (career passports Gold rung) ─────────────────────
+  // The harmonic-comb NoteVerifier is the DETECTION AUTHORITY: the YIN mirror
+  // proposes each fresh note, the comb confirms it (a single-note verify
+  // target against the player's real tuning), and only confirmed notes
+  // classify against the chord/key under the playhead. During a jam the
+  // verify slot idles (a jam chart has no judged notes — ndPushVerifyTarget
+  // never pushes), so gold may own it. Browser/downlevel (no comb) falls back
+  // to YIN-classified notes with verifier:'yin'; the Gold bar is comb-only by
+  // default — the recap says which ear listened. Values are PLACEHOLDERS
+  // until the on-device tuning session calibrates them.
+  const GOLD_BAR = {
+    minMs: 180000,       // ≥3 minutes of deliberate jam
+    minInKeyPct: 0.8,    // of confirmed notes
+    minChordHops: 6,     // chord-segment changes played over (loops recount)
+    minPcs: 7,           // distinct tones confirmed
+    combOnly: true,
+  };
+  let _goldMirror = null;
+  let _goldPending = null;   // {pc, chartT, until} — one comb confirm in flight
+
+  function goldReset() {
+    _goldMirror = { confirmed: 0, inChord: 0, inKey: 0, outside: 0,
+                    pcs: new Set(), chordHops: 0, lastSeg: null, comb: false };
+    _goldPending = null;
+  }
+
+  function goldKeyScalePcs() {
+    const cfg = activeBundle && activeBundle.config;
+    if (!cfg) return null;
+    const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
+    const ivs = SCALE_INTERVALS[cfg.scale] || [];
+    return ivs.length ? new Set(ivs.map(i => (keyPc + i) % 12)) : null;
+  }
+
+  function goldClassify(pc, chartT) {
+    const g = _goldMirror;
+    if (!g) return;
+    const info = jamCarrierInfo(chartT);
+    const cur = info && info.cur;
+    g.confirmed++;
+    g.pcs.add(pc);
+    const seg = cur ? `${cur.rootPc ?? 'x'}:${(cur.cpcs || []).join('')}` : null;
+    if (seg && seg !== g.lastSeg) { g.chordHops++; g.lastSeg = seg; }
+    if (cur && Array.isArray(cur.cpcs) && cur.cpcs.includes(pc)) { g.inChord++; g.inKey++; return; }
+    const scale = goldKeyScalePcs();
+    if (scale && scale.has(pc)) { g.inKey++; return; }
+    g.outside++;
+  }
+
+  function goldCombActive() { return _ndVerifyMode && isJamMode() && ndVerifyAvailable(); }
+
+  // Any correct (string, fret) position produces the same pitch for the comb.
+  function goldMidiTarget(midi, omOverride) {
+    const om = omOverride || _ptOpenMidis || [];
+    for (let st = om.length - 1; st >= 0; st--) {
+      const f = midi - om[st];
+      if (f >= 0 && f <= 21) return [{ s: st, f, b: false }];
+    }
+    return null;
+  }
+
+  function goldPropose(midi, pc) {
+    if (!_goldMirror) return;
+    if (!goldCombActive()) {
+      // No comb: classify the YIN note directly; the recap and the Gold bar
+      // both know this take was heard by the browser ear.
+      goldClassify(pc, currentPracticeTime);
+      return;
+    }
+    _goldMirror.comb = true;
+    const tgt = goldMidiTarget(midi);
+    if (!tgt) return;
+    _goldPending = { pc, chartT: currentPracticeTime, until: performance.now() + 350 };
+    try { window.noteDetect.setVerifyTarget(tgt, _ndVerifyCtx || { openMidis: _ptOpenMidis || [] }); } catch (_) { /* comb briefly gone */ }
+  }
+
+  // Registered once at load; no-ops unless a confirm is pending, so it never
+  // fights the exercise verifier's own listener (whose hits it ignores).
+  function goldOnVerify(ev) {
+    const d = ev && ev.detail;
+    const pending = _goldPending;
+    if (!d || !d.isHit || !pending) return;
+    _goldPending = null;
+    try { window.noteDetect.setVerifyTarget(null); } catch (_) { /* ok */ }
+    if (performance.now() <= pending.until) goldClassify(pending.pc, pending.chartT);
+  }
+  if (typeof window !== 'undefined') window.addEventListener('notedetect:verify', goldOnVerify);
+
+  function goldEvaluate(s) {
+    const g = _goldMirror;
+    if (!g || !g.confirmed) return null;
+    const inKeyPct = g.inKey / g.confirmed;
+    const res = {
+      confirmed: g.confirmed,
+      inChordPct: g.inChord / g.confirmed,
+      inKeyPct,
+      chordHops: g.chordHops,
+      pcs: g.pcs.size,
+      verifier: g.comb ? 'comb' : 'yin',
+      durationMs: (s && s.duration_ms) || 0,
+    };
+    res.met = res.durationMs >= GOLD_BAR.minMs
+      && inKeyPct >= GOLD_BAR.minInKeyPct
+      && res.chordHops >= GOLD_BAR.minChordHops
+      && res.pcs >= GOLD_BAR.minPcs
+      && (!GOLD_BAR.combOnly || g.comb);
+    return res;
+  }
+
+  // Gained-only: the first qualifying jam mints the style's gold; nothing
+  // ever un-mints it.
+  function goldStore(styleId, res) {
+    const o = progressLoad();
+    o.goldImprov = o.goldImprov || {};
+    if (o.goldImprov[styleId]) return false;
+    o.goldImprov[styleId] = {
+      at: Date.now(),
+      durationMs: res.durationMs,
+      inKeyPct: Math.round(res.inKeyPct * 100) / 100,
+      chords: res.chordHops,
+      pcs: res.pcs,
+      verifier: res.verifier,
+    };
+    progressSave(o);
+    return true;
+  }
+
   function jamPanelState() {
     return {
       style: currentJamStyleId(),
@@ -23451,6 +23600,7 @@
     try {
       const o = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}');
       o.byNode = o.byNode || {};
+      o.goldImprov = (o.goldImprov && typeof o.goldImprov === 'object') ? o.goldImprov : {};
       if (o.mode !== 'off' && o.mode !== 'hardcore') o.mode = 'casual';
       if (typeof o.xp !== 'number') o.xp = 0;
       return o;
@@ -25771,6 +25921,16 @@
   window.Virtuoso = { generateExercise, generateSession, makeBundle, resolveRendererFactory, readConfig, setSegmentLoop, clearSegmentLoop, getSegmentLoop, STYLE_PALETTES, stylePaletteConfig, SEGMENT_TEMPLATES, SEGMENT_ROLES, BUILT_IN_SESSIONS, rollSegment, refreshWorkout, applyLengthPreset, materializeSegment, progressLoad, progressSave, progressSetMode, advanceDepthLadder, nodeProgressState, woodshedLog, streakCount, creditBlockTier, xpLevelInfo, computeBadges, creditBadges, shareCardText, isShareworthy, feltHoldAnalyze, creditFeltRung, shareCardModel, shareCardText, renderShareCardImage, isShareworthy,
     // J-2 + sampled-guitar probe surface (feature entry points / readouts, not new behavior)
     jamArmFromDrill, jamTargetPcs, jamNextGuidePcs,
+    // Gold rung harness surface (smoke-gold.mjs): pure gate math + store.
+    goldDebug: {
+      bar: GOLD_BAR,
+      reset: goldReset,
+      mirror: () => _goldMirror,
+      seed: (m) => { _goldMirror = Object.assign({ confirmed: 0, inChord: 0, inKey: 0, outside: 0, pcs: new Set(), chordHops: 0, lastSeg: null, comb: false }, m, m && m.pcs ? { pcs: new Set(m.pcs) } : {}); },
+      evaluate: goldEvaluate,
+      store: goldStore,
+      midiTarget: goldMidiTarget,
+    },
     getActiveBundleInfo: () => activeBundle ? { config: activeBundle.config, duration: activeBundle.songInfo && activeBundle.songInfo.duration, leadIn: activeBundle.leadIn } : null,
     sgStats: () => { const out = { ready: 0, loading: 0, failed: 0 }; for (const k of Object.keys(sgBuffers)) out[sgBuffers[k].state] = (out[sgBuffers[k].state] || 0) + 1; return out; } };
   if (typeof globalThis !== 'undefined' && globalThis.__SS_HARNESS__) globalThis.__ss_debug = { STRING_SETUPS, resolveCAGEDShape, resolveThreeNPSPosition, NOTE_ALIASES, chordRootForDegree, nearestPositionForPc, compileChordTimeline, MOTIF_CELLS, resolveMotifCell, buildMotifExercise, applyTimelinePush, resolveHumanSeed, parseMeter, BASS_FIGURES, bassFigureForConfig, DRUM_GROOVES, DRUM_PIECE_GAIN, resolveGroove, ARRANGEMENT_RECIPES, resolveArrangement, compCellForConfig, DRUMKIT_BANKS, KIT_REGISTRY, resolveDrumKit, recipeTracks, resolveHumanSeed, buildCompCellHits, activeBundleBacking: () => activeBundle ? activeBundle.backingEvents : null, activeBundleChords: () => activeBundle ? activeBundle.chords : null, activeBundleCfg: () => activeBundle ? activeBundle.config : null, activeBundleTimeline: () => activeBundle ? (activeBundle.timeline || (activeBundle.chart && activeBundle.chart.timeline)) : null, irState: () => Object.fromEntries(Object.entries(_irBufs).map(([k, v]) => [k, v.state])), rigState: () => JSON.parse(JSON.stringify(rigState)), buildDrumEvents, drawHeatmapHero, drawLeanStripHero, buildResultsHero, countInSubTicks, blockFeltInfo, ptPracticeTime: () => currentPracticeTime, preRollUntil: () => _preRollUntil, wrapAnim: () => _wrapAnim, ptWindows: () => _ptWin, ptRunInfo: () => _ptRunInfo, ptPreviewJudgeCounts, ptSpeakBudget, ptScoredUnits: () => _ptScoredUnits, lvlMode: () => _lvlMode, ndContainedMode: () => _ndContainedMode, ndContainedFallback: () => _ndContainedFallback, ndVerifyMode: () => _ndVerifyMode, ptCalibrateOffsetMs, ptLatency, pickSinkMatch, sinkTokens, applyHostSink, sinkState: () => ({ appliedId: _sinkAppliedId, mismatch: _sinkMismatch, outs: _sinkLastOuts }), audioCtxRef: () => audioCtx, resolveAudioProfile, resolveMix, resolveAmpId, sgNotesWanted, sgHarmWanted, sgPadWanted, applyStyleMixerDefaults, sgFilesFor, bankDesc, bankLayerTag, SAMPLE_BANKS, compTargetMidis, COMP_GROOVES, wafGmTrim, WAF_GM_TRIM, TONE_GM, liveInstrumentReady, prewarmMixerCandidates, jamApplyToken: () => _jamApplyToken, mixerStateRef: () => mixerState, jamMirrorCapture, jamMirrorReset, jamMirrorDebugAdd, jamRecapAnalysisLines, jamBassIntents, jamSpotlightPhraseNotes, jamMirror: () => _jamMirror ? { noteCount: _jamMirror.noteCount, pcs: [..._jamMirror.pcs] } : null, jamPlayedLen: () => _jamPlayed.length, jamSpotlightTurn, activeBundleNotes: () => activeBundle ? activeBundle.notes : null,

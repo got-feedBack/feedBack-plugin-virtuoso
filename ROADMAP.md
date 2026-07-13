@@ -16,6 +16,28 @@ Virtuoso ships a mature, working feature set inherited at relaunch — **this is
 
 Verification: 18 Playwright smoke suites (`.claude/skills/run-virtuoso/`, `npm test`) + the in-`screen.js` startup guards. **Smoke 18/18 green at relaunch.**
 
+## v0.2.0 — Gold improv rung (career passports, 2026-07-14)
+
+The first career-mode integration: jam mode gains a **comb-verified conformity
+readout** and mints the **Gold rung** for the host's career passports.
+
+- **Detection authority = the harmonic-comb NoteVerifier** (Byron's ruling):
+  the YIN jam mirror *proposes* each fresh note; a single-note
+  `window.noteDetect.setVerifyTarget` push *confirms* it against the player's
+  real tuning; only confirmed notes classify (chord tone / key tone / outside
+  via `jamCarrierInfo` + the style's scale). During a jam the verify slot
+  idles (no judged chart notes), so gold owns it; browser/downlevel falls back
+  to YIN-classified with `verifier:'yin'` and the recap says which ear
+  listened.
+- **Recap honesty before gating**: every jam recap with confirmed notes shows
+  "Verified: N% in key · N% chord tones · over N chord changes".
+- **`GOLD_BAR`** (duration / in-key % / chord hops / distinct tones /
+  comb-only) mints `goldImprov[styleId]` in `virtuoso.progress` (gained-only)
+  and emits `virtuoso:progress {kind:'gold_improv', …}` for the career relay.
+  **Bar values are PLACEHOLDERS pending Byron's on-device tuning session.**
+- Verification: `smoke-gold.mjs` (gate math per axis, gained-only store,
+  midi→position probe mapping) — 13 checks green against a live host.
+
 ## Planned — action items for a future session
 
 - **Consume note_detect's results-card function (DECIDED — do NOT duplicate locally).** note_detect's results card is the canonical design (no grade; Top Section; per-section practice; Copy card / Save-to-Pictures + toast; glow A/B), shipping as `got-feedback/feedback-plugin-notedetect` **PR #43**. Christian's call (2026-06-27): once #43 merges, **Virtuoso pulls this function FROM note_detect** rather than mirroring it locally — collapsing the existing duplicate (`renderShareCardImage` / `shareCardAction` / `shareRowHtml`). A local Option-A port was explicitly NOT pursued.
