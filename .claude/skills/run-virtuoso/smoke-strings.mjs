@@ -25,6 +25,13 @@ const browser = await chromium.launch({ headless: true });
 try {
   await ensureHost();
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
   const pageErrs = [];
   page.on("pageerror", e => pageErrs.push(e.message));
   await page.goto(`${HOST}/`, { waitUntil: "domcontentloaded" });
@@ -32,7 +39,7 @@ try {
   await page.waitForFunction(() => typeof window.showScreen === "function");
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
   await page.waitForSelector("#virtuoso-root", { state: "attached" });
-  await page.waitForSelector(".virtuoso-view-btn");
+  await page.waitForSelector("#virtuoso-view-select");
   await page.waitForFunction(() => window.Virtuoso && typeof window.Virtuoso.generateExercise === "function", { timeout: 10000 });
 
   // Install in-page helpers that drive the real form + readConfig.
@@ -305,6 +312,160 @@ try {
   });
   ok(fg.n > 0 && fg.ho && fg.po, "bass legato generates slurs (hammer-ons + pull-offs)", `n=${fg.n} ho=${fg.ho} po=${fg.po}`);
   ok(fg.fgs.includes(4), "legato carries fg incl. the PINKY (fg 4) — the bass pinky drill works", `fgs=[${fg.fgs.join(",")}]`);
+
+  console.log("-- (12) DEFAULT fretboard-system routing is instrument/count-aware (string-count fix, 2026-07-10) --");
+  // Beginner mode used to force 'caged' for EVERYTHING — on 7/8-string the box
+  // anchors top-six (rows 5/6, correct for CAGED itself) so the extra strings
+  // never sounded (the "switched to 8-string and nothing changed" report), and
+  // bass got guitar-shape geometry (bass-pedagogy: bass never uses CAGED).
+  // defaultFretboardSystem: bass → position, guitar N>6 → 3nps, guitar 6 → caged;
+  // an explicit advanced-mode pick still wins.
+  const d8 = await page.evaluate(() => {
+    window.__t.setAdvanced(false); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "guitar_8_standard", practiceType: "scale", scale: "major", key: "C" });
+    const cfg = window.Virtuoso.readConfig();
+    const ex = window.Virtuoso.generateExercise(cfg);
+    const opens = [30, 35, 40, 45, 50, 55, 59, 64];   // guitar_8_standard
+    const strings = [...new Set(ex.chart.notes.map(n => n.s))].sort((a, b) => a - b);
+    const midis = [...new Set(ex.chart.notes.map(n => `${n.s}:${n.f}`))].map(k => { const [s, f] = k.split(":").map(Number); return opens[s] + f; });
+    return { sys: cfg.fretboardSystem, n: ex.chart.notes.length, strings, unison: midis.length !== new Set(midis).size };
+  });
+  ok(d8.sys === "3nps", "(12a) 8-string beginner default = 3nps (the extended-range scale system)", d8.sys);
+  ok(d8.n > 0 && d8.strings.includes(0) && d8.strings.includes(1), "(12b) default 8-string scale run REACHES the low F#/B (s=0,1)", `[${d8.strings.join(",")}]`);
+  ok(!d8.unison, "(12c) the extended default path holds the no-unison rule (unique position = unique pitch)");
+  const d6 = await page.evaluate(() => {
+    window.__t.setForm({ stringSetup: "guitar_6_standard", practiceType: "scale", scale: "major", key: "C" });
+    return window.Virtuoso.readConfig().fretboardSystem;
+  });
+  ok(d6 === "caged", "(12d) 6-string guitar beginner default stays caged (unchanged)", d6);
+  const dExplicit = await page.evaluate(() => {
+    window.__t.setAdvanced(true);
+    window.__t.setForm({ stringSetup: "guitar_8_standard", practiceType: "scale", scale: "major", key: "C", fretboardSystem: "caged", shape: "E" });
+    const cfg = window.Virtuoso.readConfig();
+    window.__t.setAdvanced(false);
+    return cfg.fretboardSystem;
+  });
+  ok(dExplicit === "caged", "(12e) an EXPLICIT advanced-mode caged pick on 8-string is preserved (default only fills the unset case)", dExplicit);
+  console.log("-- (13) BASS never routes through a guitar shape system (6-string bass passed the old count-only guards) --");
+  // Face 1: beginner Custom bass got CAGED-derived geometry (pathways already
+  // coded 'position'). Face 2 (latent, pitch-wrong): a 6-STRING bass satisfies
+  // stringCount>=6, but the CAGED templates bake EADGBE's G→B major 3rd — on an
+  // all-4ths bass the top two strings land a semitone flat (a real wrong pitch).
+  // Guards are now instrument-first at every layer (resolveCurrentShape,
+  // cagedShapeNotesForChord, templateFromShape, sweep wantShape).
+  for (const su of ["bass_4_standard", "bass_5_standard", "bass_6_standard"]) {
+    const r = await page.evaluate((s) => {
+      window.__t.setAdvanced(false); window.__t.setTuning(null);
+      window.__t.setForm({ stringSetup: s, practiceType: "scale", scale: "major", key: "C" });
+      const cfg = window.Virtuoso.readConfig();
+      return { sys: cfg.fretboardSystem, hasShape: !!(cfg.shapeNotes && cfg.shapeNotes.length) };
+    }, su);
+    ok(r.sys === "position" && !r.hasShape, `(13) ${su} beginner default = position, no resolved shape`, `sys=${r.sys} shape=${r.hasShape}`);
+  }
+  const b6 = await page.evaluate(() => {
+    // Force the hostile config: a 6-string bass shoved INTO caged sweep territory.
+    // wantShape must refuse (instrument guard) and fall to the interval-derived
+    // path, so every emitted pitch stays a chord/scale tone of C major.
+    window.__t.setAdvanced(true); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "bass_6_standard", practiceType: "sweep_arpeggios", scale: "major", key: "C", fretboardSystem: "caged", shape: "E" });
+    const ex = window.Virtuoso.generateExercise(window.Virtuoso.readConfig());
+    const opens = [23, 28, 33, 38, 43, 48];   // bass_6_standard (all 4ths — no G→B 3rd)
+    const pcs = [...new Set(ex.chart.notes.map(n => ((opens[n.s] + n.f) % 12 + 12) % 12))].sort((a, b) => a - b);
+    const cMajor = new Set([0, 2, 4, 5, 7, 9, 11]);
+    window.__t.setAdvanced(false);
+    return { n: ex.chart.notes.length, offKey: pcs.filter(pc => !cMajor.has(pc)) };
+  });
+  ok(b6.n > 0 && b6.offKey.length === 0, "(13b) 6-string bass forced at caged sweeps: every pitch stays diatonic (no semitone-flat template leak)", `n=${b6.n} offKey=[${b6.offKey.join(",")}]`);
+  const lowB = await page.evaluate(() => {
+    window.__t.setAdvanced(false); window.__t.setTuning(null);
+    window.__t.setForm({ stringSetup: "bass_5_standard", practiceType: "scale", scale: "major", key: "E" });
+    const ex = window.Virtuoso.generateExercise(window.Virtuoso.readConfig());
+    const strings = [...new Set(ex.chart.notes.map(n => n.s))].sort((a, b) => a - b);
+    window.__t.setForm({ stringSetup: "guitar_6_standard" });   // self-clean
+    return { n: ex.chart.notes.length, strings };
+  });
+  // The B string (s=0) must be PLAYED — a root-anchored run legitimately starts
+  // AT the root (E sits on the B string, fret 5), so assert string usage, not
+  // sub-E pitch. Reaching BELOW the root (the low-fifth idiom) is the deferred
+  // bassRootGrip downward-reach feature (ROADMAP open thread), not this fix.
+  ok(lowB.n > 0 && lowB.strings.includes(0), "(13c) 5-string bass scale actually plays ON the low B string (s=0)", `strings=[${lowB.strings.join(",")}]`);
+
+  console.log("-- (14) power-chord grip is INTERVAL-aware: drop tuning collapses to the same-fret barre --");
+  // powerChordGrip hardcoded +2 on s1/s2 (standard-4ths assumption) — in every
+  // drop-X/DADGAD/Open-D tuning (s0→s1 = a FIFTH) that sounded root + MAJOR 6TH
+  // instead of root+5th (guitar-pedagogy 2026-07-12). Fixed by-pitch: drop-D
+  // 5oct = the iconic one-finger barre {s0:F, s1:F, s2:F} = root·5th·octave;
+  // standard keeps {F, F+2, F+2}. Drives strum_comp with chordOverride=5oct.
+  const pchord = await page.evaluate(() => {
+    const run = (su) => {
+      window.__t.setAdvanced(true); window.__t.setTuning(null);
+      window.__t.setForm({ stringSetup: su, practiceType: "strum_comp", key: "D", chordOverride: "5oct" });
+      const cfg = window.Virtuoso.readConfig();
+      const ex = window.Virtuoso.generateExercise(cfg);
+      const t0 = Math.min(...ex.chart.notes.map(n => n.t));
+      // Strum notes are ROLL-staggered a few ms per string — collect the first
+      // chord within a strum window, one note per string.
+      const first = [];
+      for (const n of ex.chart.notes.filter(n => n.t < t0 + 0.09 && n.s <= 2).sort((a, b) => a.s - b.s)) {
+        if (!first.some(p => p.s === n.s)) first.push({ s: n.s, f: n.f });
+      }
+      const opens = su === "guitar_6_drop_d" ? [38, 45, 50, 55, 59, 64] : [40, 45, 50, 55, 59, 64];
+      const midis = first.map(p => opens[p.s] + p.f);
+      return { first, ivs: midis.slice(1).map(m => m - midis[0]) };
+    };
+    const out = { drop: run("guitar_6_drop_d"), std: run("guitar_6_standard") };
+    window.__t.setAdvanced(false); window.__t.setForm({ stringSetup: "guitar_6_standard" });  // self-clean
+    return out;
+  });
+  ok(pchord.drop.first.length === 3 && pchord.drop.first.every(p => p.f === pchord.drop.first[0].f),
+     "(14a) drop-D 5oct power chord = SAME-FRET barre across s0/s1/s2", JSON.stringify(pchord.drop.first));
+  ok(pchord.drop.ivs.join(",") === "7,12", "(14b) drop-D barre sounds root·5th·octave (was root·MAJOR-6TH·octave)", `ivs=[${pchord.drop.ivs}]`);
+  ok(pchord.std.ivs.join(",") === "7,12", "(14c) standard-tuning grip still sounds root·5th·octave (F/F+2/F+2 unchanged)", `ivs=[${pchord.std.ivs}] frets=${JSON.stringify(pchord.std.first)}`);
+
+  console.log("-- (15) bass low-fifth reach (rfoPattern='low5', bass-pedagogy 2026-07-12) --");
+  // R–low5–5–8: the fifth BELOW the root on the string below (the reach the low
+  // string exists for). Default R-5-8-5 must be BYTE-IDENTICAL with the field
+  // absent (the canonical pre-scales box never changes under a beginner);
+  // unreachable low fifth (root on the lowest string) degrades to the upper 5th.
+  const rfo = await page.evaluate(() => {
+    const run = (su, pattern, key, fretMax) => {
+      window.__t.setAdvanced(true); window.__t.setTuning(null);
+      // Bass-native practice types only enter the select once the FAMILY is
+      // bass — dispatch a real setup change first (mirrors row 10), else the
+      // silent practiceType set falls back to a scale exercise.
+      const setup = document.querySelector('#virtuoso-controls [name="stringSetup"]');
+      setup.value = su; setup.dispatchEvent(new Event("change", { bubbles: true }));
+      const pt = document.querySelector('[name="practiceType"]');
+      pt.value = "root_fifth_octave"; pt.dispatchEvent(new Event("change", { bubbles: true }));
+      const rp = document.querySelector('[name="rfoPattern"]'); if (rp) rp.value = pattern || "";
+      window.__t.setForm({ key, progression: "I-IV-V", fretMin: 0, fretMax: fretMax || 7 });
+      const cfg = window.Virtuoso.readConfig();
+      if (cfg.mode !== "root_fifth_octave") return `WRONG-MODE:${cfg.mode}`;
+      const ex = window.Virtuoso.generateExercise(cfg);
+      return ex.chart.notes.map(n => `${n.t.toFixed(3)}:${n.s}:${n.f}`).join("|");
+    };
+    const opens5 = [23, 28, 33, 38, 43];
+    const firstBar = (sig) => sig.split("|").slice(0, 4).map(k => { const [, s, f] = k.split(":").map(Number); return { s, f }; });
+    // (a) geometry on 5-string, key C (root lands fretted above the low B).
+    const low5 = firstBar(run("bass_5_standard", "low5", "C"));
+    const midis = low5.map(p => opens5[p.s] + p.f);
+    // (b) default parity: no pattern field vs explicit 'r5o' — identical charts.
+    const def = run("bass_5_standard", "", "C");
+    const r5o = run("bass_5_standard", "r5o", "C");
+    // (c) null-degrade: 4-string key E root sits on the lowest string (s0) →
+    //     low fifth unreachable → the low5 chart equals swapping in the UPPER 5th.
+    const deg = firstBar(run("bass_4_standard", "low5", "E", 5));
+    const opens4 = [28, 33, 38, 43];
+    const degMidis = deg.map(p => opens4[p.s] + p.f);
+    const rp = document.querySelector('[name="rfoPattern"]'); if (rp) rp.value = "";   // self-clean
+    window.__t.setAdvanced(false); window.__t.setForm({ stringSetup: "guitar_6_standard" });
+    return { midis, defEqualsR5o: def === r5o, defSig: def.split("|").length, degMidis };
+  });
+  ok(rfo.midis.length === 4 && rfo.midis[1] === rfo.midis[0] - 7 && rfo.midis[2] === rfo.midis[0] + 7 && rfo.midis[3] === rfo.midis[0] + 12,
+     "(15a) low5 bar = R, low-5th (root−7, the string below), 5th, octave", `midis=[${rfo.midis}]`);
+  ok(rfo.defEqualsR5o && rfo.defSig > 0, "(15b) default R-5-8-5 chart is BYTE-IDENTICAL with the field absent vs 'r5o' (no leak into the canonical box)");
+  ok(rfo.degMidis.length === 4 && rfo.degMidis[1] === rfo.degMidis[0] + 7,
+     "(15c) unreachable low fifth (4-string, root on the lowest string) degrades to the UPPER 5th", `midis=[${rfo.degMidis}]`);
 
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  strings/tuning: ${fails} failure(s)`);

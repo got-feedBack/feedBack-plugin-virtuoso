@@ -654,7 +654,11 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    flex-wrap: wrap;
+    /* nowrap (topbar parity): the host cluster widened the right side, and wrap's
+       first casualty was the ⚙ orphaned onto a second row. The masthead shrinks
+       instead (tagline ellipsizes) and the media-query ladder handles real
+       narrow-width degrade. */
+    flex-wrap: nowrap;
     padding: 2px 6px 11px;
     margin-bottom: 12px;
     border-bottom: 1px solid var(--vir-hairline);
@@ -664,13 +668,37 @@
   .virtuoso-header-modes { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
   .virtuoso-header-modes .virtuoso-mode-bar { flex: 0 0 auto; }
   .virtuoso-header .virtuoso-progress-strip { flex: 0 0 auto; min-width: 200px; }
+  /* Host-parity right cluster (docs/topbar-host-parity.md): tuner · instrument ·
+     profile in the host topbar's exact order, reading as one borrowed unit (tight
+     internal gap vs the header's 16px). Compact 32px density variants of the host's
+     92px badge cards — same card grammar (inset fill, 1px border, rounded), same
+     content hierarchy, same click behavior; smaller box (a slim working toolbar
+     must not steal stage height — the opposite of what fullscreen bought). */
+  .virtuoso-header-host { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .virtuoso-tuner-badge, .virtuoso-profile-badge { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--vir-border, #334155); background: var(--vir-inset, #0b1220); color: var(--vir-text, #e2e8f0); cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
+  .virtuoso-tuner-badge:hover, .virtuoso-profile-badge:hover { background: var(--vir-hover-soft); }
+  .virtuoso-tuner-badge[hidden], .virtuoso-profile-badge[hidden] { display: none !important; }
+  /* Tuner card content: mini segment meter + the big italic note name (the host
+     card's hierarchy at our scale; the Hz sub-label folds into the title tooltip). */
+  .virtuoso-tuner-meter { display: inline-flex; align-items: center; gap: 2px; }
+  .virtuoso-tuner-meter i { width: 3px; height: 10px; border-radius: 1px; background: var(--vir-border, #334155); }
+  .virtuoso-tuner-meter i:nth-child(3) { height: 14px; }
+  .virtuoso-tuner-meter i.on { background: #34d399; }
+  .virtuoso-tuner-meter i.on.off-pitch { background: #f59e0b; }
+  .virtuoso-tuner-note { font-size: 13px; font-weight: 800; font-style: italic; min-width: 34px; text-align: center; }
+  .virtuoso-profile-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+  .virtuoso-profile-text { font-size: 12px; font-weight: 600; color: var(--vir-text-dim, #cbd5e1); }
+  /* Progress chip HIDDEN (topbar parity) — pending the profile-merge design. */
+  .virtuoso-progress-strip[hidden] { display: none !important; }
   /* Setup popover (instrument + strings + tuning) — collapsed behind one header button. */
   .virtuoso-header-setup { position: relative; flex: 0 0 auto; }
   .virtuoso-setup-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; font-size: 12.5px; font-weight: 600; border-radius: 8px; border: 1px solid var(--vir-border, #334155); background: var(--vir-inset, #0b1220); color: var(--vir-text, #e2e8f0); cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
   .virtuoso-setup-btn:hover { background: var(--vir-hover-soft); }
   .virtuoso-setup-btn[aria-expanded="true"] { border-color: var(--vir-accent, #4080e0); }
   .virtuoso-setup-caret { color: var(--vir-text-faint, #64748b); font-size: 10px; }
-  .virtuoso-setup-popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 290px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--vir-surface, #0d1424); border: 1px solid var(--vir-border, #334155); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); }
+  /* Anchored right (the setup button now lives in the right-side host cluster —
+     a left-anchored 290px popover would overflow the viewport edge). */
+  .virtuoso-setup-popover { position: absolute; top: calc(100% + 6px); right: 0; left: auto; z-index: 30; min-width: 290px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--vir-surface, #0d1424); border: 1px solid var(--vir-border, #334155); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.45); }
   .virtuoso-setup-popover[hidden] { display: none; }
   /* Progress chip — the header strip is now P's open affordance (clickable). */
   .virtuoso-progress-chip { cursor: pointer; transition: border-color 0.12s, background 0.12s; }
@@ -734,23 +762,30 @@
   @media (max-width: 1120px) {
     #virtuoso-setup-label { font-size: 0; }
     #virtuoso-setup-label::after { content: attr(data-short); font-size: 12.5px; font-weight: 600; }
+    /* Profile badge drops its text → avatar-only (protect order: mode nav >
+       instrument > ⚙ > profile > tuner > tagline). */
+    .virtuoso-profile-text { display: none; }
   }
   @media (max-width: 1000px) {
     .virtuoso-view-label, .virtuoso-fb-toggle-label, #virtuoso-theme-toggle { display: none !important; }
     /* Mode switcher goes icon-only here (aria-label keeps the accessible name). */
     .virtuoso-mode-btn-label { display: none; }
     .virtuoso-mode-btn { gap: 0; padding: 0; }
+    /* Tuner badge yields (the tuner stays reachable via the Setup panel's
+       target-aware entry; only the shortcut is lost). */
+    #virtuoso-tuner-badge { display: none !important; }
   }
   @media (max-width: 880px) {
     .virtuoso-header-modes .virtuoso-mode-bar { display: none; }
     .virtuoso-mode-select { display: inline-block; }
+    #virtuoso-profile-badge { display: none !important; }
   }
   /* Wordmark: mirror the host's signature gradient treatment so "Virtuoso" reads
      as a sibling of the host wordmark, not a flat-white outlier (host-harmony seam).
      The version span resets text-fill so it stays solid muted, not clipped. */
   .virtuoso-header h1 { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.02em; font-weight: 800; background: linear-gradient(115deg, var(--vir-accent-hover) 0%, #b984f5 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .virtuoso-version { margin-left: 7px; font-size: 11px; font-weight: 500; letter-spacing: 0.01em; color: var(--vir-text-muted, #94a3b8); -webkit-text-fill-color: var(--vir-text-muted, #94a3b8); vertical-align: middle; }
-  .virtuoso-tagline { margin: 3px 0 6px 0; font-size: 12px; line-height: 1.35; color: var(--vir-text-muted, #94a3b8); max-width: 760px; }
+  .virtuoso-tagline { margin: 3px 0 6px 0; font-size: 12px; line-height: 1.35; color: var(--vir-text-muted, #94a3b8); max-width: 760px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .virtuoso-tagline strong { font-weight: 600; color: var(--vir-text-dim, #cbd5e1); }
   .virtuoso-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1; }
   .virtuoso-meta #virtuoso-renderer-status { color: #94a3b8; }
@@ -1056,9 +1091,29 @@
      active = a lit accent pill. */
   .virtuoso-view-tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--vir-input); border: 1px solid var(--vir-hairline); border-radius: 9px; box-shadow: var(--vir-recess); }
   .virtuoso-view-ico { font-size: 13px; line-height: 1; opacity: 0.9; }
+  /* View dropdown (replaced the segmented tabs once 2D Highway joined the
+     lineup — 5 stringed views + Piano Roll outgrew a pill row). Same control
+     family as the mode/settings selects; the accent border marks it as the
+     stage's primary switch. */
+  .virtuoso-view-select {
+    min-height: 28px;
+    padding: 0 26px 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border-radius: 7px;
+    border: 1px solid var(--vir-border, #334155);
+    background: var(--vir-inset, #0b1220);
+    color: var(--vir-text, #e2e8f0);
+    cursor: pointer;
+  }
+  .virtuoso-view-select:hover { background: var(--vir-hover-soft); }
+  .virtuoso-view-select:focus-visible { outline: 2px solid var(--vir-accent, #4080e0); outline-offset: 1px; }
   /* Tabs read as tabs: unselected is a subtle outlined chip; selected gets
      a saturated background, a bottom highlight, and a slight lift so the
-     active view is unmistakable at a glance. */
+     active view is unmistakable at a glance.
+     (RETIRED with the view dropdown — kept only for the local shot-*.mjs
+     scripts + skin overrides that still reference the class; no live markup.) */
   .virtuoso-view-btn {
     position: relative;
     display: inline-flex;
@@ -1719,10 +1774,11 @@
      the selected instrument; when Piano is active, the guitar/bass-oriented 3D
      Highway and Jumping Tab views are hidden. (Piano Roll stays disabled until
      piano playback ships — groundwork only.) */
-  .virtuoso-view-btn[data-renderer="piano_roll"] { display: none; }
-  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-btn[data-renderer="piano_roll"] { display: inline-flex; align-items: center; }
-  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-btn[data-renderer="highway_3d"],
-  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-btn[data-renderer="builtin_2d"] { display: none; }
+  .virtuoso-view-select option[value="piano_roll"] { display: none; }
+  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-select option[value="piano_roll"] { display: block; }
+  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-select option[value="highway_3d"],
+  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-select option[value="highway_2d"],
+  .virtuoso-root.virtuoso-piano-instrument .virtuoso-view-select option[value="builtin_2d"] { display: none; }
   .virtuoso-tuning-label { flex: 0 0 56px; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; }
   .virtuoso-string-count-row { display: flex; gap: 4px; flex: 1; }
   .virtuoso-string-count-btn {
@@ -2069,9 +2125,46 @@
       </div>
       <span id="virtuoso-renderer-status" hidden></span>
     </div>
+    <!-- Four-mode shell switcher, now top-level nav in the header (Layout A).
+         Internal data-mode tokens stay stable (guided→Ladder [was Pathways],
+         session→Workout) so the existing selectMode/syncModeBar wiring is untouched. -->
+    <div class="virtuoso-header-modes">
+      <div class="virtuoso-mode-toggle virtuoso-mode-bar" role="tablist" aria-label="Practice mode">
+        <button type="button" id="virtuoso-mode-guided"  class="virtuoso-mode-btn active" data-mode="guided"  role="tab" aria-selected="true"  aria-label="Ladder"  title="Follow a guided curriculum"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18v-3"/><path d="M12 18v-7"/><path d="M18 18v-11"/></svg><span class="virtuoso-mode-btn-label">Ladder</span></button>
+        <button type="button" id="virtuoso-mode-custom"  class="virtuoso-mode-btn" data-mode="custom"  role="tab" aria-selected="false" aria-label="Custom"  title="Drill the exact thing you're stuck on"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="16" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Custom</span></button>
+        <button type="button" id="virtuoso-mode-session" class="virtuoso-mode-btn" data-mode="session" role="tab" aria-selected="false" aria-label="Workout" title="Build a timed routine — and actually run it"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 20.5L9.6 5.5H14.4L18.2 20.5Z"/><path d="M5.8 20.5H18.2"/><path d="M11.2 3L14 16.5"/><path d="M11.3 10.9L14.3 10" stroke-width="2.4"/></svg><span class="virtuoso-mode-btn-label">Workout</span></button>
+        <button type="button" id="virtuoso-mode-jam"     class="virtuoso-mode-btn" data-mode="jam"     role="tab" aria-selected="false" aria-label="Jam"     title="Pick a style and play along on your instrument"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V5.5L18 3.5V15.5"/><ellipse cx="6.6" cy="17.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/><ellipse cx="15.6" cy="15.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Jam</span></button>
+      </div>
+      <!-- Narrowest-width fallback: the 4 segments collapse to one Mode dropdown
+           (last in the degrade order — primary nav is protected longest). Synced by
+           syncModeBar; switches via selectMode. Hidden until the edge breakpoint. -->
+      <select id="virtuoso-mode-select" class="virtuoso-mode-select" aria-label="Practice mode">
+        <option value="guided">Ladder</option>
+        <option value="custom">Custom</option>
+        <option value="session">Workout</option>
+        <option value="jam">Jam</option>
+      </select>
+    </div>
+    <!-- Host-parity right cluster (topbar parity, docs/topbar-host-parity.md):
+         tuner · instrument · profile — the host main-menu topbar's exact badge
+         order, brought into our header because "fullscreen":true hides the host
+         topbar on this screen. Compact 32px density variants of the host cards
+         (same order, fills, click behavior, data — smaller box). Each badge
+         feature-detects independently and hides cleanly when its host surface
+         is absent (tuner: window.tuner; profile: /api/profile + onboarded). -->
+    <div class="virtuoso-header-host">
+    <!-- Tuner badge — BORROWS the launch (window.tuner.toggle(), the same action
+         as the host topbar card) + mirrors the live note readout via the bus
+         'tuner:frame' event. Hidden until the tuner plugin is detected. -->
+    <button type="button" id="virtuoso-tuner-badge" class="virtuoso-tuner-badge" hidden title="Open Tuner" aria-label="Open Tuner">
+      <span class="virtuoso-tuner-meter" id="virtuoso-tuner-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="virtuoso-tuner-note" id="virtuoso-tuner-note">Tuner</span>
+    </button>
     <!-- Setup popover — instrument + strings + tuning collapsed behind one labeled
          button (set-once, orthogonal to mode). The button shows the live instrument
-         + tuning; clicking opens the popover. Moved out of the rail (shell IA). -->
+         + tuning; clicking opens the popover. Moved out of the rail (shell IA);
+         now the host-parity INSTRUMENT badge slot (host settings are the source of
+         truth for guitar/bass — see the sync layer in screen.js). -->
     <div class="virtuoso-header-setup">
       <button type="button" id="virtuoso-setup-btn" class="virtuoso-setup-btn" aria-haspopup="true" aria-expanded="false" title="Instrument, strings &amp; tuning"><span id="virtuoso-setup-label">Guitar · Standard</span> <span class="virtuoso-setup-caret">▾</span></button>
       <div id="virtuoso-setup-popover" class="virtuoso-setup-popover" hidden role="dialog" aria-label="Instrument setup">
@@ -2104,13 +2197,14 @@
                this popover, so the tool that gets the physical instrument INTO that
                tuning lives here too. Hidden when the host scoring SDK (the mic
                detector) is unavailable — toggleSetupPopover syncs it on open. -->
+          <!-- Relabeled "Tune to this tuning…" (topbar parity): the header Tuner badge
+               is the generic chromatic tuner (host standard, host engine); this entry
+               is the TARGET-AWARE verify-each-string tuner. Two jobs, two entries,
+               now visually distinct — resolves the 2026-06-21 two-tuners gap. The old
+               courtesy "Floating tuner ↗" button retired: the header badge IS that
+               affordance now, in the host's own position. -->
           <div class="virtuoso-tuning-row" id="virtuoso-tune-row" style="display:none">
-            <button type="button" id="virtuoso-tune-btn" class="secondary" title="Tune your strings to the selected tuning — each string locks green when held in tune">Tune…</button>
-            <!-- Courtesy hook (decision deck 2026-06-06): opens the third-party floating
-                 tuner via its public API when that plugin is installed. Coexistence
-                 etiquette for players who live in that tuner — NEVER the retune
-                 hand-off path (it can't be handed a target tuning). Feature-detected. -->
-            <button type="button" id="virtuoso-tuner-ext" class="secondary" style="display:none" title="Open the floating tuner plugin you have installed (generic chromatic tuner)">Floating tuner ↗</button>
+            <button type="button" id="virtuoso-tune-btn" class="secondary" title="Tune your strings to the selected tuning — each string locks green when held in tune">Tune to this tuning…</button>
           </div>
           <!-- This hidden tuning field lives in the header Setup popover, OUTSIDE
                the #virtuoso-controls form. The `form=` attribute associates it
@@ -2130,31 +2224,26 @@
         </div>
       </div>
     </div>
-    <!-- Four-mode shell switcher, now top-level nav in the header (Layout A).
-         Internal data-mode tokens stay stable (guided→Ladder [was Pathways],
-         session→Workout) so the existing selectMode/syncModeBar wiring is untouched. -->
-    <div class="virtuoso-header-modes">
-      <div class="virtuoso-mode-toggle virtuoso-mode-bar" role="tablist" aria-label="Practice mode">
-        <button type="button" id="virtuoso-mode-guided"  class="virtuoso-mode-btn active" data-mode="guided"  role="tab" aria-selected="true"  aria-label="Ladder"  title="Follow a guided curriculum"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18v-3"/><path d="M12 18v-7"/><path d="M18 18v-11"/></svg><span class="virtuoso-mode-btn-label">Ladder</span></button>
-        <button type="button" id="virtuoso-mode-custom"  class="virtuoso-mode-btn" data-mode="custom"  role="tab" aria-selected="false" aria-label="Custom"  title="Drill the exact thing you're stuck on"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="15" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="16" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Custom</span></button>
-        <button type="button" id="virtuoso-mode-session" class="virtuoso-mode-btn" data-mode="session" role="tab" aria-selected="false" aria-label="Workout" title="Build a timed routine — and actually run it"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 20.5L9.6 5.5H14.4L18.2 20.5Z"/><path d="M5.8 20.5H18.2"/><path d="M11.2 3L14 16.5"/><path d="M11.3 10.9L14.3 10" stroke-width="2.4"/></svg><span class="virtuoso-mode-btn-label">Workout</span></button>
-        <button type="button" id="virtuoso-mode-jam"     class="virtuoso-mode-btn" data-mode="jam"     role="tab" aria-selected="false" aria-label="Jam"     title="Pick a style and play along on your instrument"><svg class="virtuoso-mode-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17.5V5.5L18 3.5V15.5"/><ellipse cx="6.6" cy="17.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/><ellipse cx="15.6" cy="15.5" rx="2.6" ry="2.1" fill="currentColor" stroke="none"/></svg><span class="virtuoso-mode-btn-label">Jam</span></button>
-      </div>
-      <!-- Narrowest-width fallback: the 4 segments collapse to one Mode dropdown
-           (last in the degrade order — primary nav is protected longest). Synced by
-           syncModeBar; switches via selectMode. Hidden until the edge breakpoint. -->
-      <select id="virtuoso-mode-select" class="virtuoso-mode-select" aria-label="Practice mode">
-        <option value="guided">Ladder</option>
-        <option value="custom">Custom</option>
-        <option value="session">Workout</option>
-        <option value="jam">Jam</option>
-      </select>
-    </div>
+    <!-- Profile badge — compact MIRROR of the host topbar profile chip (avatar +
+         streak + Mastery Rank from /api/profile + /api/profile/progress); click
+         LINKS to the host profile screen (goScreen('v3-profile')). Never a second
+         profile implementation. Hidden until onboarded profile data loads. -->
+    <button type="button" id="virtuoso-profile-badge" class="virtuoso-profile-badge" hidden title="Profile" aria-label="Open profile">
+      <img id="virtuoso-profile-avatar" class="virtuoso-profile-avatar" alt="" hidden>
+      <span class="virtuoso-profile-text" id="virtuoso-profile-text"></span>
+    </button>
+    </div><!-- /.virtuoso-header-host -->
     <!-- Progress chip — streak + 7-day calendar (ambient progress, header-right).
          IS the P-sheet's open affordance (tap → Progress sheet); de-dups the old
          view-bar Progress button. The full 3-signal chip (armed-lane · →next) is a
          gamification-content refinement on the same element. -->
-    <div class="virtuoso-progress-strip virtuoso-progress-chip" id="virtuoso-progress-strip"
+    <!-- HIDDEN (topbar host parity, 2026-07-10): the chip pauses until a real
+         profile-merge design reconciles it with the host Profile badge (two streak
+         definitions must not coexist visibly). CSS-hidden, NOT removed — all sync
+         wiring (syncProgressStrip/syncCrest/chip-open/click) stays live and harmless;
+         un-hiding is a one-attribute revert. P-sheet affordance: the ⚙ menu's
+         "Progress (P)" item + the P hotkey. -->
+    <div class="virtuoso-progress-strip virtuoso-progress-chip" id="virtuoso-progress-strip" hidden
          role="button" tabindex="0" aria-label="Open progress" title="Progress (P)">
       <span class="virtuoso-crest" id="virtuoso-crest" hidden><!-- syncCrest() --></span>
       <div class="virtuoso-streak-block">
@@ -2236,6 +2325,10 @@
           </div>
         </div>
         <div class="virtuoso-settings-divider"></div>
+        <!-- P-sheet open affordance (the header progress chip is hidden pending the
+             profile-merge design). Low-frequency ambient check → a labelled menu item;
+             the P hotkey + session-end auto-present stay the primary paths. -->
+        <button type="button" class="virtuoso-settings-item" id="virtuoso-settings-progress" role="menuitem">Progress (P)</button>
         <button type="button" class="virtuoso-settings-item" id="virtuoso-settings-shortcuts" role="menuitem">Keyboard shortcuts</button>
         <button type="button" class="virtuoso-settings-item" id="virtuoso-settings-host" role="menuitem">Plugin settings ↗</button>
       </div>
@@ -2775,6 +2868,9 @@
              (pulse|crossing|rake|three_finger). Pathway-driven; 'pulse' default;
              anti-leak defaulted in applyPathwayConfig. -->
         <input type="hidden" name="rhTechMode" id="virtuoso-rh-tech-mode" value="pulse">
+        <!-- root_fifth_octave pattern: 'r5o' (default box) | 'low5' (fifth-below
+             reach). Pathway-driven, like rhTechMode above. -->
+        <input type="hidden" name="rfoPattern" id="virtuoso-rfo-pattern" value="">
         <!-- Bass Lines & Changes ladder: walking-line approach into the next chord
              (scale|chromatic|dominant|mixed). Pathway-driven; 'scale' default;
              anti-leak defaulted in applyPathwayConfig. -->
@@ -3207,14 +3303,20 @@
     <section class="virtuoso-panel virtuoso-stage">
       <div class="virtuoso-view-switcher" role="group" aria-label="Renderer">
         <span class="virtuoso-view-label">View</span>
-        <!-- View selector: icon+label segmented tabs (toolbarexample.png). Click →
-             onViewSwitch() reattaches the renderer; syncViewSwitcher() sets .active. -->
-        <div class="virtuoso-view-tabs" role="group" aria-label="Renderer view">
-          <button type="button" class="virtuoso-view-btn active" data-renderer="highway_3d"><span class="virtuoso-view-ico" aria-hidden="true">▦</span>3D Highway</button>
-          <button type="button" class="virtuoso-view-btn" data-renderer="builtin_2d"><span class="virtuoso-view-ico" aria-hidden="true">♫</span>Jumping Tab</button>
-          <button type="button" class="virtuoso-view-btn" data-renderer="tab_2d"><span class="virtuoso-view-ico" aria-hidden="true">☰</span>Tab</button>
-          <button type="button" class="virtuoso-view-btn" data-renderer="notation_2d"><span class="virtuoso-view-ico" aria-hidden="true">♪</span>Notation</button>
-        </div>
+        <!-- View selector: a dropdown (was icon+label segmented tabs — the row
+             outgrew pills once the in-tree 2D Highway became directly selectable,
+             5 stringed views + Piano Roll). change → onViewSwitch() reattaches the
+             renderer; syncViewSwitcher() keeps the value in sync with what's
+             ACTUALLY rendered (saved-pref restore, >8-string force). Options
+             show/hide per instrument via the CSS rules below (piano ↔ stringed). -->
+        <select id="virtuoso-view-select" class="virtuoso-view-select" aria-label="Renderer view">
+          <option value="highway_3d">▦ 3D Highway</option>
+          <option value="highway_2d">▤ 2D Highway</option>
+          <option value="builtin_2d">♫ Jumping Tab</option>
+          <option value="tab_2d">☰ Tab</option>
+          <option value="notation_2d">♪ Notation</option>
+          <option value="piano_roll">▥ Piano Roll</option>
+        </select>
         <!-- Glance strip (LCD): the GENERATED facts the left-panel menus don't
              already state — Key · Tempo · Meter · Bars · Length · Notes (or
              Session · Segments · Length · Notes). Populated by summarize(). -->

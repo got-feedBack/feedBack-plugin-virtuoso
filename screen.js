@@ -85,7 +85,12 @@
     guitar_6_standard: { label:'6-string guitar — standard', instrument:'guitar', openMidis:[40,45,50,55,59,64], tuning:[0,0,0,0,0,0] },
     guitar_6_drop_d: { label:'6-string guitar — Drop D', instrument:'guitar', openMidis:[38,45,50,55,59,64], tuning:[-2,0,0,0,0,0] },
     guitar_7_standard: { label:'7-string guitar — standard', instrument:'guitar', openMidis:[35,40,45,50,55,59,64], tuning:[0,0,0,0,0,0,0] },
-    guitar_8_standard: { label:'8-string guitar — standard', instrument:'guitar', openMidis:[30,35,40,45,50,55,59,64], tuning:[2,0,0,0,0,0,0,0] },
+    // tuning was [2,0,…] — internally inconsistent metadata (implied a nonsense E
+    // base for string 0; the 8-string family standard IS F#, offset 0 — matches the
+    // host's STANDARD_OPEN_MIDIS["guitar-8"]). Inert for playback (openMidisForConfig
+    // never reads .tuning) but live in chart.tuning: a host round-trip through that
+    // offset would detune string 0 a whole step. Fixed 2026-07-10 (guitar-pedagogy).
+    guitar_8_standard: { label:'8-string guitar — standard', instrument:'guitar', openMidis:[30,35,40,45,50,55,59,64], tuning:[0,0,0,0,0,0,0,0] },
     bass_4_standard: { label:'4-string bass — standard', instrument:'bass', openMidis:[28,33,38,43], tuning:[0,0,0,0] },
     bass_5_standard: { label:'5-string bass — standard low B', instrument:'bass', openMidis:[23,28,33,38,43], tuning:[0,0,0,0,0] },
     bass_6_standard: { label:'6-string bass — standard (B-E-A-D-G-C)', instrument:'bass', openMidis:[23,28,33,38,43,48], tuning:[0,0,0,0,0,0] }
@@ -113,6 +118,12 @@
       { id:'drop_b',       label:'Drop B (B F# B E G# C#)',     midis:[35,42,47,52,56,61] },
       { id:'eb_standard',  label:'Eb Standard (down ½ step)',   midis:[39,44,49,54,58,63], offset:true },
       { id:'d_standard',   label:'D Standard (down 1 step)',    midis:[38,43,48,53,57,62], offset:true },
+      // Host-parity uniform standards (2026-07-10): the host tuning table names
+      // these; tagging them offset:true here keeps applyTuningAdaptL1's transpose
+      // path working when they arrive via the host selector sync ("add a tagged
+      // preset, don't grow a delta heuristic" — bass-pedagogy ruling).
+      { id:'cs_standard',  label:'C# Standard (down 1½ steps)', midis:[37,42,47,52,56,61], offset:true },
+      { id:'c_standard',   label:'C Standard (down 2 steps)',   midis:[36,41,46,51,55,60], offset:true },
       { id:'dadgad',       label:'DADGAD',                       midis:[38,45,50,55,57,62] },
       { id:'open_g',       label:'Open G (D G D G B D)',        midis:[38,43,50,55,59,62] },
       { id:'open_d',       label:'Open D (D A D F# A D)',       midis:[38,45,50,54,57,62] },
@@ -120,10 +131,15 @@
     guitar_7: [
       { id:'standard',     label:'Standard (B E A D G B E)',    midis:[35,40,45,50,55,59,64], offset:true },
       { id:'drop_a',       label:'Drop A (A E A D G B E)',      midis:[33,40,45,50,55,59,64] },
+      // Host-parity uniform standards (see the guitar_6 note).
+      { id:'bb_standard',  label:'Bb Standard (down ½ step)',   midis:[34,39,44,49,54,58,63], offset:true },
+      { id:'a_standard',   label:'A Standard (down 1 step)',    midis:[33,38,43,48,53,57,62], offset:true },
     ],
     guitar_8: [
       { id:'standard',     label:'Standard (F# B E A D G B E)', midis:[30,35,40,45,50,55,59,64], offset:true },
       { id:'drop_e',       label:'Drop E (E B E A D G B E)',    midis:[28,35,40,45,50,55,59,64] },
+      // Host-parity uniform standards (see the guitar_6 note).
+      { id:'e_standard',   label:'E Standard (down 1 step)',    midis:[28,33,38,43,48,53,57,62], offset:true },
     ],
     bass_4: [
       { id:'standard',     label:'Standard (E A D G)',          midis:[28,33,38,43], offset:true },
@@ -1268,8 +1284,12 @@
       goal:'The foundational bass box: root, fifth, octave, fifth, anchored on each chord. Before scales, a bassist owns this shape — it outlines any chord and lays the harmonic floor under the band. The skill is finding the root and reaching the 5th/octave by feel in any key.',
       scales:['major','natural_minor'],
       tempoTiers:[60, 80, 100, 120],
-      base:{ practiceType:'root_fifth_octave', scale:'major', progression:'I-IV-V', chordDepth:'triad', chordOverride:'auto', meter:'4/4', subdivision:'quarter', bpm:80, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'position', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'C', fretMin:0, fretMax:5 },
-      vary:[ { key:'C', progression:'I-IV-V' }, { key:'G', progression:'I-IV-V' }, { key:'A', progression:'i-VII-VI-VII', scale:'natural_minor' }, { key:'E', progression:'I-V-vi-IV' }, { key:'D', progression:'I-IV-V' } ]
+      base:{ practiceType:'root_fifth_octave', scale:'major', progression:'I-IV-V', chordDepth:'triad', chordOverride:'auto', meter:'4/4', subdivision:'quarter', bpm:80, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'position', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'C', fretMin:0, fretMax:5, rfoPattern:'r5o' },
+      // Final vary = the low-fifth reach (R–low5–5–8): the same box, now also
+      // dropping BELOW the root — the move the low string exists for (and the
+      // whole point of a 5-string's B). rfoPattern is coded explicitly in base
+      // ('r5o') so the variant never leaks across this rung's own vary steps.
+      vary:[ { key:'C', progression:'I-IV-V' }, { key:'G', progression:'I-IV-V' }, { key:'A', progression:'i-VII-VI-VII', scale:'natural_minor' }, { key:'E', progression:'I-V-vi-IV' }, { key:'D', progression:'I-IV-V' }, { key:'C', progression:'I-IV-V', rfoPattern:'low5', fretMin:0, fretMax:7 } ]
     },
     bass_octave_groove: {
       label:'Octave Groove',
@@ -3187,6 +3207,22 @@
   // fretMin/fretMax handling.
   const SHAPE_AWARE_SYSTEMS = new Set(['caged', '3nps', 'open']);
   function isShapeAwareSystem(system) { return SHAPE_AWARE_SYSTEMS.has(system); }
+  // Default fretboard system per instrument profile (string-count fix, 2026-07-10;
+  // guitar-pedagogy + bass-pedagogy panel):
+  // - bass → 'position': bass NEVER uses the guitar shape systems (CAGED/Open/3NPS
+  //   are EADGBE artifacts; the movable position box is bass's system — the pathway
+  //   path already coded this at apply time, this aligns Custom/beginner + sessions).
+  // - guitar N>6 → '3nps': THE extended-range scale system — it tiles every string
+  //   uniformly, so a 7/8-string exercise actually uses the low B/F#. A caged
+  //   default anchors the top-six and leaves the extra strings dead (the
+  //   "switched to 8-string and nothing changed" bug). CAGED itself deliberately
+  //   stays a top-six system (no re-rooted mega-box — no method teaches one).
+  // - guitar 6 → 'caged' (unchanged).
+  // An EXPLICIT user/rung choice always wins — this is only the unset default.
+  function defaultFretboardSystem(instrument, stringCount) {
+    if (instrument === 'bass') return 'position';
+    return (stringCount || 6) > 6 ? '3nps' : 'caged';
+  }
 
   // Sensible default shape for a system + key.
   function defaultShapeForSystem(system, keyPc, scale, openMidis) {
@@ -3282,6 +3318,12 @@
   // isn't shape-aware (callers should fall back to raw fretMin/fretMax).
   function resolveCurrentShape(cfg, openMidis) {
     if (!isShapeAwareSystem(cfg.fretboardSystem)) return null;
+    // Bass never resolves a guitar shape system (defense-in-depth: the count
+    // guards alone pass a 6-string bass, whose all-4ths tuning breaks the
+    // EADGBE-interval templates — notes land a semitone flat on the top two
+    // strings; bass-pedagogy 2026-07-10). The UI hides shape controls for bass,
+    // but a programmatic config (preset import, host sync) must be safe too.
+    if (cfg.instrument === 'bass') return null;
     const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
     let shape = cfg.shape;
     // Coerce numeric shape ids for 3NPS (form values are strings).
@@ -4359,11 +4401,13 @@
     let fretMax = Math.min(MAX_FRET, Math.max(fretMin + 1, parseInt(_fretVal('fretMax', '5'), 10) || 5));
     const practiceType = data.get('practiceType') || data.get('mode') || 'scale';
     const advancedMode = data.get('advancedMode') === 'on';
-    // Default fretboard system is CAGED in beginner mode and whatever the user
-    // picks in advanced mode. The shape-aware systems (caged/3nps/open) drive
+    // Default fretboard system is instrument/count-aware (defaultFretboardSystem:
+    // bass → position, guitar 7/8 → 3nps, guitar 6 → caged); an advanced-mode
+    // explicit pick wins. The shape-aware systems (caged/3nps/open) drive
     // fretMin/fretMax via the resolved shape; raw fretMin/fretMax inputs only
     // matter for the 'position' / 'single_string' / 'full_neck' legacy paths.
-    const fretboardSystem = advancedMode ? (data.get('fretboardSystem') || 'caged') : 'caged';
+    const fretboardSystem = (advancedMode && data.get('fretboardSystem'))
+      || defaultFretboardSystem(setup.instrument, setup.openMidis.length);
     let shape = data.get('shape');
     let shapeNotes = null, shapeDisplayName = null;
     // Frame-window types (the chromatic warmup, the fingerstyle spider) take
@@ -4373,7 +4417,7 @@
     // 2026-06-12 building the spider, whose whole walk rides the window).
     const frameWindowType = practiceType === 'chromatic' || practiceType === 'spider';
     if (isShapeAwareSystem(fretboardSystem) && !frameWindowType) {
-      const resolved = resolveCurrentShape({ fretboardSystem, key: data.get('key') || 'C', scale: data.get('scale') || 'major', shape }, effectiveOpenMidis);
+      const resolved = resolveCurrentShape({ fretboardSystem, instrument: setup.instrument, key: data.get('key') || 'C', scale: data.get('scale') || 'major', shape }, effectiveOpenMidis);
       if (resolved) {
         shape = resolved.shape;
         shapeNotes = resolved.resolved.notes;
@@ -4525,6 +4569,10 @@
       // rhTechMode (Bass Groove & Right-Hand ladder): pulse|crossing|rake|three_finger.
       // Pathway-driven hidden field; absent = 'pulse' (the back-compatible default).
       rhTechMode: data.get('rhTechMode') || 'pulse',
+      // rfoPattern (root_fifth_octave): 'r5o' (default R-5-8-5, the canonical box)
+      // | 'low5' (R–low5–5–8, the fifth-below reach — bass-pedagogy 2026-07-12).
+      // Pathway-driven hidden field; absent = the untouched default.
+      rfoPattern: data.get('rfoPattern') || 'r5o',
       // walkApproach (Bass Lines & Changes ladder): how the walking line targets the
       // NEXT chord on the bar's last beat — scale (current scale-walk) | chromatic
       // (½-step into the next root) | dominant (the 5th of the next chord, V→I) |
@@ -6479,10 +6527,13 @@
   }
 
   function cagedShapeNotesForChord(cfg, shape, quality, rootFret) {
-    // CAGED chord-tone templates are a 6-string (EADGBE) system. Need ≥6 strings;
-    // bass 4/5 (<6) → return null so the caller falls back. On a 7/8-string the
+    // CAGED chord-tone templates are a 6-string (EADGBE) system. Need ≥6 GUITAR
+    // strings; bass 4/5 (<6) → null so the caller falls back — and bass at ANY
+    // count → null: a 6-string bass passes the count guard but is all-4ths (no
+    // G→B major 3rd), so the interval-baked template lands a semitone flat on the
+    // top two strings (bass-pedagogy 2026-07-10). On a 7/8-string guitar the
     // template anchors on the TOP SIX strings (off = N-6), mirroring resolveCAGEDShape.
-    if (cfg.stringCount < 6) return null;
+    if (cfg.instrument === 'bass' || cfg.stringCount < 6) return null;
     const def = CAGED_SHAPES[shape];
     if (!def) return null;
     const tmpl = def.chordTemplates[cagedShapeQualityKey(quality)];
@@ -7048,9 +7099,11 @@
   // chord voicing (all strings the shape covers, not just the strings the
   // generator happened to play) with sensible fingerings.
   function templateFromShape(name, shape, quality, rootFret, cfg, arp) {
-    // 6-string (EADGBE) template; need ≥6 strings. On 7/8 it sits on the top-six
-    // (off = N-6) so the chord box matches the anchored CAGED shape.
-    if (cfg.stringCount < 6) return null;
+    // 6-string (EADGBE) template; need ≥6 GUITAR strings (a 6-string bass passes
+    // the count but its all-4ths tuning breaks the template intervals — see
+    // cagedShapeNotesForChord). On 7/8 it sits on the top-six (off = N-6) so the
+    // chord box matches the anchored CAGED shape.
+    if (cfg.instrument === 'bass' || cfg.stringCount < 6) return null;
     const def = CAGED_SHAPES[shape];
     if (!def) return null;
     const tmpl = def.chordTemplates[cagedShapeQualityKey(quality)];
@@ -9367,11 +9420,12 @@
     // carries fingering by construction (the standard CAGED arpeggio shapes).
     // pickShapeRootFret walks the chosen shape up/down the neck per chord.
     const shape = cfg.shape || cfg.cagedShape;
-    // ≥6 strings: a 7/8-string can host the 6-string CAGED sweep template on its
-    // top-six (anchored via `off` in pickShapeRootFret/cagedShapeNotesForChord),
+    // ≥6 GUITAR strings: a 7/8-string can host the 6-string CAGED sweep template
+    // on its top-six (anchored via `off` in pickShapeRootFret/cagedShapeNotesForChord),
     // so the extended-range sweep keeps by-construction fingering instead of the
-    // greedy all-string rake. <6 (bass) → falls to sweepArpeggioPositions.
-    const wantShape = cfg.stringCount >= 6 && !!CAGED_SHAPES[shape];
+    // greedy all-string rake. <6 OR bass (a 6-string bass passes the count but
+    // breaks the EADGBE template intervals) → falls to sweepArpeggioPositions.
+    const wantShape = cfg.instrument !== 'bass' && cfg.stringCount >= 6 && !!CAGED_SHAPES[shape];
     // The CAGED chordTemplates carry only TRIADS (maj/min/dim) — cagedShapeQualityKey
     // collapses min7→min and maj7/dom7→maj, so a seventh sweep through the template
     // would silently drop the 7th (its whole color). Route seventh sweeps to the
@@ -11059,7 +11113,16 @@
   }
   // A movable power-chord grip (root + 5th [+ octave]) on the low string-set —
   // built directly from the interval geometry (CAGED has no power-chord template).
-  // Standard 4ths between the low strings: 5th = next string +2 frets, oct = +2 up two strings.
+  // Fret offsets are computed BY PITCH against the actual open-string intervals,
+  // not hardcoded (+2 assumed standard 4ths — WRONG in drop tunings, where the
+  // s0→s1 fifth collapses the grip to the iconic SAME-FRET one-finger barre:
+  // {s0:F, s1:F, s2:F} = root·5th·octave. The old +2 sounded root + MAJOR 6TH
+  // in every drop-X/DADGAD/Open-D tuning — a real wrong pitch. Guitar-pedagogy
+  // 2026-07-12: gate on the interval (opens[1]-opens[0] === 7 collapses; DADGAD
+  // and Open D are TRUE positives — the barre is the idiomatic voicing there),
+  // apply by default (in a drop tuning the barre is the only correct voicing),
+  // F=0 = a valid open voicing. templateFromPositions fingers a same-fret row
+  // as a shared-finger barre (fg 1) by construction.
   function powerChordGrip(cfg, rootPc, quality, prevRootFret) {
     const opens = openMidisForConfig(cfg);
     if (opens.length < 3) return null;
@@ -11067,8 +11130,13 @@
     let f = (((rootPc - open0) % 12) + 12) % 12;                 // 0..11 on the lowest string
     if (prevRootFret != null && prevRootFret >= 0 && f + 12 <= 12 &&
         Math.abs((f + 12) - prevRootFret) < Math.abs(f - prevRootFret)) f += 12;
-    const gripNotes = [{ s:0, f, midi:opens[0] + f }, { s:1, f:f + 2, midi:opens[1] + f + 2 }];
-    if (quality === '5oct') gripNotes.push({ s:2, f:f + 2, midi:opens[2] + f + 2 });
+    const fifthF = f + 7 - (opens[1] - opens[0]);                // 5th above root, on s1
+    if (fifthF < 0) return null;                                 // hostile custom tuning — no grippable 5th
+    const gripNotes = [{ s:0, f, midi:opens[0] + f }, { s:1, f:fifthF, midi:opens[1] + fifthF }];
+    if (quality === '5oct') {
+      const octF = f + 12 - (opens[2] - opens[0]);               // octave above root, on s2
+      if (octF >= 0) gripNotes.push({ s:2, f:octF, midi:opens[2] + octF });
+    }
     const name = chordName(rootPc, quality);
     return { shape:'power', rootFret:f, gripNotes, template:templateFromPositions(name, gripNotes, cfg, false) };
   }
@@ -11477,7 +11545,18 @@
       while (opens[s] + f < targetMidi - 6 && f + 12 <= 17) f += 12;
       return { s, f, midi: opens[s] + f };
     };
-    return { root, fifth: onString(root.s + 1, root.midi + 7), octave: onString(root.s + 2, root.midi + 12) };
+    // lowFifth — the P5 BELOW the root on the string below (the "why own a
+    // 5-string" reach; bass-pedagogy spec 2026-07-12). Guards: root.s>=1 (a
+    // string exists below) AND root.f>=2 (at f0/f1 the pc-math octave-push
+    // wraps the note UP a 4th — the opposite of the intent), plus an exact
+    // pitch check (never trust pc arithmetic alone on a custom tuning). Null
+    // when unavailable — consumers degrade to the upper fifth.
+    let lowFifth = null;
+    if (root.s >= 1 && root.f >= 2) {
+      const cand = onString(root.s - 1, root.midi - 7);
+      if (cand.midi === root.midi - 7 && cand.f >= 0) lowFifth = cand;
+    }
+    return { root, fifth: onString(root.s + 1, root.midi + 7), octave: onString(root.s + 2, root.midi + 12), lowFifth };
   }
 
   // right_hand_technique — pitch-INVISIBLE plucking-hand stamina (alternating i-m /
@@ -11540,7 +11619,15 @@
     while (t < totalTime - 0.001) {
       const grip = bassRootGrip(cfg, chordRootForDegree(cfg, degrees[bar % degrees.length]), prevMidi);
       if (grip) {
-        const seq = [grip.root, grip.fifth, grip.octave, grip.fifth];   // R-5-8-5
+        // Default R-5-8-5 — the canonical pre-scales box, deliberately untouched.
+        // rfoPattern 'low5' (opt-in, bass-pedagogy spec 2026-07-12) = R–low5–5–8:
+        // root on the downbeat, then the fifth BELOW on the string below (the
+        // 5-string reach), traversing both fifths + the octave. When the low
+        // fifth is unreachable (root on the lowest string / low fret) the grip
+        // degrades to the upper fifth — the pattern stays playable everywhere.
+        const seq = (cfg.rfoPattern === 'low5')
+          ? [grip.root, grip.lowFifth || grip.fifth, grip.fifth, grip.octave]
+          : [grip.root, grip.fifth, grip.octave, grip.fifth];   // R-5-8-5
         for (let b = 0; b < beatsPerBar; b++) {
           const p = seq[b % seq.length], nt = t + b * beatSec;
           if (nt < totalTime) notes.push(noteDefaults({ t:Number(nt.toFixed(6)), s:p.s, f:p.f, sus, ac:(b === 0) }));
@@ -11969,7 +12056,10 @@
       // Structural defaults
       key:'C', scale:'major', bpm:80, bars:4, direction:'up_down', sequence:'none',
       meter:'4/4',   // safety-net default so a meter-less config never yields meter.denominator undefined
-      subdivision:'eighth', fretboardSystem:'caged', shape:'E', fretMin:0, fretMax:5,
+      // fretboardSystem: instrument/count-aware (bass → position, guitar 7/8 →
+      // 3nps, guitar 6 → caged); a segment's own coded system still wins (a rung
+      // that TEACHES a CAGED shape stays a CAGED lesson on its coded strings).
+      subdivision:'eighth', fretboardSystem: defaultFretboardSystem(setup.instrument, setup.openMidis.length), shape:'E', fretMin:0, fretMax:5,
       chordDepth:'seventh', progression:'ii-V-I', chordOverride:'auto',
       chordScaleStrategy:'mode_of_moment', chromaticPattern:'1234', keyCycle:'none',
       repeatCount:1, advancedMode:true, voices:'thirds_only', renderer:'highway_3d',
@@ -11993,7 +12083,7 @@
     // Resolve CAGED / 3NPS / Open shape into fretMin/fretMax + shapeNotes
     raw.shapeNotes = null; raw.shapeDisplayName = null;
     if (isShapeAwareSystem(raw.fretboardSystem)) {
-      const resolved = resolveCurrentShape({ fretboardSystem:raw.fretboardSystem, key:raw.key, scale:raw.scale, shape:raw.shape }, effectiveOpenMidis);
+      const resolved = resolveCurrentShape({ fretboardSystem:raw.fretboardSystem, instrument:raw.instrument, key:raw.key, scale:raw.scale, shape:raw.shape }, effectiveOpenMidis);
       if (resolved) {
         raw.shape = resolved.shape;
         raw.shapeNotes = resolved.resolved.notes;
@@ -13031,6 +13121,257 @@
     };
   }
 
+  // ── Classic 2D Highway (host-parity MIRROR) ─────────────────────────────
+  // A faithful port of the host's "Classic 2D Highway" (Byron's) — the
+  // perspective falling-fret highway that is createHighway()'s private
+  // _defaultRenderer (static/highway.js + static/js/highway-{geometry,draw,
+  // state-primitives}.js). HOST CHECK 2026-07-10: that renderer is core,
+  // closure-fed + websocket-fed, and exposes no viz factory, so it can't be
+  // BORROWED — verdict MIRROR (issue got-feedBack/feedBack#835 asks the host to
+  // ship a bundle-driven feedBackViz_highway_2d, which would flip this to a
+  // pure borrow). This drives the `highway_2d` view slot; our horizontal-lane
+  // makeBuiltin2DRenderer stays the Jumping-Tab fallback + the >8-string path.
+  //
+  // Ported faithfully (constants + geometry lifted from the host source): the
+  // #080810 BG, the perspective project() (VISIBLE_SECONDS/Z_CAM/Z_MAX), the
+  // centered fretX() trapezoid, the fret lines, the beat sweep, the string
+  // palette (DEFAULT_STRING_COLORS/DIM/BRIGHT), the strike (now) line, the
+  // falling fret-number gems, and the amber fret-number rail with anchor
+  // highlight. Deliberate approximations (documented, not oversights): the
+  // exotic overlays our bundle doesn't feed (unison-bend connectors, strum-
+  // group brackets, master-difficulty phrase filtering, lyrics, chord frames)
+  // are omitted; and a CREDITED hit keeps Virtuoso's own green-gem grammar
+  // (#22c55e + glow — the cross-surface "a hit is unmistakable" guarantee from
+  // the 2026-07-09 tester fix) rather than the host's string-bright lit gem,
+  // so the hit stays as visible here as on our Tab/Notation surfaces.
+  function makeClassic2DHighwayRenderer() {
+    let canvas = null, ctx = null, W = 0, H = 0;
+    let displayMaxFret = 12, lastTime = null;
+    const VISIBLE_SECONDS = 3.0, Z_CAM = 2.2, Z_MAX = 10.0, BG = '#080810';
+    const SC = ['#cc0000','#cca800','#0066cc','#cc6600','#00cc66','#9900cc','#cc00aa','#00cccc'];
+    const SDIM = ['#520000','#524200','#002952','#522900','#005229','#3d0052','#520042','#005252'];
+    const SBRIGHT = ['#ff3c3c','#ffe040','#3c9cff','#ff9c3c','#3cff9c','#cc3cff','#ff3ce0','#3ce0e0'];
+
+    function resize() {
+      if (!canvas) return;
+      const box = canvas.parentElement || $('virtuoso-render-host');
+      const r = box ? box.getBoundingClientRect() : { width: canvas.width, height: canvas.height };
+      W = Math.max(640, Math.round(r.width || 1280));
+      H = Math.max(420, Math.round(r.height || 720));
+      canvas.width = W; canvas.height = H;
+    }
+    // Perspective projection: fret plane recedes UP from the strike line at
+    // y=0.82. Exact host math (highway-geometry.js project()).
+    function project(tOff) {
+      if (tOff > VISIBLE_SECONDS || tOff < -0.05) return null;
+      if (tOff < 0) return { y: 0.82 + Math.abs(tOff) * 0.3, scale: 1.0 };
+      const z = tOff * (Z_MAX / VISIBLE_SECONDS), denom = z + Z_CAM;
+      if (denom < 0.01) return null;
+      const scale = Z_CAM / denom;
+      return { y: 0.82 + (0.08 - 0.82) * (1.0 - scale), scale };
+    }
+    // Centered fret→x band (highway-state-primitives.js fretX()).
+    function fretX(fret, scale) {
+      const hw = W * 0.52 * scale, margin = hw * 0.06, usable = hw * 2 - 2 * margin;
+      return W / 2 - hw + margin + (fret / Math.max(1, displayMaxFret)) * usable;
+    }
+    function anchorsOf(bundle) { return bundle.anchors && bundle.anchors.length ? bundle.anchors : null; }
+    function anchorAt(bundle, t) {
+      const src = anchorsOf(bundle);
+      if (!src) { let mf = 0; for (const n of bundle.notes || []) if (n.f > mf) mf = n.f; return { fret: 0, width: Math.max(4, mf) }; }
+      let a = src[0] || { fret: 1, width: 4 };
+      for (const anc of src) { if (anc.time > t) break; a = anc; }
+      return a;
+    }
+    function maxFretInWindow(bundle, t) {
+      const src = anchorsOf(bundle);
+      if (!src) { let mf = 0; for (const n of bundle.notes || []) if (n.f > mf) mf = n.f; return mf; }
+      let mf = 0;
+      for (const anc of src) {
+        if (anc.time > t + VISIBLE_SECONDS + 2) break;
+        if (anc.time + 2 < t) continue;
+        const top = anc.fret + anc.width; if (top > mf) mf = top;
+      }
+      return mf;
+    }
+    function smoothFret(bundle, now, dt) {
+      const a = anchorAt(bundle, now);
+      const needed = Math.max(a.fret + a.width, maxFretInWindow(bundle, now));
+      const target = Math.max(needed + 3, 8);
+      displayMaxFret += (target - displayMaxFret) * Math.min(0.4 * dt, 0.4);
+    }
+    // Text stays left-to-right readable under the lefty mirror transform.
+    function textReadable(txt, x, y, lefty) {
+      if (!lefty) { ctx.fillText(txt, x, y); return; }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillText(txt, W - x, y); ctx.restore();
+    }
+
+    function drawHighway() {
+      const strips = 40;
+      for (let i = 0; i < strips; i++) {
+        const p0 = project((i / strips) * VISIBLE_SECONDS), p1 = project(((i + 1) / strips) * VISIBLE_SECONDS);
+        if (!p0 || !p1) continue;
+        const hw0 = W * 0.26 * p0.scale, hw1 = W * 0.26 * p1.scale, bright = 18 + 10 * p0.scale;
+        ctx.fillStyle = `rgb(${bright | 0},${bright | 0},${(bright + 14) | 0})`;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 - hw0, p0.y * H); ctx.lineTo(W / 2 + hw0, p0.y * H);
+        ctx.lineTo(W / 2 + hw1, p1.y * H); ctx.lineTo(W / 2 - hw1, p1.y * H);
+        ctx.fill();
+      }
+    }
+    function drawFretLines() {
+      const hi = Math.ceil(displayMaxFret);
+      ctx.strokeStyle = '#2d2d45'; ctx.lineWidth = 1;
+      for (let fret = 0; fret <= hi; fret++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 40; i++) {
+          const p = project((i / 40) * VISIBLE_SECONDS); if (!p) continue;
+          const x = fretX(fret, p.scale);
+          if (i === 0) ctx.moveTo(x, p.y * H); else ctx.lineTo(x, p.y * H);
+        }
+        ctx.stroke();
+      }
+    }
+    function drawBeats(bundle, now) {
+      for (const beat of bundle.beats || []) {
+        const p = project(beat.time - now);
+        if (!p || p.scale < 0.06) continue;
+        const hw = W * 0.26 * p.scale, isMeasure = beat.measure >= 0;
+        ctx.strokeStyle = isMeasure ? '#343450' : '#202038'; ctx.lineWidth = isMeasure ? 2 : 1;
+        ctx.beginPath(); ctx.moveTo(W / 2 - hw, p.y * H); ctx.lineTo(W / 2 + hw, p.y * H); ctx.stroke();
+      }
+    }
+    function drawStrings(nStr, inverted) {
+      const strTop = H * 0.83, strBot = H * 0.95, margin = W * 0.03, span = Math.max(1, nStr - 1);
+      ctx.lineWidth = 3;
+      for (let i = 0; i < nStr; i++) {
+        const yi = inverted ? (nStr - 1 - i) : i, y = strTop + (yi / span) * (strBot - strTop);
+        ctx.strokeStyle = SC[i] || '#888';
+        ctx.beginPath(); ctx.moveTo(margin, y); ctx.lineTo(W - margin, y); ctx.stroke();
+      }
+    }
+    function drawNowLine() {
+      const y = H * 0.82, hw = W * 0.26;
+      for (let i = 1; i < 5; i++) {
+        const a = Math.max(0, 70 - i * 15);
+        ctx.strokeStyle = `rgba(${a},${a},${a + 8},1)`; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(W / 2 - hw, y - i); ctx.lineTo(W / 2 + hw, y - i); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(W / 2 - hw, y + i); ctx.lineTo(W / 2 + hw, y + i); ctx.stroke();
+      }
+      ctx.strokeStyle = '#dce0f0'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(W / 2 - hw, y); ctx.lineTo(W / 2 + hw, y); ctx.stroke();
+    }
+    function drawFretNumbers(bundle, now, lefty) {
+      const y = H * 0.97, hi = Math.ceil(displayMaxFret), a = anchorAt(bundle, now);
+      ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (let fret = 0; fret <= hi; fret++) {
+        const inAnchor = fret >= a.fret && fret <= a.fret + a.width;
+        ctx.fillStyle = inAnchor ? '#e8c040' : '#8a6830';
+        textReadable(String(fret), fretX(fret, 1.0), y, lefty);
+      }
+    }
+    function drawSustains(bundle, now) {
+      for (const n of bundle.notes || []) {
+        if (!(n.sus > 0)) continue;
+        const p0 = project(Math.max(-0.05, n.t - now)), p1 = project(Math.max(-0.05, n.t + n.sus - now));
+        if (!p0 && !p1) continue;
+        const yTop = (p1 ? p1.y : 0.0) * H, yBot = (p0 ? p0.y : 0.82) * H, sc = p0 ? p0.scale : 1.0;
+        const x = fretX(n.f, sc), w = Math.max(3, 10 * sc * (H / 900));
+        ctx.strokeStyle = SDIM[n.s] || '#333'; ctx.lineWidth = w; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, Math.min(yBot, H * 0.82)); ctx.lineTo(fretX(n.f, p1 ? p1.scale : sc), yTop); ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+    }
+    function drawNote(bundle, n, x, y, scale, lefty) {
+      const sz = Math.max(12, 80 * scale * (H / 900)), half = sz / 2, s = n.s;
+      const st = bundle.getNoteState ? bundle.getNoteState(n) : null;
+      const stState = st && (typeof st === 'string' ? st : st.state);
+      const hit = stState === 'hit' || stState === 'active', miss = stState === 'miss';
+      // Dead/muted note: hollow X (host draws an X marker; keep it simple).
+      if (n.mt) {
+        ctx.strokeStyle = SC[s] || '#888'; ctx.lineWidth = Math.max(2, sz / 8);
+        ctx.beginPath(); ctx.moveTo(x - half * 0.6, y - half * 0.6); ctx.lineTo(x + half * 0.6, y + half * 0.6);
+        ctx.moveTo(x + half * 0.6, y - half * 0.6); ctx.lineTo(x - half * 0.6, y + half * 0.6); ctx.stroke();
+        return;
+      }
+      if (miss) ctx.globalAlpha = 0.5;
+      // Open string: wide centered bar (host grammar).
+      if (n.f === 0) {
+        const hw = W * 0.26 * scale, barH = Math.max(6, sz * 0.45);
+        ctx.fillStyle = SDIM[s] || '#222'; roundRectPath(W / 2 - hw - 1, y - barH / 2 - 1, hw * 2 + 2, barH + 2, 3); ctx.fill();
+        if (hit) { ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 14; }
+        ctx.fillStyle = hit ? '#22c55e' : (SC[s] || '#888'); roundRectPath(W / 2 - hw, y - barH / 2, hw * 2, barH, 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(8, sz * 0.5) | 0}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        textReadable('0', W / 2, y, lefty);
+        if (miss) ctx.globalAlpha = 1;
+        return;
+      }
+      // Fretted gem: glow rect + body rounded rect + white fret number.
+      ctx.fillStyle = hit ? '#166534' : (SDIM[s] || '#222');
+      roundRectPath(x - half - 4, y - half - 4, sz + 8, sz + 8, sz / 3); ctx.fill();
+      if (hit) { ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 14; }
+      ctx.fillStyle = hit ? '#22c55e' : (SC[s] || '#888');
+      roundRectPath(x - half, y - half, sz, sz, sz / 5); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(10, sz * 0.5) | 0}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      textReadable(String(n.f), x, y, lefty);
+      // Technique glyph above (PM / h / p / ~ / accent) — small, host-adjacent.
+      if (sz >= 14) {
+        const g = n.pm ? 'PM' : n.ho ? 'H' : n.po ? 'P' : n.tp ? 'T' : n.tr ? '~' : '';
+        if (g) { ctx.fillStyle = '#ffe08a'; ctx.font = `bold ${Math.max(9, sz * 0.3) | 0}px sans-serif`; textReadable(g, x, y - half - 6, lefty); }
+      }
+      if (miss) ctx.globalAlpha = 1;
+    }
+    function roundRectPath(x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr); ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr); ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+    }
+    function drawNotes(bundle, now, lefty) {
+      // Far notes first so nearer (bigger) gems paint over them.
+      const src = (bundle.notes || []).filter(n => { const dt = n.t - now; return dt <= VISIBLE_SECONDS && (dt > -0.05 || (n.sus > 0 && n.t + n.sus > now)); });
+      src.sort((a, b) => b.t - a.t);
+      for (const n of src) {
+        let tOff = n.t - now, p;
+        if (tOff < -0.05 && n.sus > 0 && n.t + n.sus > now) p = { y: 0.82, scale: 1.0 };
+        else p = project(tOff);
+        if (!p) continue;
+        drawNote(bundle, n, fretX(n.f, p.scale), p.y * H, p.scale, lefty);
+      }
+    }
+
+    function draw(bundle) {
+      if (!ctx || !bundle) return;
+      resize();
+      const now = bundle.currentTime || 0;
+      const dt = lastTime == null ? 1 / 60 : Math.max(1 / 240, Math.min(0.1, now - lastTime));
+      lastTime = now;
+      smoothFret(bundle, now, dt);
+      const nStr = Math.max(1, bundle.stringCount || 6), inverted = !!bundle.inverted, lefty = !!bundle.lefty;
+      ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      if (lefty) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+      drawHighway();
+      drawFretLines();
+      drawBeats(bundle, now);
+      drawStrings(nStr, inverted);
+      drawSustains(bundle, now);
+      drawNowLine();
+      drawNotes(bundle, now, lefty);
+      drawFretNumbers(bundle, now, lefty);
+      ctx.restore();
+    }
+
+    return {
+      init(c, bundle) { canvas = c; ctx = c.getContext('2d'); displayMaxFret = 12; lastTime = null; resize(); if (bundle) { const a = (bundle.anchors || [])[0]; if (a) displayMaxFret = Math.max(8, a.fret + a.width + 3); } window.addEventListener('resize', resize); },
+      draw,
+      resize,
+      destroy() { window.removeEventListener('resize', resize); canvas = null; ctx = null; }
+    };
+  }
+
   function makeBuiltin2DTabRenderer() {
     // Standard guitar-tab look: paper background, string lines, fret numbers
     // sitting on the strings with the line broken behind each number, plain
@@ -13995,6 +14336,21 @@
     if (kind === 'builtin_2d') {
       const f = await borrowHostViz('jumpingtab', '/api/plugins/jumpingtab/screen.js');
       return f ? { factory:f, label:'Jumping Tab' } : { factory:makeBuiltin2DRenderer, label:'2D Highway (fallback)' };
+    }
+    // 'highway_2d' = the 2D Highway slot (view dropdown, 2026-07-10). The
+    // TARGET is the host's "Classic 2D Highway" (Byron's), but that renderer is
+    // host-CORE, not borrowable today — HOST CHECK 2026-07-10: it's the private
+    // _defaultRenderer inside createHighway() (static/highway.js), picker id
+    // 'default' (RESERVED), no feedBackViz factory, closure-fed (no bundle) and
+    // websocket-fed (no chart setter). Verdict MIRROR; flips to BORROW when the
+    // host ships a bundle-driven feedBackViz_highway_2d factory (asked via host
+    // issue). Borrow-FIRST probe (factory global only — no speculative script
+    // fetch, its URL doesn't exist yet and a blind 404 trips the smoke
+    // console-guards): the moment the host registers the factory this slot
+    // upgrades itself; until then the in-tree 2D highway renders.
+    if (kind === 'highway_2d') {
+      const f = vizFactoryFor('highway_2d');
+      return f ? { factory:f, label:'2D Highway (host)' } : { factory:makeClassic2DHighwayRenderer, label:'2D Highway' };
     }
     if (kind === 'tab_2d') return { factory:makeBuiltin2DTabRenderer, label:'Tab' };
     if (kind === 'notation_2d') return { factory:makeBuiltin2DNotationRenderer, label:'Notation' };
@@ -17887,7 +18243,9 @@
     if (tun && tun.selectedOptions && tun.selectedOptions[0]) {
       tuning = tun.selectedOptions[0].textContent.replace(/\s*\(.*\)\s*/, '').trim();
     }
-    return tuning ? `${instr} · ${tuning}` : instr;
+    // Host-badge content hierarchy: instrument · strings · tuning (topbar parity).
+    const count = currentStringCount();
+    return tuning ? `${instr} · ${count} · ${tuning}` : `${instr} · ${count}`;
   }
   function updateSetupButton() {
     const lbl = $('virtuoso-setup-label');
@@ -17910,17 +18268,280 @@
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     // The Tune… row needs the host scoring SDK (the mic detector) — sync its
     // visibility on every open so a host without it never shows a dead button.
-    // The courtesy button rides the same sync: shown only when the third-party
-    // floating-tuner plugin's public API is present (feature-detect, no dependency).
+    // (The old courtesy "Floating tuner ↗" button retired 2026-07-10: the header
+    // Tuner badge is that affordance now, in the host's own topbar position.)
     if (open) {
       const row = $('virtuoso-tune-row');
-      const extOk = typeof window.tuner?.toggle === 'function';
-      if (row) row.style.display = (ptAvailable() || ndVerifyAvailable() || extOk) ? '' : 'none';
+      if (row) row.style.display = (ptAvailable() || ndVerifyAvailable()) ? '' : 'none';
       const tuneBtn = $('virtuoso-tune-btn');
       if (tuneBtn) tuneBtn.style.display = ptAvailable() ? '' : 'none';
-      const ext = $('virtuoso-tuner-ext');
-      if (ext) ext.style.display = extOk ? '' : 'none';
     }
+  }
+  // ── Host topbar parity: tuner + profile badges & instrument-settings sync ───
+  // (docs/topbar-host-parity.md, 2026-07-10.) Virtuoso's "fullscreen":true hides
+  // the host topbar on this screen, so the header mirrors its three badges. HOST
+  // CHECK verdicts: tuner = BORROW the launch (window.tuner.toggle) + MIRROR the
+  // card; instrument = BORROW persistence (/api/settings + /api/tunings +
+  // workingTuning + instrument:changed) + MIRROR the badge; profile = MIRROR the
+  // chip + LINK (goScreen('v3-profile')). Host settings are the source of truth
+  // for the player's guitar/bass identity; piano (gated) NEVER posts — the host
+  // model has no piano. Per-rung tuning overrides (applyPathwayConfig /
+  // setFieldSilent paths) never reach hostSettingsWrite — only user-driven panel
+  // changes funnel through instrumentStoreSave. All host paths fail silent so
+  // the standalone/degraded behavior is exactly the pre-parity plugin.
+  // NOTE (notedetect-expert, load-bearing): note_detect reads NEITHER
+  // workingTuning nor /api/settings — the verifier's tuning reference is solely
+  // the per-call ctx Virtuoso already passes. This sync must never replace it.
+  let _hostTuningsByKey = null;   // {'guitar-6': {name: [hz,…]}} from GET /api/tunings
+  let _hostTuningsRef = 440;      // referencePitch the hz table was scaled to
+  let _hostSettingsCache = null;  // last GET /api/settings body (pathway echo)
+  let _hostApplying = false;      // true while applying host → panel (no write echo)
+  let _hostSelfEmit = false;      // true around our own instrument:changed emit
+  let _hostWriteTimer = null;
+  function hostStandardMidisFor(family, count) {
+    return (STRING_SETUPS[`${family}_${count}_standard`] || {}).openMidis || null;
+  }
+  // The host serves tunings as FREQUENCIES scaled to its reference pitch; recover
+  // absolute midis against that same reference (A4 = 69 at referencePitch).
+  function hostTuningEntries(family, count) {
+    const table = _hostTuningsByKey && _hostTuningsByKey[`${family}-${count}`];
+    if (!table) return [];
+    const ref = _hostTuningsRef || 440;
+    const out = [];
+    for (const [name, freqs] of Object.entries(table)) {
+      if (!Array.isArray(freqs) || freqs.length !== count) continue;
+      const midis = freqs.map(hz => Math.round(69 + 12 * Math.log2(hz / ref)));
+      if (midis.every(m => Number.isFinite(m) && m >= 0 && m <= 127)) out.push({ name, midis });
+    }
+    return out;
+  }
+  function hostTuningNameForMidis(family, count, midis) {
+    const hit = hostTuningEntries(family, count)
+      .find(e => e.midis.length === midis.length && e.midis.every((m, i) => m === midis[i]));
+    return hit ? hit.name : null;
+  }
+  async function loadHostTunings() {
+    try {
+      const r = await fetch('/api/tunings');
+      if (!r.ok) return;
+      const d = await r.json();
+      _hostTuningsByKey = (d && d.tunings) || null;
+      _hostTuningsRef = Number(d && d.referencePitch) || 440;
+      syncTuningOptions();   // repaint the dropdown with the host named group
+    } catch (_) { /* older host / offline — Virtuoso presets only */ }
+  }
+  // The panel's currently-effective open midis (custom override else the setup's).
+  function effectiveMidisNow() {
+    const count = currentStringCount();
+    const hidden = $('virtuoso-custom-open-midis');
+    const custom = (hidden?.value || '').split(',').map(Number).filter(Number.isFinite);
+    if (custom.length === count) return custom;
+    const setup = document.querySelector('[name="stringSetup"]');
+    return ((STRING_SETUPS[setup?.value] || {}).openMidis || []).slice();
+  }
+  // Write-through: user panel change → POST /api/settings (host commit discipline:
+  // adopt only on an accepted response — /api/settings can return {error} with
+  // HTTP 200), then workingTuning + instrument:changed + the tuner-config push,
+  // exactly the host badge's own saveSettings sequence. Named tunings round-trip
+  // by NAME; everything else as a custom offset array vs the family standard
+  // (interop always maps through ABSOLUTE midis — never reconcile via .tuning).
+  function hostSettingsWriteSoon() {
+    if (_hostApplying) return;   // applying host → panel; don't echo it back
+    if (_hostWriteTimer) clearTimeout(_hostWriteTimer);
+    _hostWriteTimer = setTimeout(() => { _hostWriteTimer = null; hostSettingsWriteNow(); }, 150);
+  }
+  async function hostSettingsWriteNow() {
+    const instrEl = document.querySelector('[name="instrument"]');
+    if (!instrEl || instrEl.value === 'piano') return;   // no piano in the host model
+    const family = currentFamily();
+    const count = currentStringCount();
+    const std = hostStandardMidisFor(family, count);
+    const midis = effectiveMidisNow();
+    if (!std || midis.length !== std.length) return;
+    const named = hostTuningNameForMidis(family, count, midis);
+    const tuning = named || midis.map((m, i) => m - std[i]);
+    let accepted = false;
+    try {
+      const r = await fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instrument: family, string_count: count, tuning }),
+      });
+      if (r.ok) { const body = await r.json().catch(() => ({})); accepted = !(body && body.error); }
+    } catch (_) { /* host settings unreachable — Virtuoso persistence still holds */ }
+    if (!accepted) return;
+    try { hostBus()?.workingTuning?.setCurrentInstrument?.(family, count); } catch (_) {}
+    _hostSelfEmit = true;
+    try {
+      hostBus()?.emit?.('instrument:changed', {
+        instrument: family, stringCount: count, tuning,
+        pathway: (_hostSettingsCache && _hostSettingsCache.pathway) || 'songs',   // echo, control dropped
+      });
+    } catch (_) {}
+    setTimeout(() => { _hostSelfEmit = false; }, 250);
+    // Tuner-config push only when the tuner plugin is actually present (its
+    // global is the cheap detect for its routes — a blind POST 404s and the
+    // console noise trips the smoke suites' console-error guards).
+    if (typeof window.tuner?.toggle === 'function') {
+      try {
+        const body = { lastInstrument: `${family}-${count}` };
+        if (typeof tuning === 'string') body.lastTuning = tuning;   // custom arrays have no name — skip
+        await fetch('/api/plugins/tuner/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (typeof window._tunerReloadConfig === 'function') await window._tunerReloadConfig();
+      } catch (_) { /* tuner plugin config route absent */ }
+    }
+  }
+  // Resolve a host settings body to {inst, count, midis} (absolute midis — the
+  // interop currency; never reconcile via offsets alone).
+  function hostSettingsResolve(s) {
+    const inst = s.instrument === 'bass' ? 'bass' : 'guitar';
+    const counts = inst === 'bass' ? [4, 5, 6] : [6, 7, 8];
+    let count = Number(s.string_count);
+    if (!counts.includes(count)) count = counts[0];
+    const std = hostStandardMidisFor(inst, count);
+    if (!std) return null;
+    let midis;
+    if (typeof s.tuning === 'string') {
+      const named = hostTuningEntries(inst, count).find(e => e.name === s.tuning);
+      midis = named ? named.midis.slice() : std.slice();
+    } else if (Array.isArray(s.tuning) && s.tuning.length === std.length) {
+      midis = std.map((m, i) => m + (Number(s.tuning[i]) || 0));
+    } else {
+      midis = std.slice();
+    }
+    return { inst, count, midis };
+  }
+  function hostStateMatchesPanel(res) {
+    const cur = effectiveMidisNow();
+    return currentFamily() === res.inst && currentStringCount() === res.count
+      && cur.length === res.midis.length && cur.every((m, i) => m === res.midis[i]);
+  }
+  // Apply host → panel (a PULL: fresh install, or a live instrument:changed from
+  // the host badge / another screen). Applies via the normal setup-change path so
+  // pathway repaint/regenerate behave exactly like a user change — _hostApplying
+  // suppresses only the write-back echo.
+  function applyHostInstrument(s) {
+    const res = hostSettingsResolve(s);
+    if (!res) return;
+    if (hostStateMatchesPanel(res)) return;   // already showing it (breaks the react loop)
+    const { inst, count, midis } = res;
+    const instrEl = document.querySelector('[name="instrument"]');
+    const setupEl = document.querySelector('[name="stringSetup"]');
+    const hidden = $('virtuoso-custom-open-midis');
+    if (!instrEl || !setupEl) return;
+    // Exact built-in setup match else custom override vs the family standard.
+    let setupName = null;
+    for (const [k, v] of Object.entries(STRING_SETUPS)) {
+      if (v.instrument === inst && v.openMidis.length === midis.length
+          && v.openMidis.every((m, i) => m === midis[i])) { setupName = k; break; }
+    }
+    _hostApplying = true;
+    try {
+      instrEl.value = inst;
+      if (setupName) { setupEl.value = setupName; if (hidden) hidden.value = ''; }
+      else { setupEl.value = `${inst}_${count}_standard`; if (hidden) hidden.value = midis.join(','); }
+      syncInstrumentFamilyButtons();
+      // The full user-path handler: syncs, L1 store save, pathway repaint, regenerate.
+      setupEl.dispatchEvent(new Event('change', { bubbles: true }));
+      syncCustomTuningInputs();
+    } finally { _hostApplying = false; }
+  }
+  async function hostSettingsFetch() {
+    try {
+      const r = await fetch('/api/settings');
+      if (!r.ok) return null;
+      const s = await r.json();
+      if (!s || typeof s !== 'object') return null;
+      _hostSettingsCache = s;
+      return (s.instrument === 'guitar' || s.instrument === 'bass') ? s : null;
+    } catch (_) { return null; /* older host / offline */ }
+  }
+  // Boot-time reconcile. Direction matters: while this plugin is resident it
+  // tracks host changes LIVE (the instrument:changed subscription), so at boot a
+  // divergence means the LOCAL declaration is the survivor to trust — a pre-merge
+  // player's tuning lives only in the L1 store, and the host side may still be
+  // factory default ("chose Standard" and "never touched" are indistinguishable).
+  // Local wins and is pushed host-ward; a fresh install (no L1 store) adopts the
+  // host. Live external changes always PULL (the event handler below).
+  async function hostSettingsRead() {
+    const s = await hostSettingsFetch();
+    if (!s) return;
+    const res = hostSettingsResolve(s);
+    if (!res || hostStateMatchesPanel(res)) return;   // in sync — nothing to do
+    if (!instrumentStoreLoad()) { applyHostInstrument(s); return; }
+    hostSettingsWriteNow();
+  }
+  // Tuner badge: launch is the host's own action; display is a passive mirror of
+  // the bus 'tuner:frame' stream ({note, cents, freq, hasSignal}). Never draws on
+  // the tuner's surfaces or re-implements detection (the borrow boundary).
+  function syncTunerBadge() {
+    const b = $('virtuoso-tuner-badge');
+    if (b) b.hidden = typeof window.tuner?.toggle !== 'function';
+  }
+  function applyTunerFrame(d) {
+    const note = $('virtuoso-tuner-note'), meter = $('virtuoso-tuner-meter');
+    if (!note || !meter) return;
+    const has = d && d.hasSignal !== false && d.note;
+    note.textContent = has ? String(d.note) : 'Tuner';
+    const segs = meter.children;
+    const cents = has && Number.isFinite(Number(d.cents)) ? Number(d.cents) : null;
+    // 5 segments ≈ the host's 11-bar meter at our scale: lit segment tracks cents
+    // (±25¢ range), green in tune, amber off-pitch.
+    const lit = cents == null ? -1 : Math.max(0, Math.min(4, Math.round(cents / 10) + 2));
+    for (let i = 0; i < segs.length; i++) {
+      segs[i].classList.toggle('on', i === lit);
+      segs[i].classList.toggle('off-pitch', i === lit && Math.abs(cents) > 5);
+    }
+  }
+  // Profile badge: compact mirror (avatar + streak + rank) + LINK. Renders nothing
+  // unless the profile endpoint answers AND the player is onboarded (host rule).
+  async function loadProfileBadge() {
+    const btn = $('virtuoso-profile-badge');
+    if (!btn || !btn.hidden) return;   // absent or already rendered
+    try {
+      const r = await fetch('/api/profile');
+      if (!r.ok) return;
+      const p = await r.json();
+      if (!p || !p.onboarded) return;
+      let prog = null;
+      try { const r2 = await fetch('/api/profile/progress'); if (r2.ok) prog = await r2.json(); } catch (_) {}
+      let rank = '';
+      try { rank = String(window.v3Progression?.get?.()?.mastery_rank || ''); } catch (_) {}
+      const av = $('virtuoso-profile-avatar');
+      if (av && p.avatar_url) { av.src = p.avatar_url; av.hidden = false; }
+      const streak = Number(prog && prog.current_streak) || 0;
+      const bits = [];
+      if (streak > 0) bits.push(`${streak}🔥`);
+      if (rank) bits.push(rank);
+      if (!bits.length) bits.push(p.display_name || 'Profile');
+      const txt = $('virtuoso-profile-text');
+      if (txt) txt.textContent = bits.join(' · ');
+      btn.title = [p.display_name, rank, streak ? `${streak}-day streak` : '']
+        .filter(Boolean).join(' · ') || 'Profile';
+      btn.hidden = false;
+    } catch (_) { /* endpoint absent (web/smoke oddity) — badge stays hidden */ }
+  }
+  // One idempotent init: feature-detects each badge, loads host state, subscribes
+  // the bus streams. Called from bind() + a delayed retry (plugin load order — the
+  // tuner plugin / bus may register after us, mirroring the ptShowIdleStrip retry).
+  let _hostTopbarSubscribed = false;
+  function initHostTopbar() {
+    syncTunerBadge();
+    loadProfileBadge();
+    if (_hostTopbarSubscribed) return;
+    const bus = hostBus();
+    if (!bus || typeof bus.on !== 'function') return;
+    _hostTopbarSubscribed = true;
+    try { bus.on('tuner:frame', (e) => applyTunerFrame((e && e.detail) || e)); } catch (_) {}
+    try {
+      bus.on('instrument:changed', async () => {
+        if (_hostSelfEmit) return;   // our own emit bouncing back
+        // External change (host badge, another screen) — always a PULL.
+        const s = await hostSettingsFetch();
+        if (s) applyHostInstrument(s);
+      });
+    } catch (_) {}
   }
   // Header settings menu (⚙) + its prefs: accent theme (live), default XP mode (a
   // stored default — ready for the unbuilt XP store), default count-in (seeds the
@@ -20005,6 +20626,12 @@
         customOpenMidis: (hidden?.value || '').trim(),
       }));
     } catch (_) {}
+    // Host write-through (topbar parity): this function IS the user-driven L1
+    // declaration funnel — every call site is a real user panel change (pathway/
+    // programmatic writes go through setFieldSilent and never land here), so it is
+    // exactly the anti-leak boundary the host sync must respect. Debounced;
+    // no-ops while applying host → panel and on every host failure.
+    hostSettingsWriteSoon();
   }
   function instrumentStoreLoad() {
     try {
@@ -20098,7 +20725,11 @@
       ? customMidis
       : ((STRING_SETUPS[setupName] || {}).openMidis || []);
     let activeId = null;
-    // Built-in presets (Standard, Drop D, DADGAD, …).
+    // Built-in presets (Standard, Drop D, DADGAD, …). These keep their STABLE ids
+    // (`standard`, `d_standard`, …) — tests, stored prefs, and the L1 adapt paths
+    // key off them, so the host merge must never remove or rename them (deliberate
+    // deviation from the spec's "host name wins": id stability beats label
+    // provenance; the labels are near-identical anyway).
     const presetGroup = document.createElement('optgroup');
     presetGroup.label = 'Built-in';
     for (const p of presets) {
@@ -20112,6 +20743,29 @@
       }
     }
     sel.appendChild(presetGroup);
+    // Host named tunings the curated set doesn't carry (topbar parity): the host
+    // tuning table is the fuller catalog (Drop A/Ab, Open E, …) — midis-duplicates
+    // of a built-in preset are skipped. Round-tripping to the host by NAME is
+    // unaffected by which option the user picks (hostTuningNameForMidis matches by
+    // resolved midis), as is the offset:true intent tag (applyTuningAdaptL1
+    // matches TUNING_PRESETS by midis).
+    const hostEntries = hostTuningEntries(family, count)
+      .filter(e => !presets.some(p => p.midis.length === e.midis.length && p.midis.every((m, i) => m === e.midis[i])));
+    if (hostEntries.length) {
+      const hostGroup = document.createElement('optgroup');
+      hostGroup.label = 'FeedBack';
+      for (const e of hostEntries) {
+        const opt = document.createElement('option');
+        opt.value = `host:${e.name}`;
+        opt.textContent = e.name;
+        opt.dataset.midis = e.midis.join(',');
+        hostGroup.appendChild(opt);
+        if (!activeId && effective.length === e.midis.length && effective.every((m, i) => m === e.midis[i])) {
+          activeId = `host:${e.name}`;
+        }
+      }
+      sel.appendChild(hostGroup);
+    }
     // Saved tunings filtered to the current family + string count.
     const mine = savedTunings.filter(t => t.family === family && t.string_count === count);
     if (mine.length) {
@@ -20136,7 +20790,9 @@
     customOpt.textContent = 'Custom…';
     sel.appendChild(customOpt);
     if (!activeId && customMidis && customMidis.length === count) activeId = 'custom';
-    sel.value = activeId || (presets[0] && presets[0].id) || 'custom';
+    // Fallback = the first listed option (the host group may have absorbed the
+    // built-in Standard entry, so presets[0].id can be absent from the DOM).
+    sel.value = activeId || (sel.options[0] && sel.options[0].value) || 'custom';
     syncCustomTuningInputs();
     updateSetupButton();   // header Setup button shows the live instrument + tuning
   }
@@ -20233,10 +20889,10 @@
   function onTuningPresetChange() {
     const sel = $('virtuoso-tuning-select'); if (!sel) return;
     const hidden = $('virtuoso-custom-open-midis');
-    // Saved tunings come back as `saved:<id>`; the midis live on the option's
-    // dataset.midis (set by syncTuningOptions). Apply them as a custom
-    // override against the family's standard stringSetup.
-    if (sel.value && sel.value.startsWith('saved:')) {
+    // Saved tunings come back as `saved:<id>`, host named tunings as `host:<name>`;
+    // the midis live on the option's dataset.midis (set by syncTuningOptions).
+    // Apply them as a custom override against the family's standard stringSetup.
+    if (sel.value && (sel.value.startsWith('saved:') || sel.value.startsWith('host:'))) {
       const opt = sel.options[sel.selectedIndex];
       const midis = (opt?.dataset.midis || '').split(',').map(Number).filter(Number.isFinite);
       if (midis.length) {
@@ -25025,19 +25681,21 @@
   // ── End Session UI ──────────────────────────────────────────────────────────
 
   function syncViewSwitcher(kind) {
-    document.querySelectorAll('.virtuoso-view-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.renderer === kind);
-    });
+    // The view dropdown mirrors what's ACTUALLY rendered (saved-pref restore,
+    // the >8-string force in attachRenderer) — value-set only, no change event,
+    // so syncing never re-triggers onViewSwitch.
+    const viewSel = $('virtuoso-view-select');
+    if (viewSel && viewSel.value !== kind) viewSel.value = kind;
     // Theme toggle is only meaningful for the themed renderers (Tab,
     // Notation); the highway renderers have their own visual identity.
     const root = $('virtuoso-root');
     if (root) {
       root.classList.toggle('virtuoso-theme-renderer', kind === 'tab_2d' || kind === 'notation_2d');
       // Fretboard strip is offered on every stringed-instrument view — 3D
-      // Highway, Jumping Tab, Tab, and Notation; the user can toggle it off.
-      // (Always hidden for the Piano instrument via CSS.)
+      // Highway, 2D Highway, Jumping Tab, Tab, and Notation; the user can
+      // toggle it off. (Always hidden for the Piano instrument via CSS.)
       root.classList.toggle('virtuoso-fb-capable',
-        kind === 'highway_3d' || kind === 'builtin_2d' || kind === 'tab_2d' || kind === 'notation_2d');
+        kind === 'highway_3d' || kind === 'highway_2d' || kind === 'builtin_2d' || kind === 'tab_2d' || kind === 'notation_2d');
       // The HUD title only shows for 3D Highway — every other renderer draws
       // the exercise name in-canvas itself, so showing it here too would double.
       root.classList.toggle('virtuoso-hud-title-on', kind === 'highway_3d');
@@ -25603,10 +26261,8 @@
     document.querySelectorAll('.virtuoso-practice-pill input').forEach(inp => {
       inp.addEventListener('change', () => { writeShareHash(); if (activeBundle) onGenerate(); });
     });
-    // View switcher tabs in the render stage — independent of exercise mode
-    document.querySelectorAll('.virtuoso-view-btn').forEach(btn => {
-      btn.addEventListener('click', () => onViewSwitch(btn.dataset.renderer));
-    });
+    // View dropdown in the render stage — independent of exercise mode
+    $('virtuoso-view-select')?.addEventListener('change', (e) => onViewSwitch(e.target.value));
     // Hand-marks pill (hand-marks Slice 1): default ON, persisted, never
     // auto-flipped. Renderers + the strip read handMarksOn() per frame, so a
     // flip shows on the next draw with no re-attach.
@@ -26040,13 +26696,22 @@
     ptShowIdleStrip();
     setTimeout(ptShowIdleStrip, 2000);
     $('virtuoso-tuner-done')?.addEventListener('click', () => stopTuner());
-    // Courtesy hook for the third-party floating tuner (never touch its DOM —
-    // its own public API only; the click is impossible unless feature-detect
-    // showed the button).
-    $('virtuoso-tuner-ext')?.addEventListener('click', () => {
-      toggleSetupPopover(false);
+    // Header tuner badge (topbar parity) — the host topbar card's exact action.
+    // Feature-detected by initHostTopbar/syncTunerBadge; never touches the tuner's
+    // DOM, its own public API only.
+    $('virtuoso-tuner-badge')?.addEventListener('click', () => {
       try { window.tuner?.toggle?.(); } catch (_) {}
     });
+    // Header profile badge → the host profile screen (LINK, never a second
+    // profile implementation).
+    $('virtuoso-profile-badge')?.addEventListener('click', () => goScreen('v3-profile'));
+    // Host topbar parity init: badges + /api/tunings + host-settings read (host
+    // wins over the L1 restore above for the player's guitar/bass identity) +
+    // bus subscriptions. Delayed retry covers plugin load order — the tuner
+    // plugin / bus may register after us (mirrors the ptShowIdleStrip retry).
+    loadHostTunings().then(() => hostSettingsRead());
+    initHostTopbar();
+    setTimeout(initHostTopbar, 2000);
     $('virtuoso-tuning-select')?.addEventListener('change', updateSetupButton);
     document.addEventListener('click', (e) => {
       const pop = $('virtuoso-setup-popover'); if (!pop || pop.hidden) return;
@@ -26056,6 +26721,9 @@
     updateSetupButton();
     // Header settings menu (⚙): toggle, items, close-on-outside-click.
     $('virtuoso-settings-btn')?.addEventListener('click', (e) => { e.stopPropagation(); toggleSettingsMenu(); });
+    // P-sheet affordance (the header progress chip is hidden pending the
+    // profile-merge design; P hotkey + session-end auto-present stay primary).
+    $('virtuoso-settings-progress')?.addEventListener('click', () => { toggleSettingsMenu(false); toggleProgressSheet(true); });
     $('virtuoso-settings-shortcuts')?.addEventListener('click', () => { toggleSettingsMenu(false); toggleCheatSheet(true); });
     $('virtuoso-settings-host')?.addEventListener('click', () => {
       toggleSettingsMenu(false);
