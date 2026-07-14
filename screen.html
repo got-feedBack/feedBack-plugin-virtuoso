@@ -1411,6 +1411,11 @@
   /* Bass felt-hold descriptive word (no flip) — the verdict WORD is the hero, calm
      not shaming, never meter-green (green is only a cleared pocket). */
   .virtuoso-results-felt { font-size: 16px; font-weight: 800; text-align: center; padding: 14px 16px 2px; color: var(--vir-text, #e2e8f0); letter-spacing: 0.01em; }
+  /* Bass Pocket-Diagnosis (PR 1.5): the specific pocket read under the verdict
+     word — which of lean/drift/jitter it is + a light cue. Calm, never red; a
+     locked pocket reads meter-green (a win), everything else neutral. */
+  .virtuoso-results-pocket { text-align: center; font-size: 12px; line-height: 1.4; padding: 6px 22px 0; color: #cbd5e1; }
+  .virtuoso-pocket-good { color: var(--vir-meter, #22c55e); }
   .virtuoso-results-card .virtuoso-vir-transfer { text-align: center; padding: 2px 18px 0; }
   .virtuoso-results-card .virtuoso-vir-copy { display: block; margin: 8px auto 0; }
   .virtuoso-results-strip { display: flex; flex-direction: column; gap: 5px; align-items: center; padding: 9px 16px 2px; border-top: 1px solid rgba(51,65,85,0.5); }

@@ -80,6 +80,32 @@ try {
   const opts = await page.evaluate(() => Array.from(document.querySelectorAll('#virtuoso-pathway option')).map(o => o.value));
   for (const t of targets) ok(opts.includes(t), `target is a real pathway option: ${t}`);
 
+  // ── PR 1.5 · Bass Pocket-Diagnosis — the felt { verdict, leanMs, driftMs,
+  //    jitterMs, untight } → the SPECIFIC pocket sentence (drift → lean → jitter,
+  //    matching feltHoldAnalyze's own verdict bucketing).
+  const pocket = [
+    { n: "locked → good", felt: { verdict: "locked", leanMs: 5, driftMs: 5, jitterMs: 10 }, tone: "good", text: /Dead in the pocket/ },
+    { n: "drift late", felt: { verdict: "dragging", leanMs: 10, driftMs: 50, jitterMs: 20 }, tone: "work", text: /slips later.*slowing down.*keep the subdivision moving/ },
+    { n: "drift early", felt: { verdict: "rushing", leanMs: -5, driftMs: -50, jitterMs: 20 }, tone: "work", text: /creeps ahead.*speeding up.*don't chase it/ },
+    { n: "drift wins over lean", felt: { verdict: "dragging", leanMs: 40, driftMs: 50, jitterMs: 20 }, tone: "work", text: /across the phrase/ },
+    { n: "lean behind", felt: { verdict: "dragging", leanMs: 35, driftMs: 5, jitterMs: 20 }, tone: "work", text: /behind the beat.*Lean in a hair earlier/ },
+    { n: "lean ahead", felt: { verdict: "rushing", leanMs: -25, driftMs: 5, jitterMs: 20 }, tone: "work", text: /ahead of the beat.*Relax/ },
+    { n: "settling jitter", felt: { verdict: "settling", leanMs: 5, driftMs: 5, jitterMs: 38 }, tone: "work", text: /uneven.*not locked yet/ },
+    { n: "untight", felt: { verdict: null, untight: true, leanMs: 5, driftMs: 5, jitterMs: 60 }, tone: "work", text: /uneven/ },
+    { n: "low evidence → null", felt: { verdict: null, untight: false, leanMs: 5, driftMs: 5, jitterMs: 10 }, tone: null, text: null },
+    { n: "no felt → null", felt: null, tone: null, text: null },
+  ];
+  const pres = await page.evaluate((ps) => ps.map(p => {
+    const d = window.__virtuosoCoach.buildPocketDiagnosis(p.felt);
+    return { n: p.n, tone: d ? d.tone : null, text: d ? d.text : "" };
+  }), pocket);
+  for (let i = 0; i < pocket.length; i++) {
+    const p = pocket[i], got = pres[i];
+    ok(got.tone === p.tone, `pocket: ${p.n}`, `tone=${got.tone} (want ${p.tone})`);
+    if (p.text) ok(p.text.test(got.text), `pocket: ${p.n} copy`, `“${got.text}”`);
+    else ok(got.text === "", `pocket: ${p.n} suppressed`);
+  }
+
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  coach prescription: ${fails} failure(s)`);
   process.exit(fails ? 1 : 0);

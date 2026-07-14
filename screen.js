@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.17';
+  const VIRTUOSO_VERSION = '0.1.18';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17300,9 +17300,43 @@
       + `<span class="virtuoso-results-coach-cta">${esc(PATHWAYS[rx.pathwayId].label)} →</span>`
       + `</button>`;
   }
-  // Debug/test hook: the pure mapping, exposed for the smoke suite (immune to the
-  // "smoke mocks the verifier" blind spot — it takes a fault fixture directly).
-  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxHtml };
+  // ── PR 1.5 · Bass Pocket-Diagnosis ──────────────────────────────────────────
+  // A bass feltGate run shows only the verdict WORD (Dragging/Settling/Locked) —
+  // buildResultsHero returns null for felt runs, so the three numbers the felt
+  // engine already computes (leanMs/driftMs/jitterMs) are dropped. The single word
+  // conflates distinct pocket faults with DIFFERENT fixes: a steady lag (relax /
+  // anticipate) vs a DRIFT across the phrase (a tempo-stability problem — you're
+  // speeding up or slowing down) vs loose JITTER (not tight yet). This names the
+  // dominant one in a sentence, bucketed the SAME way feltHoldAnalyze picks the
+  // verdict (drift → lean → jitter). Descriptive + a light cue; never a score.
+  // Pure (takes a felt object); bass-pedagogy validated 2026-07-14. { text, tone }.
+  function buildPocketDiagnosis(felt) {
+    if (!felt) return null;
+    const v = felt.verdict, lean = felt.leanMs || 0, drift = felt.driftMs || 0, jit = felt.jitterMs || 0;
+    if (v === 'locked') return { text: `Dead in the pocket — steady within ±${Math.abs(jit)}ms.`, tone: 'good' };
+    // DRIFT first (the worst — a moving pulse you can't feel): a tempo trend.
+    // The fix splits by direction (bass-pedagogy 2026-07-14): slowing = the
+    // subdivision is decaying (keep the grid alive); speeding = chasing the beat.
+    if (Math.abs(drift) >= FELT.DRIFT_FAIL) {
+      const fix = drift > 0
+        ? 'Anchor to the click and keep the subdivision moving between hits.'
+        : "Anchor to the click — don't chase it, let it come to you.";
+      return { text: `Your time ${drift > 0 ? 'slips later' : 'creeps ahead'} across the phrase (~${Math.abs(drift)}ms) — you're ${drift > 0 ? 'slowing down' : 'speeding up'} as it goes. ${fix}`, tone: 'work' };
+    }
+    // LEAN: a steady offset (the kinder fix — consistent, just off-center).
+    if (lean >= FELT.LEAN_BEHIND || lean <= FELT.LEAN_AHEAD) {
+      const behind = lean > 0;
+      return { text: `You sit ~${Math.abs(lean)}ms ${behind ? 'behind' : 'ahead of'} the beat — consistent, just off-center. ${behind ? 'Lean in a hair earlier.' : 'Relax and let the click come to you.'}`, tone: 'work' };
+    }
+    // JITTER (settling / loose-but-centered): the pocket's there, not tight yet.
+    if (v === 'settling' || felt.untight) {
+      return { text: `Your placement is uneven (±${Math.abs(jit)}ms) — the pocket's there, not locked yet. Keep working it, no rush.`, tone: 'work' };
+    }
+    return null;
+  }
+  // Debug/test hook: the pure mappings, exposed for the smoke suite (immune to the
+  // "smoke mocks the verifier" blind spot — they take fixtures directly).
+  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxHtml, buildPocketDiagnosis };
   // ── J-3 end-of-jam reflection (warm, NO score — mirror not judge) ───────────
   // A deliberate Jam stop opens the SAME modal shell as the results card, but
   // with descriptive content only: time jammed, how many notes, the tones you
@@ -17662,6 +17696,10 @@
         const word = v ? (MAP[v] || 'Settling — finding the pocket')
           : (s.felt && s.felt.untight ? 'Keep working the pocket' : 'Couldn’t catch the low strings — go by feel');
         feltBodyHtml = `<div class="virtuoso-results-verdict virtuoso-results-felt">${word}</div>`;
+        // PR 1.5: the specific pocket read under the verdict word (which one of
+        // lean / drift / jitter it actually is — they have different fixes).
+        const pd = buildPocketDiagnosis(s.felt);
+        if (pd) feltBodyHtml += `<div class="virtuoso-results-pocket virtuoso-pocket-${pd.tone}">${pd.text}</div>`;
       }
       feltBodyHtml += `<div class="virtuoso-results-practiced">${s.displayName || 'Practice'}${s.bpm ? ` · ${s.bpm} BPM` : ''}${(s.felt && s.felt.spanBars) ? ` · held ${s.felt.spanBars} bars` : ''}</div>`;
     }
