@@ -17565,6 +17565,196 @@
     }
     return null;
   }
+  // ── PR 1.3 · the prescriptive coach loop ────────────────────────────────────
+  // The DESCRIPTIVE diagnostics (the heatmap/lean hero + the fault stat lines)
+  // name WHAT happened; this names the FIX — ONE next drill to run, chosen from
+  // the already-computed verdict + geometry data (heat.fgMiss / transMiss,
+  // leanMs, nearMiss, the bass felt verdict). Display-only, downstream-only: it
+  // re-reads the same signals the judge already produced and never re-judges
+  // (consume-the-host-judge). The prescription is always a REAL Ladder rung the
+  // player owns off the screen — teach the fix, never fake a score. The fault→
+  // drill table is instrument-aware (guitar vs bass rungs) and never prescribes
+  // the rung you just ran (falls to its sibling). Returns { why, pathwayId } | null.
+  function buildCoachRx(s, r, info) {
+    if (!info || !s) return null;
+    if (s.jam || s.mode === 'session') return null;   // Jam is a mirror; a Workout has no single fault
+    if (_downshiftChipShown) return null;             // the mid-run downshift chip already nudged — don't stack two (learning-design 2026-07-14: a finger fault at a too-high tempo is a ceiling problem, not a weak finger)
+    const felt = s.felt;
+    if ((r.judgedPassed || 0) < 8 && !(felt && felt.verdict)) return null;
+    const isBass = /^bass/.test((activeBundle && activeBundle.config && activeBundle.config.stringSetup) || '');
+    const curPw = s.mode === 'pathway' ? s.pathway_id : null;
+    const candidates = coachRxCandidates({ isBass, curPw, info, felt });
+    if (!candidates.length) return null;
+    // Anti-thrash hysteresis: keep the player on ONE fix across runs. Persist the
+    // prescribed focus per spec (mode + rung), and prefer last run's focus if it
+    // still trips a threshold — the pure applyCoachHysteresis decides.
+    const key = `${s.mode || ''}:${s.pathway_id || s.practice_type || ''}`;
+    let store = {}; try { store = JSON.parse(localStorage.getItem('virtuoso.coach_focus') || '{}'); } catch (_) {}
+    const { chosen, focus } = applyCoachHysteresis(candidates, store[key] || null);
+    try { store[key] = focus; localStorage.setItem('virtuoso.coach_focus', JSON.stringify(store)); } catch (_) {}
+    return chosen;
+  }
+  // PR 1.4 · localize a timing fault to the worst bar-region (not the run median).
+  // Reads the per-bar lean strip the scorer already snapshots (leanBars.bars =
+  // [{ i, lean, n }], i = 0-based bar). Returns { from, to, label } (1-based bar
+  // numbers) or null when nothing is clearly off in the fault direction, or when
+  // the "region" is basically the whole run (a GLOBAL lean — the generic copy
+  // reads better than "bars 1–8"). Pure. `rushing` = the fault direction.
+  function worstLeanBars(leanBars, rushing) {
+    if (!leanBars || !Array.isArray(leanBars.bars)) return null;
+    const bars = leanBars.bars.filter(b => (b.n || 0) >= 2);   // 1-sample bars are noise
+    if (bars.length < 3) return null;
+    const score = b => (rushing ? -b.lean : b.lean);           // fault-direction magnitude (ms)
+    let worst = bars[0];
+    for (const b of bars) if (score(b) > score(worst)) worst = b;
+    if (score(worst) < 20) return null;                        // nothing clearly off this way
+    const thr = Math.max(15, score(worst) * 0.6);
+    const hot = new Set(bars.filter(b => score(b) >= thr).map(b => b.i));
+    let lo = worst.i, hi = worst.i;
+    while (hot.has(lo - 1)) lo--;
+    while (hot.has(hi + 1)) hi++;
+    const inRegion = bars.filter(b => b.i >= lo && b.i <= hi).length;
+    if (inRegion >= bars.length * 0.75) return null;           // whole-run lean, not localized
+    const from = lo + 1, to = hi + 1;
+    return { from, to, label: from === to ? `bar ${from}` : `bars ${from}–${to}` };
+  }
+  // The PURE fault→drill mapping (no DOM / no closure state) — the durable IP of
+  // the coach loop, unit-tested via the __virtuosoCoach debug hook. Returns ALL
+  // faults that trip their threshold, in priority order (each tagged with a
+  // `fault` category so the hysteresis layer can keep the player on one fix).
+  function coachRxCandidates(ctx) {
+    const { isBass, curPw, info, felt } = ctx || {};
+    if (!info) return [];
+    // Never send them back to the rung they just ran — fall to its sibling.
+    const pick = (primary, alt) => (primary !== curPw ? primary : (alt && alt !== curPw ? alt : null));
+    const out = [];
+    const heat = info.heat;
+    if (heat && heat.missTotal >= 3) {
+      // 1 · a fretting finger the hand keeps dropping (names a mechanic — the
+      //     clearest, most fixable fault; guitar-pedagogy's ranking).
+      const fgTop = Object.entries(heat.fgMiss || {}).sort((a, b) => b[1] - a[1])[0];
+      if (fgTop && fgTop[1] >= 3 && fgTop[1] / Math.max(1, heat.missTotal) >= 0.4) {
+        const fn = Number(fgTop[0]);
+        const names = { 1: 'index', 2: 'middle', 3: 'ring', 4: 'pinky' };   // players say index/middle/ring/pinky (bass-pedagogy 2026-07-14)
+        // Bass routes a weak PINKY to the dedicated hammer-on/pull-off
+        // strengthener; every other finger (and all guitar) to one-finger-per-fret.
+        const id = isBass
+          ? (fn === 4 ? pick('bass_finger_legato', 'bass_finger_gym') : pick('bass_finger_gym', 'bass_finger_legato'))
+          : pick('chromatic_warmup', 'fs_spider_adjacent');
+        if (id) {
+          // Copy tracks the RESOLVED drill, not the branch (the fallback can flip it).
+          const why = id === 'bass_finger_legato'
+            ? 'Your pinky slipped most — strengthen it with hammer-ons and pull-offs.'
+            : `Your ${names[fn] || 'fretting'} finger slipped most — build one clean finger per fret.`;
+          out.push({ fault: 'finger', why, pathwayId: id });
+        }
+      }
+      // 2 · a string crossing the picking hand fumbles.
+      const trTop = Object.entries(heat.transMiss || {}).sort((a, b) => b[1] - a[1])[0];
+      if (trTop && trTop[1] >= 3) {
+        const [a, b] = trTop[0].split('>').map(Number);
+        const nm = i => (heat.opens[i] != null ? pcName(heat.opens[i] % 12) : String(i));
+        // The fault is a fumbled ADJACENT crossing → drill the crossing itself
+        // (alternate-picking keeps the pattern unbroken across strings), NOT
+        // string-skipping (which trains jumping OVER a string) — guitar-pedagogy
+        // 2026-07-14. Bass keeps rh_crossing (raking across adjacent strings).
+        const id = isBass ? pick('bass_rh_crossing', 'bass_rh_pulse') : pick('pick_alternate', 'pick_economy');
+        if (id) out.push({ fault: 'crossing', why: `The ${nm(a)}→${nm(b)} string crossing tripped you up — drill clean crossing.`, pathwayId: id });
+      }
+    }
+    // 3 · time: leaning off the click (the run median, or the bass felt verdict).
+    //     Isolate the timekeeping motor. Guitar → a single palm-muted note (the
+    //     pick hand IS the metronome). Bass → the i–m motor drill (bass_rh_pulse,
+    //     frets 5–9 — ABOVE the detector floor, so it stays gradable; bass-pedagogy
+    //     2026-07-14 flagged bass_root_click's sub-70 Hz open roots as a web
+    //     false-miss risk, so root_click is only the sibling fallback).
+    const feltWord = (felt && (felt.verdict === 'rushing' || felt.verdict === 'dragging')) ? felt.verdict : null;
+    const timingLean = ((info.leanN || 0) >= 12 && Math.abs(info.leanMs) >= 30) ? (info.leanMs < 0 ? 'rushing' : 'dragging') : null;
+    const lean = feltWord || timingLean;
+    if (lean) {
+      const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_single_string', 'rhy_subdivision');
+      if (id) {
+        // PR 1.4: name WHERE it broke down when the lean localizes to a region;
+        // else fall back to the whole-run framing ("ahead of / behind the click").
+        const region = worstLeanBars(info.leanBars, lean === 'rushing');
+        const why = region
+          ? `You ${lean === 'rushing' ? 'rushed' : 'dragged'} most in ${region.label} — lock your pulse to the beat.`
+          : `You were ${lean === 'rushing' ? 'ahead of' : 'behind'} the click — lock your pulse to the beat.`;
+        out.push({ fault: 'timing', why, pathwayId: id });
+      }
+    }
+    // 4 · timing consistency: right pitch, just outside the window, over and over.
+    if ((info.nearMiss || 0) >= 4) {
+      const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_subdivision', 'rhy_single_string');
+      if (id) out.push({ fault: 'scatter', why: 'Several notes landed right but just off the beat — tighten the grid.', pathwayId: id });
+    }
+    return out;
+  }
+  // The single top prescription (the priority winner) — kept for the smoke suite
+  // and any caller that doesn't want hysteresis.
+  function coachRxFor(ctx) { return coachRxCandidates(ctx)[0] || null; }
+  // PR (deferred 1.3 refinement) · anti-thrash hysteresis. Re-diagnosing from
+  // scratch every run can flip the prescribed focus finger→timing→crossing so the
+  // player never stays on one fix long enough to land it (learning-design
+  // 2026-07-14: "load-bearing for the gating"). So if last run's focus STILL trips
+  // a threshold this run, keep reinforcing it — for up to 2 consecutive runs —
+  // before letting a new top fault take over. Pure: (candidates, prevFocus) →
+  // { chosen, focus }. prevFocus = { cat, streak } | null.
+  function applyCoachHysteresis(candidates, prevFocus) {
+    if (!candidates || !candidates.length) return { chosen: null, focus: prevFocus || null };
+    const top = candidates[0];
+    const held = prevFocus && prevFocus.cat !== top.fault && (prevFocus.streak || 0) < 2
+      ? candidates.find(c => c.fault === prevFocus.cat) : null;
+    if (held) return { chosen: held, focus: { cat: held.fault, streak: (prevFocus.streak || 0) + 1 } };
+    const streak = (prevFocus && prevFocus.cat === top.fault) ? (prevFocus.streak || 0) + 1 : 0;
+    return { chosen: top, focus: { cat: top.fault, streak } };
+  }
+  function coachRxHtml(rx) {
+    if (!rx || !PATHWAYS[rx.pathwayId]) return '';
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<button type="button" class="virtuoso-results-coach" id="virtuoso-results-coach-go" data-pw="${rx.pathwayId}">`
+      + `<span class="virtuoso-results-coach-lead">Practice next</span>`
+      + `<span class="virtuoso-results-coach-why">${esc(rx.why)}</span>`
+      + `<span class="virtuoso-results-coach-cta">${esc(PATHWAYS[rx.pathwayId].label)} →</span>`
+      + `</button>`;
+  }
+  // ── PR 1.5 · Bass Pocket-Diagnosis ──────────────────────────────────────────
+  // A bass feltGate run shows only the verdict WORD (Dragging/Settling/Locked) —
+  // buildResultsHero returns null for felt runs, so the three numbers the felt
+  // engine already computes (leanMs/driftMs/jitterMs) are dropped. The single word
+  // conflates distinct pocket faults with DIFFERENT fixes: a steady lag (relax /
+  // anticipate) vs a DRIFT across the phrase (a tempo-stability problem — you're
+  // speeding up or slowing down) vs loose JITTER (not tight yet). This names the
+  // dominant one in a sentence, bucketed the SAME way feltHoldAnalyze picks the
+  // verdict (drift → lean → jitter). Descriptive + a light cue; never a score.
+  // Pure (takes a felt object); bass-pedagogy validated 2026-07-14. { text, tone }.
+  function buildPocketDiagnosis(felt) {
+    if (!felt) return null;
+    const v = felt.verdict, lean = felt.leanMs || 0, drift = felt.driftMs || 0, jit = felt.jitterMs || 0;
+    if (v === 'locked') return { text: `Dead in the pocket — steady within ±${Math.abs(jit)}ms.`, tone: 'good' };
+    // DRIFT first (the worst — a moving pulse you can't feel): a tempo trend.
+    // The fix splits by direction (bass-pedagogy 2026-07-14): slowing = the
+    // subdivision is decaying (keep the grid alive); speeding = chasing the beat.
+    if (Math.abs(drift) >= FELT.DRIFT_FAIL) {
+      const fix = drift > 0
+        ? 'Anchor to the click and keep the subdivision moving between hits.'
+        : "Anchor to the click — don't chase it, let it come to you.";
+      return { text: `Your time ${drift > 0 ? 'slips later' : 'creeps ahead'} across the phrase (~${Math.abs(drift)}ms) — you're ${drift > 0 ? 'slowing down' : 'speeding up'} as it goes. ${fix}`, tone: 'work' };
+    }
+    // LEAN: a steady offset (the kinder fix — consistent, just off-center).
+    if (lean >= FELT.LEAN_BEHIND || lean <= FELT.LEAN_AHEAD) {
+      const behind = lean > 0;
+      return { text: `You sit ~${Math.abs(lean)}ms ${behind ? 'behind' : 'ahead of'} the beat — consistent, just off-center. ${behind ? 'Lean in a hair earlier.' : 'Relax and let the click come to you.'}`, tone: 'work' };
+    }
+    // JITTER (settling / loose-but-centered): the pocket's there, not tight yet.
+    if (v === 'settling' || felt.untight) {
+      return { text: `Your placement is uneven (±${Math.abs(jit)}ms) — the pocket's there, not locked yet. Keep working it, no rush.`, tone: 'work' };
+    }
+    return null;
+  }
+  // Debug/test hook: the pure mappings, exposed for the smoke suite (immune to the
+  // "smoke mocks the verifier" blind spot — they take fixtures directly).
+  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxCandidates, applyCoachHysteresis, coachRxHtml, buildPocketDiagnosis };
   // ── J-3 end-of-jam reflection (warm, NO score — mirror not judge) ───────────
   // A deliberate Jam stop opens the SAME modal shell as the results card, but
   // with descriptive content only: time jammed, how many notes, the tones you
@@ -17673,6 +17863,13 @@
     // neck, the lean strip for groove runs — suppressed on rough/sparse/felt/
     // Workout runs and whenever the mid-run downshift chip already spoke.
     const hero = buildResultsHero(r, info, { rough, judged, isWorkout, isFelt });
+    // The prescriptive coach line (PR 1.3): ONE next drill for the run's dominant
+    // fault. Complements the descriptive hero — hero names the fault, this names
+    // the fix. Suppressed on Workouts (no single fault) and on an EARNED clear —
+    // a clear is the win moment; a "here's what's still wrong, go drill it" button
+    // undercuts it and competes with the climb CTA (learning-design 2026-07-14:
+    // the climb IS the prescription). Null too when nothing crosses threshold.
+    const coachHtml = (isWorkout || earned) ? '' : coachRxHtml(buildCoachRx(s, r, info));
 
     // 1 · VERDICT slot — earned outcomes only; ONE hero (felt > proof > tier > travel).
     // Bass felt FLIP: the verdict WORD is the hero, tempo demoted (Option A — the
@@ -17942,6 +18139,10 @@
         const word = v ? (MAP[v] || 'Settling — finding the pocket')
           : (s.felt && s.felt.untight ? 'Keep working the pocket' : 'Couldn’t catch the low strings — go by feel');
         feltBodyHtml = `<div class="virtuoso-results-verdict virtuoso-results-felt">${word}</div>`;
+        // PR 1.5: the specific pocket read under the verdict word (which one of
+        // lean / drift / jitter it actually is — they have different fixes).
+        const pd = buildPocketDiagnosis(s.felt);
+        if (pd) feltBodyHtml += `<div class="virtuoso-results-pocket virtuoso-pocket-${pd.tone}">${pd.text}</div>`;
       }
       feltBodyHtml += `<div class="virtuoso-results-practiced">${s.displayName || 'Practice'}${s.bpm ? ` · ${s.bpm} BPM` : ''}${(s.felt && s.felt.spanBars) ? ` · held ${s.felt.spanBars} bars` : ''}</div>`;
     }
@@ -17954,11 +18155,12 @@
       (isWorkout
         ? sessionHeadHtml + chaptersHtml + strip + shareBtn
         : isFelt
-        ? feltBodyHtml + strip + shareBtn
+        ? feltBodyHtml + coachHtml + strip + shareBtn
         : verdict +
           `<div class="virtuoso-results-pct">${(judged && !reduceMotion) ? '0%' : headline}</div>` +
           `<div class="virtuoso-results-head">${sub}</div>` +
           (hero ? hero.html : '') +
+          coachHtml +
           strip +
           `<div class="virtuoso-results-practiced">Practiced ${dur}${s.bpm ? ` @ ${s.bpm} BPM` : ''}</div>` +
           shareBtn) +
@@ -18065,6 +18267,19 @@
       closeResultsModal();
       // D-J10: same device hand-off as the primary jam CTA.
       jamArmFromDrill(jamStyle, (readConfig() || {}).key, s.displayName || '');
+    });
+    // Coach prescription (PR 1.3): close-and-arm into the Ladder, the SAME open
+    // path the picker node-click uses (set the select + dispatch change → mode
+    // switch happens first so the guided form is live).
+    $('virtuoso-results-coach-go')?.addEventListener('click', (ev) => {
+      const id = ev.currentTarget.getAttribute('data-pw');
+      if (!id) return;
+      closeResultsModal();
+      selectMode('guided');
+      const sel = $('virtuoso-pathway');
+      if (sel && [...sel.options].some(o => o.value === id)) { sel.value = id; sel.dispatchEvent(new Event('change')); }
+      else applyPathwayById(id);
+      focusPlay();
     });
     $('virtuoso-results-details-toggle')?.addEventListener('click', () => {
       const sec = $('virtuoso-results-details'), btn = $('virtuoso-results-details-toggle');
