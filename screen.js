@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.10';
+  const VIRTUOSO_VERSION = '0.1.11';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -637,6 +637,21 @@
     ['sweep5_box',         'sweep_roll_apex'],
     ['sweep_roll_apex',    'sweep7_color'],
     ['sweep7_color',       'sweep_changes'],
+    // Tapping ladder (panel 2026-07-14) — guitar builds on Legato (tapping = both-hands
+    // legato) with a cross-link to Arpeggios (know the shape before you tap it, same
+    // logic as arp_sweeps→sweep3_triad); bass builds on the pinky-legato rung + the
+    // neck-arpeggio rung. First incoming edge = each rung's "Builds on" hint.
+    ['leg_runs',           'tap_articulation'],
+    ['tap_articulation',   'tap_cell'],
+    ['tap_cell',           'tap_cascade'],
+    ['arp_seventh_shapes', 'tap_cascade'],
+    ['tap_cascade',        'tap_sevenths'],
+    ['tap_sevenths',       'tap_changes'],
+    ['bass_finger_legato', 'btap_articulation'],
+    ['btap_articulation',  'btap_arpeggio'],
+    ['bass_arp_neck',      'btap_arpeggio'],
+    ['btap_arpeggio',      'btap_groove'],
+    ['btap_groove',        'btap_apply'],
   ];
   // Band map — the single source for the two-level picker that replaces the SVG
   // skill-tree display (which tangles at 27 nodes). L1 = band (array order); L2 =
@@ -677,8 +692,13 @@
     { id:'concept_expression', label:'Expression', kind:'style', family:'Concepts', buildsOn:'Builds on Core Beginner — a fretted note and a target pitch. Make the note SING: vibrato width first, then bends that land dead in tune (half → whole → mixed).', pathways:['exp_vibrato','exp_bend_half','exp_bend_whole','exp_bend_mixed'] },
     { id:'concept_rhythm', label:'Rhythm', kind:'style', family:'Concepts', buildsOn:'Builds on Core — a steady pulse and the pentatonic box. Own TIME itself, easy→mastery: the grid (subdivisions, the 16th pocket) → the feel (swing, syncopation, the gallop, moving the accent) → the pulse frame (one-note pulse, half/double-time, odd meters) → two pulses at once (over the barline) → trade bars and make your own groove. World rhythms (tresillo, clave) ride the one-note pulse. Instrument-agnostic — works on guitar or bass.', pathways:['rhy_subdivision','rhy_sixteenth','rhy_swing','rhy_displacement','rhy_gallop_snap','rhy_accent_displace','rhy_single_string','rhy_half_double','rhy_odd_meter','rhy_over_barline','rhy_trade_bars'] },
     { id:'concept_picking', label:'Picking', kind:'style', family:'Concepts', buildsOn:'Builds on Core — the chromatic warmup and one-finger-per-fret sync. The pick-hand engine: tremolo, alternate across strings, economy crossings, string skipping, hybrid picking.', pathways:['pick_tremolo','pick_alternate','pick_chromatic_16ths','pick_economy','pick_string_skip','pick_hybrid','pick_herta'] },
-    { id:'concept_legato', label:'Legato', kind:'style', family:'Concepts', buildsOn:'Builds on Core — clean fretting and a scale shape. The fretting-hand engine: hammer-ons/pull-offs, 3NPS legato runs, then two-hand tapping.', pathways:['leg_hopo','leg_runs','leg_tapping'] },
+    { id:'concept_legato', label:'Legato', kind:'style', family:'Concepts', buildsOn:'Builds on Core — clean fretting and a scale shape. The fretting-hand engine: hammer-ons/pull-offs, then 3NPS legato runs. (Two-hand tapping graduated into its own Tapping ladder.)', pathways:['leg_hopo','leg_runs'] },
     { id:'concept_sweeps', label:'Sweep Picking', kind:'style', family:'Concepts', buildsOn:'Builds on the Arpeggios pack — you can already spell a triad across the neck in a shape. Sweep picking turns that vertical chord shape into one fluid raked motion, the fretting hand muting everything not sounding: 3-string triad -> the 5-string box -> the finger-roll & clean apex -> seventh sweeps -> sweeps through the changes. Cleanliness comes first; speed is a byproduct.', pathways:['sweep3_triad','sweep5_box','sweep_roll_apex','sweep7_color','sweep_changes'] },
+    // Tapping ladder — two-hand legato, carved out of the Legato pack (panel
+    // 2026-07-14). Guitar climbs to the neoclassical cascade; the bass rungs (btap_*)
+    // are register-clamped and shown only on bass via isHiddenNode. Guitar and bass
+    // mirror rungs 1–2, then diverge (guitar → shred cascade, bass → tapped groove).
+    { id:'concept_tapping', label:'Tapping', kind:'style', family:'Concepts', buildsOn:"Builds on the Legato pack — clean hammer-ons and pull-offs. Tapping is legato with both hands: the picking hand joins the fretting hand on the fingerboard to sound notes beyond one hand's reach. Isolate the tap-and-pull, build the tapped cell, then the wide arpeggio cascades — and end over the changes and in a groove, not as fireworks.", pathways:['tap_articulation','tap_cell','tap_cascade','tap_sevenths','tap_changes','btap_articulation','btap_arpeggio','btap_groove','btap_apply'] },
     // Bass family — DISSOLVED into the instrument-aware Core (2026-06-08): the former
     // Bass: Foundations/Scales/Arpeggios/Groove packs were fundamentals filed as Style
     // only because there was no bass Core band. Their rungs now live in core_* above
@@ -1736,14 +1756,9 @@
       base:{ practiceType:'legato', scale:'natural_minor', meter:'4/4', subdivision:'sixteenth', bpm:85, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'3nps', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:1 },
       vary:[ { shape:1 }, { shape:2 }, { shape:3 }, { scale:'major', key:'C' }, { shape:5 } ]
     },
-    leg_tapping: {
-      label:'Tapping',
-      goal:'The picking hand joins the fretting hand on the fingerboard — tap a high note, pull off to fretted notes below. Two-hand tapping extends legato past the stretch of one hand and opens the wide arpeggio cascades that define the technique.',
-      scales:['natural_minor','harmonic_minor','minor_pentatonic'],
-      tempoTiers:[60, 80, 100, 120],
-      base:{ practiceType:'tapping', scale:'natural_minor', meter:'4/4', subdivision:'eighth', bpm:80, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E' },
-      vary:[ { key:'A', shape:'E' }, { key:'E', shape:'E' }, { scale:'harmonic_minor' }, { key:'D', shape:'E' }, { scale:'minor_pentatonic', key:'A' } ]
-    },
+    // (Tapping moved out of Legato into its own concept_tapping ladder — panel
+    // 2026-07-14. The old single `leg_tapping` rung is re-homed as `tap_articulation`,
+    // the ladder's rung 1; the full guitar+bass ladders live below the sweep pack.)
     // ── SWEEP PICKING ladder (new concept_sweeps pack) ──────────────────────────
     // The dedicated sweep vertical (was only 2 isolated rungs). guitar-pedagogy +
     // metal-idiom panel 2026-06-07: string count grows 3→5→6, tempo ceilings DESCEND
@@ -1794,6 +1809,98 @@
       tempoTiers:[50, 60, 72, 85],
       base:{ practiceType:'sweep_arpeggios', scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'sixteenth', bpm:52, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E', fretMin:0, fretMax:17 },
       vary:[ { key:'A', shape:'E', progression:'i-VI-III-VII' }, { key:'A', shape:'A', progression:'i-VII-VI-VII' }, { key:'C', shape:'E', scale:'major', progression:'ii-V-I' }, { key:'G', shape:'E', scale:'major', progression:'I-vi-IV-V' }, { key:'A', shape:'E', scale:'harmonic_minor', chordDepth:'seventh', progression:'minor_ii_V_i' } ]
+    },
+    // ── TAPPING ladder (new concept_tapping pack) ──────────────────────────────
+    // The two-hand-legato vertical, carved out of Legato (panel 2026-07-14:
+    // learning-design chair + guitar/bass-pedagogy + metal-idiom + harmony + rhythm).
+    // Engine facts this pack rides on:
+    //   • Rung 1 is the ARTICULATION drill (plain 'tapping': single-string tap→pull);
+    //     rungs 2–5 set tapArp:true → the CASCADE builder (tap→pull→hammer per string,
+    //     the wide interval always routed to the RH tap).
+    //   • Subdivision tracks the CELL note-count so cells land on the beat (rhythm):
+    //     tap→pull = eighth, the 3-note tap-pull-hammer cell = triplet, the rolling
+    //     two-cells-per-beat cascade = sixteenth_triplet.
+    //   • Ceilings DESCEND on the wider-reach rungs (clean before fast — the sweep
+    //     ladder's discipline; a tapped note must ring as loud as a picked one).
+    //   • Cascade rungs stay on scales WITH a diatonic-quality row (natural/harmonic
+    //     minor, major) — never pentatonic (no seventh row).
+    tap_articulation: {
+      label:'Tap & Pull-Off',
+      goal:"The atom of tapping: the picking-hand finger joins the fretboard, TAPS a note high on the string, then flicks OFF it — a pull-off that sounds the note your fretting hand is already holding. One string, one tapped note, one fretted note. The whole lesson is the pull-off being a sideways flick toward the palm (it plucks the string), not a lift, so the fretted note rings clean instead of dying. Tap on the beat, pull-off on the '&' — a dead-even trill. A click instead of a note is what kills it; build the tempo slowly.",
+      scales:['minor_pentatonic','natural_minor'],
+      tempoTiers:[60, 75, 90, 105],
+      base:{ practiceType:'tapping', scale:'minor_pentatonic', meter:'4/4', subdivision:'eighth', bpm:60, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'single_string', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A' },
+      vary:[ { key:'A' }, { key:'E' }, { key:'D' }, { scale:'natural_minor', key:'A' }, { scale:'natural_minor', key:'E' } ]
+    },
+    tap_cell: {
+      label:'The Tapped Cell',
+      goal:"The figure that made tapping famous — the Van Halen cell. On one string: TAP a high note, PULL OFF to a fretting finger, HAMMER ON to a second — three notes spelling a triad you could never reach with one hand, fired as a rolling triplet. The tap buys the wide interval the stretch can't; that's the whole point of the technique. Start with the root-octave-fifth shape and keep the triplet dead even — clean and slow beats fast and smeared, every time.",
+      scales:['natural_minor','harmonic_minor'],
+      tempoTiers:[55, 70, 85, 100],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'triplet', bpm:55, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E', sweepStrings:1, fretMin:5, fretMax:14 },
+      vary:[ { key:'A' }, { key:'E' }, { scale:'harmonic_minor', key:'A' }, { key:'D' }, { scale:'harmonic_minor', key:'E' } ]
+    },
+    tap_cascade: {
+      label:'Tapped Arpeggio Cascade',
+      goal:"Move the cell across the strings and a whole arpeggio pours down the neck — tap→pull→hammer on one string hands off to the next, outlining a triad through octaves you could never sweep cleanly. The lesson is the string change: a gap-free hand-off with no doubled note, each string muted the instant it's done. Learn the shape as one cell per beat, then let it double into the rolling cascade — the density jump IS the rung.",
+      scales:['natural_minor','harmonic_minor','major'],
+      tempoTiers:[50, 62, 66, 74],
+      tempoTierSubdivs:['triplet', 'triplet', 'sixteenth_triplet', 'sixteenth_triplet'],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'triplet', bpm:50, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E', sweepStrings:3, fretMin:5, fretMax:17 },
+      vary:[ { sweepStrings:3, key:'A' }, { sweepStrings:5, key:'E' }, { sweepStrings:5, key:'A' }, { sweepStrings:6, key:'D' }, { sweepStrings:6, key:'A', scale:'harmonic_minor' } ]
+    },
+    tap_sevenths: {
+      label:'Seventh & Diminished Cascade',
+      goal:"Add the 7th and one more string-crossing: m7 / maj7 / dom7 arpeggios tapped across the neck, the seventh's color turning the triad into a chord with a voice. Harmonic minor hands you the diminished-7th cascade — one symmetric shape you slide up in minor thirds over the dominant, the sound of a shred solo taking flight. Outline the chord, not a scale; a clean tapped 7th is worth more than a fast blur.",
+      scales:['natural_minor','major','harmonic_minor'],
+      tempoTiers:[46, 58, 70, 82],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'seventh', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'triplet', bpm:46, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E', fretMin:0, fretMax:19 },
+      vary:[ { scale:'natural_minor', key:'A' }, { scale:'major', key:'C' }, { scale:'harmonic_minor', key:'A' }, { key:'E' }, { scale:'harmonic_minor', key:'D' } ]
+    },
+    tap_changes: {
+      label:'Tapping the Changes',
+      goal:"The musical payoff: run the tapped cascade through a progression, re-rooting the shape on each chord in time. One figure slides to the nearest position per change — the skill is landing the new root's first tap cleanly on the downbeat, not the fireworks. This is tapping turned into a line, not a trick.",
+      scales:['natural_minor','major','harmonic_minor'],
+      tempoTiers:[50, 60, 70, 80],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'triplet', bpm:50, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'guitar_6_standard', renderer:'highway_3d', key:'A', shape:'E', fretMin:0, fretMax:17 },
+      vary:[ { progression:'i-VI-III-VII', key:'A' }, { progression:'i-VII-VI-VII', key:'A' }, { scale:'major', key:'C', progression:'ii-V-I' }, { scale:'major', key:'G', progression:'I-vi-IV-V' }, { scale:'harmonic_minor', chordDepth:'seventh', progression:'minor_ii_V_i', key:'A' } ]
+    },
+    // ── Bass tapping ladder (mirrors the arc; DIVERGES on content — bass-pedagogy
+    // 2026-07-14). Register-clamped octave/arpeggio taps: the fretted note stays in
+    // the neck's meat (5–12), the tap reaches past hand-span (a feature, not a
+    // stretch). 2-note tap→pull cells (root + one chord tone — no dense low clusters);
+    // the two-hand-independence capstone needs a two-voice engine, staged for v2.
+    btap_articulation: {
+      label:'Bass Tap & Pull-Off',
+      goal:"Tapping's atom on bass: the picking hand taps a note up the string, then flicks off it — a pull-off that sounds the fretted note your fretting hand holds. Stay in the meat of the neck where the low strings speak clean and punchy; a weak tap gives a dead thump, so the lesson is an articulate tap and a ringing pull-off. Tap on the beat, pull on the '&'.",
+      scales:['minor_pentatonic','natural_minor'],
+      tempoTiers:[52, 64, 76, 88],
+      base:{ practiceType:'tapping', scale:'minor_pentatonic', meter:'4/4', subdivision:'eighth', bpm:52, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'single_string', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'A' },
+      vary:[ { key:'A' }, { key:'E' }, { key:'G' }, { scale:'natural_minor', key:'A' }, { stringSetup:'bass_5_standard', key:'E' } ]
+    },
+    btap_arpeggio: {
+      label:'Tapped Arpeggio Reach',
+      goal:"Now use the tap for what only tapping can do: reach past your hand. Tap the octave (or tenth) above, pull to the fretted root and chord tone below — a wide arpeggio spanned without shifting your fretting hand at all. Two independent hands, so the twelve-fret span is a gift, not a stretch. Root low and clean on the downbeat; keep the strings you're not tapping damped.",
+      scales:['natural_minor','harmonic_minor'],
+      tempoTiers:[44, 54, 64, 72],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'sixteenth', bpm:44, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'A', fretMin:5, fretMax:15, sweepStrings:2 },
+      vary:[ { key:'A' }, { key:'E' }, { key:'D' }, { scale:'harmonic_minor', key:'A' }, { stringSetup:'bass_5_standard', key:'B' } ]
+    },
+    btap_groove: {
+      label:'The Tapped Figure',
+      goal:"Tapping as a LINE, not a stunt: a repeating tapped arpeggio figure that could carry a groove, spread across the strings and locked in a pocket. Damping is the whole game on bass — sequence a few strings before more, and let only the note you mean to sound ring. Make it repeatable and even over eight bars; a tapped figure you can hold is worth more than a fast one you can't.",
+      scales:['natural_minor','harmonic_minor'],
+      tempoTiers:[46, 56, 66, 76],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'sixteenth', bpm:46, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'A', fretMin:5, fretMax:17, sweepStrings:3 },
+      vary:[ { sweepStrings:3, key:'A' }, { sweepStrings:3, key:'E' }, { sweepStrings:4, key:'A' }, { key:'D' }, { stringSetup:'bass_5_standard', key:'B', sweepStrings:4 } ]
+    },
+    btap_apply: {
+      label:'Tapping Over a Vamp',
+      goal:"The payoff: run the tapped figure over a vamp, re-rooting on each chord in time so the tapped line serves the harmony. Land the new root low on the downbeat and let the figure follow the changes — a musical tapped bass line, not decoration. This is where the technique earns its place in a song.",
+      scales:['natural_minor','harmonic_minor'],
+      tempoTiers:[46, 56, 66, 76],
+      base:{ practiceType:'tapping', tapArp:true, scale:'natural_minor', chordDepth:'triad', chordOverride:'auto', progression:'i-VI-III-VII', meter:'4/4', subdivision:'eighth', bpm:46, bars:8, direction:'up_down', sequence:'none', advancedMode:true, fretboardSystem:'caged', stringSetup:'bass_4_standard', renderer:'highway_3d', key:'A', fretMin:5, fretMax:17, sweepStrings:3 },
+      vary:[ { progression:'i-VI-III-VII', key:'A' }, { progression:'i-VII-VI-VII', key:'A' }, { key:'E' }, { key:'D' }, { stringSetup:'bass_5_standard', key:'B', progression:'i-VI-III-VII' } ]
     },
     // ── FINGERSTYLE pack (Acoustic & Fingerstyle — 2026-06-12, the community
     // spider thread). The fingerstyle hand from the ground up: the p-i-m-a
@@ -4411,6 +4518,10 @@
       // sweepStrings (Sweep ladder entry rung): constrain a sweep to the top N
       // strings. Pathway-driven hidden field; 0/absent = the full box. 2–6 clamp.
       sweepStrings: Math.max(0, Math.min(6, parseInt(data.get('sweepStrings') || '0', 10) || 0)),
+      // tapArp (Tapping ladder): route practiceType 'tapping' through the tapped-
+      // arpeggio cascade builder (tap→pull→hammer per string) instead of the single-
+      // string tap→pull articulation drill. Pathway-driven hidden field; '' = drill.
+      tapArp: (data.get('tapArp') || '').toString() === 'true',
       // rhTechMode (Bass Groove & Right-Hand ladder): pulse|crossing|rake|three_finger.
       // Pathway-driven hidden field; absent = 'pulse' (the back-compatible default).
       rhTechMode: data.get('rhTechMode') || 'pulse',
@@ -10257,19 +10368,137 @@
     return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration: Math.max(t, totalTime) };
   }
 
+  // Tapping ladder (concept_tapping pack, panel 2026-07-14) splits into two engines:
+  // the ARTICULATION drill (this function) and the tapped-arpeggio CASCADE
+  // (buildTappedArpeggioExercise). tapArp routes 'tapping' to the cascade.
   function buildTappingExercise(cfg) {
+    if (cfg.tapArp) return buildTappedArpeggioExercise(cfg);
+    // Articulation drill (ladder rung 1): a single-string two-note tap cell — the
+    // fretting hand HOLDS a scale tone, the picking hand TAPS the octave above, and a
+    // pull-off sounds the fretted note. tap (on the beat) → pull-off (the "&"). This
+    // replaces the old off-idiom "every scale note tapped +12 across the whole neck"
+    // (metal-idiom 2026-07-14: nobody taps a scale — the atom is the tap/pull cell).
     const step = secondsPerDivision(cfg), totalTime = cfg.bars * measureSeconds(cfg);
+    const TAP = 12, FRET_CAP = 22;   // most necks end ~22; keep the tapped note ON the neck
+    const isBass = String(cfg.stringSetup || '').indexOf('bass') === 0;
+    // Register clamp (bass-pedagogy 2026-07-14): the fretted note stays where the
+    // string speaks cleanly — frets 5+ on bass (below = sub-fundamental mud + the
+    // grading floor), 2+ on guitar — and the tap (+12) stays under the fret cap.
+    const loFret = isBass ? 5 : 2;
     const allPos = scalePositionsForSystem(cfg);
-    const TAP = 12;
     const events = [];
     for (const p of allPos) {
-      if (p.f + TAP > 24) continue;
-      events.push({ s: p.s, f: p.f, tp: false });
-      events.push({ s: p.s, f: p.f + TAP, tp: true });
+      if (p.f < loFret || p.f + TAP > FRET_CAP) continue;
+      events.push({ s: p.s, f: p.f + TAP, tp: true });    // TAP the octave (picking hand)
+      events.push({ s: p.s, f: p.f, po: true });          // PULL-OFF to the fretted tone
     }
-    if (!events.length) throw new Error('No tapping positions — try fretMin ≤ 12.');
+    if (!events.length) throw new Error('No tapping positions — need a fretted note between fret ' + loFret + ' and ' + (FRET_CAP - TAP) + ' (widen the range / use a single-string system).');
     const sus = Math.max(0.05, step * 0.85);
     return fillNotesFromSeq(events, { step, totalTime, sus, loopCycleSteps: events.length, name: `Tapping — ${cfg.key} ${cfg.scale}` });
+  }
+
+  // One tapped-arpeggio CASCADE path for one chord (Tapping ladder rungs 2–5). The
+  // picking-hand tap buys reach past one hand's span, so a WIDE arpeggio pours down
+  // the neck as a string of tap→pull→hammer cells — one cell per string, ascending
+  // low→high, spelling the chord. Harmony-theory: it rides the same one-tone-per-
+  // string grid the sweep ladder builds (root on the bass string). Notes are pick-
+  // transparent (tp/po/ho) — no pkd, nothing re-judged on top of the host verdict.
+  function buildTapCascadePath(cfg, rootPc, quality, anchorFret) {
+    const opens = openMidisForConfig(cfg);
+    const isBass = String(cfg.stringSetup || '').indexOf('bass') === 0;
+    const FRET_CAP = 22;
+    const fLo = Math.max(isBass ? 5 : 0, Number.isFinite(cfg.fretMin) ? cfg.fretMin : 5);
+    const fHi = Math.min(FRET_CAP, Number.isFinite(cfg.fretMax) ? cfg.fretMax : 19);
+    const formula = CHORD_FORMULAS[quality] || CHORD_FORMULAS.min;
+    const tonePcs = new Set(formula.intervals.map(iv => (rootPc + iv) % 12));
+    // One anchor chord-tone per string (root on the bass string), optionally sliced to
+    // the top-N strings for the entry rungs (sweepStrings:1 = the single-string EVH
+    // cell). dedupeUnisons drops a grid tone that repeats a pitch already taken on a
+    // lower string (the dim7-symmetry no-unison edge, harmony flag).
+    let grid = dedupeUnisons(sweepArpeggioPositions(cfg, rootPc, quality, anchorFret));
+    if (cfg.sweepStrings) grid = sliceSweepTopStrings(grid, cfg.sweepStrings);
+    grid = grid.slice().sort((a, b) => a.s - b.s);   // ascending low→high string
+    const cells = [];
+    for (const g of grid) {
+      const openS = opens[g.s];
+      const toneFrets = [];
+      for (let f = fLo; f <= fHi; f++) if (tonePcs.has((openS + f) % 12)) toneFrets.push(f);
+      const lhLow = g.f;                       // fretting-hand anchor (the grid tone)
+      const reach = (lhLow < 5) ? 3 : 4;       // hand span low on the neck is tighter
+      // Second fretting-hand tone: nearest chord tone within reach ABOVE the anchor.
+      const lhHigh = toneFrets.find(f => f > lhLow && f - lhLow <= reach);
+      // Tapped tone: a WIDE chord tone (≥5 frets — the span one hand can't cover) above
+      // the highest fretting tone; that unreachable interval is exactly why the tap
+      // exists. Falls back to the octave of the anchor. Wide-to-the-tap is the rule.
+      const topLH = lhHigh != null ? lhHigh : lhLow;
+      let tap = toneFrets.find(f => f > topLH && f - topLH >= 5 && f <= FRET_CAP);
+      if (tap == null && lhLow + 12 <= FRET_CAP) tap = lhLow + 12;
+      if (tap == null) continue;               // no reachable tap on this string → skip it
+      const cell = [
+        { s: g.s, f: tap, tp: true, midi: openS + tap },     // TAP the high tone
+        { s: g.s, f: lhLow, po: true, midi: openS + lhLow }  // PULL-OFF to the anchor
+      ];
+      // Guitar adds the HAMMER-ON to the second fretting tone (the 3-note EVH cell);
+      // bass stays a 2-note tap→pull (root + one chord tone, no dense low clusters —
+      // bass-pedagogy). No hammer where there's no in-reach second tone.
+      if (!isBass && lhHigh != null) cell.push({ s: g.s, f: lhHigh, ho: true, midi: openS + lhHigh });
+      cells.push(cell);
+    }
+    if (!cells.length) return [];
+    let path = [].concat.apply([], cells);
+    // up_down: pour the cascade back down (reverse the CELL order, cells intact).
+    if (cfg.direction === 'up_down' && cells.length > 1) {
+      path = path.concat([].concat.apply([], cells.slice(0, -1).reverse()));
+    }
+    // No-unison pass (this builder bypasses the startup shape-guard): collapse an
+    // event repeating the immediately-preceding pitch — the audible dim7-symmetry
+    // artifact where a tap meets the next string's anchor at the same MIDI.
+    return path.filter((n, i, arr) => i === 0 || n.midi !== arr[i - 1].midi);
+  }
+
+  // Tapped-arpeggio cascade exercise: lays one cascade per bar, re-rooting on the
+  // bar's chord, so a single-tonic drill and a "tap over changes" rung share one path
+  // (same per-bar chord machinery as buildSweepArpeggioExercise).
+  function buildTappedArpeggioExercise(cfg) {
+    const degrees = progressionDegreesForConfig(cfg);
+    const mLen = measureSeconds(cfg), step = secondsPerDivision(cfg);
+    const totalBars = Math.max(1, cfg.bars), duration = totalBars * mLen;
+    const isBass = String(cfg.stringSetup || '').indexOf('bass') === 0;
+    const fMin = Number.isFinite(cfg.fretMin) ? cfg.fretMin : 5;
+    const fMax = Number.isFinite(cfg.fretMax) ? cfg.fretMax : (isBass ? 15 : 19);
+    const anchorFret = Math.floor((fMin + fMax) / 2);
+    const perBar = Math.max(1, Math.floor(mLen / step + 1e-6));
+    const sus = Math.max(0.05, step * 0.85);
+    const cfgWin = Object.assign({}, cfg, { fretMin: fMin, fretMax: fMax });
+    const notes = [], sections = [];
+    // Carried across the whole exercise so no seam — the loop-wrap when a short
+    // cascade tiles to fill a bar, or the join between two bars' chords — ever
+    // re-articulates the same (string,fret) twice in a row (the no-unison adjacency
+    // rule; the per-path midi filter can't see these seams).
+    let lastKey = null;
+    for (let bar = 0; bar < totalBars; bar++) {
+      const degree = degrees[bar % degrees.length];
+      const rootPc = chordRootForDegree(cfg, degree);
+      const quality = chordQualityForDegree(cfg.scale, cfg.chordDepth, degree, cfg.chordOverride, cfg.progression);
+      const path = buildTapCascadePath(cfgWin, rootPc, quality, anchorFret);
+      if (!path.length) continue;
+      const barStart = bar * mLen;
+      sections.push({ name: chordName(rootPc, quality), number: sections.length + 1, time: Number(barStart.toFixed(6)) });
+      let cursor = 0;
+      for (let i = 0; i < perBar; i++) {
+        const t = barStart + i * step;
+        if (t >= duration - 1e-6) break;
+        let ev = path[cursor % path.length];
+        let key = ev.s + ':' + ev.f;
+        if (key === lastKey) { cursor++; ev = path[cursor % path.length]; key = ev.s + ':' + ev.f; }
+        cursor++; lastKey = key;
+        const nf = { t: Number(t.toFixed(6)), s: ev.s, f: ev.f, sus };
+        for (const k of SEQ_NOTE_FIELDS) if (ev[k] !== undefined) nf[k] = ev[k];
+        notes.push(noteDefaults(nf));
+      }
+    }
+    if (!notes.length) throw new Error('No tapped-arpeggio positions — widen the fret window (need chord tones a tap-span apart).');
+    return { notes, chords: [], chordTemplates: [], handShapes: [], sections, duration };
   }
 
   function buildPedalPointExercise(cfg) {
@@ -20187,6 +20416,9 @@
     // sweepStrings (Sweep ladder): anti-leak defaulted → a 3-string entry rung's
     // limiter never persists into the next pathway's full-box sweep.
     setFieldSilent('sweepStrings', config.sweepStrings != null ? config.sweepStrings : '0');
+    // tapArp (Tapping ladder): anti-leak defaulted → a cascade rung's tapped-arpeggio
+    // mode never persists into the next 'tapping' pathway's articulation drill.
+    setFieldSilent('tapArp', config.tapArp ? 'true' : '');
     // rhTechMode (Bass Groove & Right-Hand): anti-leak defaulted to 'pulse' so a
     // rake/crossing/three-finger rung never carries into the next pathway.
     setFieldSilent('rhTechMode', config.rhTechMode || 'pulse');
@@ -20931,7 +21163,12 @@
     fs_spider_wide: ['finger_proximity', 'light_grip'],
     leg_hopo: ['finger_proximity', 'light_grip'],
     leg_runs: ['finger_proximity', 'light_grip'],
-    leg_tapping: ['finger_proximity'],
+    // Tapping ladder (panel 2026-07-14): clean pull-off + light grip on the taps.
+    tap_articulation: ['finger_proximity', 'light_grip'],
+    tap_cell: ['finger_proximity', 'light_grip'],
+    tap_cascade: ['finger_proximity', 'light_grip'],
+    tap_sevenths: ['finger_proximity', 'light_grip'],
+    tap_changes: ['finger_proximity', 'light_grip'],
     major_scale_caged: ['guide_finger'],
     whole_neck_freedom: ['guide_finger'],
   };
@@ -20940,6 +21177,7 @@
     core_beginner: 'light_grip',
     concept_picking: 'wrist_neutral',
     concept_legato: 'finger_proximity',
+    concept_tapping: 'finger_proximity',
     concept_rhythm: 'anchor_palm',
   };
   // Bass candidates derive from the exercise CLASS (the bass ruling maps cues

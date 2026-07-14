@@ -2454,7 +2454,15 @@
           <option value="pick_herta">Herta Burst</option>
           <option value="leg_hopo">Hammer-Ons &amp; Pull-Offs</option>
           <option value="leg_runs">Legato Runs (3NPS)</option>
-          <option value="leg_tapping">Tapping</option>
+          <option value="tap_articulation">Tap &amp; Pull-Off</option>
+          <option value="tap_cell">The Tapped Cell</option>
+          <option value="tap_cascade">Tapped Arpeggio Cascade</option>
+          <option value="tap_sevenths">Seventh &amp; Diminished Cascade</option>
+          <option value="tap_changes">Tapping the Changes</option>
+          <option value="btap_articulation">Bass Tap &amp; Pull-Off</option>
+          <option value="btap_arpeggio">Tapped Arpeggio Reach</option>
+          <option value="btap_groove">The Tapped Figure</option>
+          <option value="btap_apply">Tapping Over a Vamp</option>
           <option value="rhy_odd_meter">Odd Meters</option>
           <option value="rhy_over_barline">Over the Barline</option>
           <option value="rhy_trade_bars">Trade Bars — Make a Groove</option>
@@ -2755,6 +2763,12 @@
              rung). Pathway-driven; 0 = full box. Same setFieldSilent→readConfig
              contract; anti-leak defaulted in applyPathwayConfig. -->
         <input type="hidden" name="sweepStrings" id="virtuoso-sweep-strings" value="0">
+        <!-- Tapping ladder: tapArp='true' routes the 'tapping' type through the
+             idiomatic tapped-arpeggio CASCADE builder (tap→pull→hammer per string)
+             instead of the single-string tap→pull articulation drill. Pathway-driven;
+             '' = the articulation drill. Same setFieldSilent→readConfig contract;
+             anti-leak defaulted in applyPathwayConfig. -->
+        <input type="hidden" name="tapArp" id="virtuoso-tap-arp" value="">
         <!-- Bass Groove & Right-Hand ladder: plucking-hand mode
              (pulse|crossing|rake|three_finger). Pathway-driven; 'pulse' default;
              anti-leak defaulted in applyPathwayConfig. -->
