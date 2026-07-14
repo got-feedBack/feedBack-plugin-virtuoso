@@ -45,6 +45,12 @@ try {
     { n: "gtr rush", ctx: { isBass: GTR, curPw: "pent_foundation", info: { heat: null, leanN: 20, leanMs: -45, nearMiss: 0 } }, id: "rhy_single_string", why: /ahead/ },
     // guitar — timing SCATTER (near-miss) → the subdivision grid.
     { n: "gtr scatter", ctx: { isBass: GTR, curPw: "pent_foundation", info: { heat: null, leanN: 5, leanMs: 5, nearMiss: 6 } }, id: "rhy_subdivision" },
+    // PR 1.4 — a lean that LOCALIZES to a hot region names the bars…
+    { n: "gtr drag localized", ctx: { isBass: GTR, curPw: "pent_foundation", info: { heat: null, leanN: 20, leanMs: 40, nearMiss: 0,
+        leanBars: { bars: [{ i: 0, lean: 5, n: 4 }, { i: 1, lean: 8, n: 4 }, { i: 2, lean: 10, n: 4 }, { i: 3, lean: 12, n: 4 }, { i: 4, lean: 60, n: 4 }, { i: 5, lean: 58, n: 4 }, { i: 6, lean: 9, n: 4 }, { i: 7, lean: 7, n: 4 }] } } }, id: "rhy_single_string", why: /dragged most in bars 5–6/ },
+    // …but a WHOLE-RUN lean stays generic (not "bars 1–8").
+    { n: "gtr drag global", ctx: { isBass: GTR, curPw: "pent_foundation", info: { heat: null, leanN: 20, leanMs: 40, nearMiss: 0,
+        leanBars: { bars: [{ i: 0, lean: 38, n: 4 }, { i: 1, lean: 42, n: 4 }, { i: 2, lean: 40, n: 4 }, { i: 3, lean: 41, n: 4 }, { i: 4, lean: 39, n: 4 }, { i: 5, lean: 43, n: 4 }] } } }, id: "rhy_single_string", why: /behind the click/ },
     // guitar — never send a timing-faulted rhy_single_string run back to itself.
     { n: "gtr rush, avoid repeat", ctx: { isBass: GTR, curPw: "rhy_single_string", info: { heat: null, leanN: 20, leanMs: -45, nearMiss: 0 } }, id: "rhy_subdivision" },
     // bass — a weak pinky routes to the hammer-on/pull-off strengthener (copy too).

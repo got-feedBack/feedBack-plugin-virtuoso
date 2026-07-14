@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.18';
+  const VIRTUOSO_VERSION = '0.1.19';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17229,6 +17229,30 @@
     const curPw = s.mode === 'pathway' ? s.pathway_id : null;
     return coachRxFor({ isBass, curPw, info, felt });
   }
+  // PR 1.4 · localize a timing fault to the worst bar-region (not the run median).
+  // Reads the per-bar lean strip the scorer already snapshots (leanBars.bars =
+  // [{ i, lean, n }], i = 0-based bar). Returns { from, to, label } (1-based bar
+  // numbers) or null when nothing is clearly off in the fault direction, or when
+  // the "region" is basically the whole run (a GLOBAL lean — the generic copy
+  // reads better than "bars 1–8"). Pure. `rushing` = the fault direction.
+  function worstLeanBars(leanBars, rushing) {
+    if (!leanBars || !Array.isArray(leanBars.bars)) return null;
+    const bars = leanBars.bars.filter(b => (b.n || 0) >= 2);   // 1-sample bars are noise
+    if (bars.length < 3) return null;
+    const score = b => (rushing ? -b.lean : b.lean);           // fault-direction magnitude (ms)
+    let worst = bars[0];
+    for (const b of bars) if (score(b) > score(worst)) worst = b;
+    if (score(worst) < 20) return null;                        // nothing clearly off this way
+    const thr = Math.max(15, score(worst) * 0.6);
+    const hot = new Set(bars.filter(b => score(b) >= thr).map(b => b.i));
+    let lo = worst.i, hi = worst.i;
+    while (hot.has(lo - 1)) lo--;
+    while (hot.has(hi + 1)) hi++;
+    const inRegion = bars.filter(b => b.i >= lo && b.i <= hi).length;
+    if (inRegion >= bars.length * 0.75) return null;           // whole-run lean, not localized
+    const from = lo + 1, to = hi + 1;
+    return { from, to, label: from === to ? `bar ${from}` : `bars ${from}–${to}` };
+  }
   // The PURE fault→drill mapping (no DOM / no closure state) — the durable IP of
   // the coach loop, unit-tested via the __virtuosoCoach debug hook. Ranks the
   // already-computed faults and returns the first that trips its threshold.
@@ -17282,7 +17306,15 @@
     const lean = feltWord || timingLean;
     if (lean) {
       const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_single_string', 'rhy_subdivision');
-      if (id) return { why: `You were ${lean === 'rushing' ? 'ahead of' : 'behind'} the click — lock your pulse to the beat.`, pathwayId: id };
+      if (id) {
+        // PR 1.4: name WHERE it broke down when the lean localizes to a region;
+        // else fall back to the whole-run framing ("ahead of / behind the click").
+        const region = worstLeanBars(info.leanBars, lean === 'rushing');
+        const why = region
+          ? `You ${lean === 'rushing' ? 'rushed' : 'dragged'} most in ${region.label} — lock your pulse to the beat.`
+          : `You were ${lean === 'rushing' ? 'ahead of' : 'behind'} the click — lock your pulse to the beat.`;
+        return { why, pathwayId: id };
+      }
     }
     // 4 · timing consistency: right pitch, just outside the window, over and over.
     if ((info.nearMiss || 0) >= 4) {
