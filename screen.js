@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.19';
+  const VIRTUOSO_VERSION = '0.1.20';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17227,7 +17227,16 @@
     if ((r.judgedPassed || 0) < 8 && !(felt && felt.verdict)) return null;
     const isBass = /^bass/.test((activeBundle && activeBundle.config && activeBundle.config.stringSetup) || '');
     const curPw = s.mode === 'pathway' ? s.pathway_id : null;
-    return coachRxFor({ isBass, curPw, info, felt });
+    const candidates = coachRxCandidates({ isBass, curPw, info, felt });
+    if (!candidates.length) return null;
+    // Anti-thrash hysteresis: keep the player on ONE fix across runs. Persist the
+    // prescribed focus per spec (mode + rung), and prefer last run's focus if it
+    // still trips a threshold — the pure applyCoachHysteresis decides.
+    const key = `${s.mode || ''}:${s.pathway_id || s.practice_type || ''}`;
+    let store = {}; try { store = JSON.parse(localStorage.getItem('virtuoso.coach_focus') || '{}'); } catch (_) {}
+    const { chosen, focus } = applyCoachHysteresis(candidates, store[key] || null);
+    try { store[key] = focus; localStorage.setItem('virtuoso.coach_focus', JSON.stringify(store)); } catch (_) {}
+    return chosen;
   }
   // PR 1.4 · localize a timing fault to the worst bar-region (not the run median).
   // Reads the per-bar lean strip the scorer already snapshots (leanBars.bars =
@@ -17254,13 +17263,15 @@
     return { from, to, label: from === to ? `bar ${from}` : `bars ${from}–${to}` };
   }
   // The PURE fault→drill mapping (no DOM / no closure state) — the durable IP of
-  // the coach loop, unit-tested via the __virtuosoCoach debug hook. Ranks the
-  // already-computed faults and returns the first that trips its threshold.
-  function coachRxFor(ctx) {
+  // the coach loop, unit-tested via the __virtuosoCoach debug hook. Returns ALL
+  // faults that trip their threshold, in priority order (each tagged with a
+  // `fault` category so the hysteresis layer can keep the player on one fix).
+  function coachRxCandidates(ctx) {
     const { isBass, curPw, info, felt } = ctx || {};
-    if (!info) return null;
+    if (!info) return [];
     // Never send them back to the rung they just ran — fall to its sibling.
     const pick = (primary, alt) => (primary !== curPw ? primary : (alt && alt !== curPw ? alt : null));
+    const out = [];
     const heat = info.heat;
     if (heat && heat.missTotal >= 3) {
       // 1 · a fretting finger the hand keeps dropping (names a mechanic — the
@@ -17279,7 +17290,7 @@
           const why = id === 'bass_finger_legato'
             ? 'Your pinky slipped most — strengthen it with hammer-ons and pull-offs.'
             : `Your ${names[fn] || 'fretting'} finger slipped most — build one clean finger per fret.`;
-          return { why, pathwayId: id };
+          out.push({ fault: 'finger', why, pathwayId: id });
         }
       }
       // 2 · a string crossing the picking hand fumbles.
@@ -17292,7 +17303,7 @@
         // string-skipping (which trains jumping OVER a string) — guitar-pedagogy
         // 2026-07-14. Bass keeps rh_crossing (raking across adjacent strings).
         const id = isBass ? pick('bass_rh_crossing', 'bass_rh_pulse') : pick('pick_alternate', 'pick_economy');
-        if (id) return { why: `The ${nm(a)}→${nm(b)} string crossing tripped you up — drill clean crossing.`, pathwayId: id };
+        if (id) out.push({ fault: 'crossing', why: `The ${nm(a)}→${nm(b)} string crossing tripped you up — drill clean crossing.`, pathwayId: id });
       }
     }
     // 3 · time: leaning off the click (the run median, or the bass felt verdict).
@@ -17313,15 +17324,34 @@
         const why = region
           ? `You ${lean === 'rushing' ? 'rushed' : 'dragged'} most in ${region.label} — lock your pulse to the beat.`
           : `You were ${lean === 'rushing' ? 'ahead of' : 'behind'} the click — lock your pulse to the beat.`;
-        return { why, pathwayId: id };
+        out.push({ fault: 'timing', why, pathwayId: id });
       }
     }
     // 4 · timing consistency: right pitch, just outside the window, over and over.
     if ((info.nearMiss || 0) >= 4) {
       const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_subdivision', 'rhy_single_string');
-      if (id) return { why: 'Several notes landed right but just off the beat — tighten the grid.', pathwayId: id };
+      if (id) out.push({ fault: 'scatter', why: 'Several notes landed right but just off the beat — tighten the grid.', pathwayId: id });
     }
-    return null;
+    return out;
+  }
+  // The single top prescription (the priority winner) — kept for the smoke suite
+  // and any caller that doesn't want hysteresis.
+  function coachRxFor(ctx) { return coachRxCandidates(ctx)[0] || null; }
+  // PR (deferred 1.3 refinement) · anti-thrash hysteresis. Re-diagnosing from
+  // scratch every run can flip the prescribed focus finger→timing→crossing so the
+  // player never stays on one fix long enough to land it (learning-design
+  // 2026-07-14: "load-bearing for the gating"). So if last run's focus STILL trips
+  // a threshold this run, keep reinforcing it — for up to 2 consecutive runs —
+  // before letting a new top fault take over. Pure: (candidates, prevFocus) →
+  // { chosen, focus }. prevFocus = { cat, streak } | null.
+  function applyCoachHysteresis(candidates, prevFocus) {
+    if (!candidates || !candidates.length) return { chosen: null, focus: prevFocus || null };
+    const top = candidates[0];
+    const held = prevFocus && prevFocus.cat !== top.fault && (prevFocus.streak || 0) < 2
+      ? candidates.find(c => c.fault === prevFocus.cat) : null;
+    if (held) return { chosen: held, focus: { cat: held.fault, streak: (prevFocus.streak || 0) + 1 } };
+    const streak = (prevFocus && prevFocus.cat === top.fault) ? (prevFocus.streak || 0) + 1 : 0;
+    return { chosen: top, focus: { cat: top.fault, streak } };
   }
   function coachRxHtml(rx) {
     if (!rx || !PATHWAYS[rx.pathwayId]) return '';
@@ -17368,7 +17398,7 @@
   }
   // Debug/test hook: the pure mappings, exposed for the smoke suite (immune to the
   // "smoke mocks the verifier" blind spot — they take fixtures directly).
-  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxHtml, buildPocketDiagnosis };
+  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxCandidates, applyCoachHysteresis, coachRxHtml, buildPocketDiagnosis };
   // ── J-3 end-of-jam reflection (warm, NO score — mirror not judge) ───────────
   // A deliberate Jam stop opens the SAME modal shell as the results card, but
   // with descriptive content only: time jammed, how many notes, the tones you

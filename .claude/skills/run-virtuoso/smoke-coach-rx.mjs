@@ -112,6 +112,34 @@ try {
     else ok(got.text === "", `pocket: ${p.n} suppressed`);
   }
 
+  // ── anti-thrash hysteresis — keep the player on ONE fix across runs. Given a
+  //    ranked candidate list + last run's focus { cat, streak }, decide which
+  //    fault to prescribe now and the focus to persist.
+  const F = { fault: "finger", pathwayId: "chromatic_warmup", why: "f" };
+  const T = { fault: "timing", pathwayId: "rhy_single_string", why: "t" };
+  const hyst = [
+    // last run said finger; timing now tops but finger still trips → REINFORCE finger.
+    { n: "reinforce prior focus", cands: [T, F], prev: { cat: "finger", streak: 0 }, chosen: "finger", streak: 1 },
+    // …but not forever: after 2 reinforcements, let the new top take over.
+    { n: "release after 2 holds", cands: [T, F], prev: { cat: "finger", streak: 2 }, chosen: "timing", streak: 0 },
+    // prior focus no longer trips a threshold → switch to the top.
+    { n: "prior focus gone → top", cands: [T], prev: { cat: "finger", streak: 0 }, chosen: "timing", streak: 0 },
+    // no history → the top, fresh streak.
+    { n: "no history → top", cands: [F, T], prev: null, chosen: "finger", streak: 0 },
+    // same fault two runs running → natural reinforcement, streak grows.
+    { n: "same top → streak grows", cands: [T], prev: { cat: "timing", streak: 1 }, chosen: "timing", streak: 2 },
+    // nothing to prescribe → keep the prior focus untouched, no pick.
+    { n: "no candidates → null", cands: [], prev: { cat: "timing", streak: 1 }, chosen: null, streak: 1 },
+  ];
+  const hres = await page.evaluate((hs) => hs.map(h => {
+    const r = window.__virtuosoCoach.applyCoachHysteresis(h.cands, h.prev);
+    return { n: h.n, chosen: r.chosen ? r.chosen.fault : null, streak: r.focus ? r.focus.streak : null };
+  }), hyst);
+  for (let i = 0; i < hyst.length; i++) {
+    const h = hyst[i], got = hres[i];
+    ok(got.chosen === h.chosen && got.streak === h.streak, `hysteresis: ${h.n}`, `chosen=${got.chosen} streak=${got.streak}`);
+  }
+
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  coach prescription: ${fails} failure(s)`);
   process.exit(fails ? 1 : 0);
