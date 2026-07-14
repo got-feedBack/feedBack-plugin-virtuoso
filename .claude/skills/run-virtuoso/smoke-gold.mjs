@@ -50,6 +50,9 @@ function runGoldInPage() {
   const met = G.evaluate(session);
   ok("all axes met → met", met && met.met === true, JSON.stringify(met));
   ok("verifier reported as comb", met && met.verifier === "comb");
+  ok("result carries N-of-M counts + pcCount", met && met.inKey === 90 && met.confirmed === 100 && met.pcCount === 7,
+    JSON.stringify(met));
+  ok("goldDebug exposes armed()", typeof G.armed === "function" && G.armed() === false);
 
   // Each axis independently unmet flips the gate.
   G.seed({ ...goldMirror });
@@ -75,7 +78,8 @@ function runGoldInPage() {
   const res = G.evaluate(session);
   ok("first mint stores", G.store("blues", res) === true);
   const stored = JSON.parse(localStorage.getItem("virtuoso.progress")).goldImprov;
-  ok("store shape", stored && stored.blues && stored.blues.verifier === "comb" && stored.blues.chords === goldMirror.chordHops,
+  ok("store shape", stored && stored.blues && stored.blues.verifier === "comb"
+    && stored.blues.chords === goldMirror.chordHops && stored.blues.pcCount === 7,
     JSON.stringify(stored));
   ok("second mint is a no-op (gained-only)", G.store("blues", res) === false);
 

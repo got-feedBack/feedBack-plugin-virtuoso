@@ -25,18 +25,21 @@ readout** and mints the **Gold rung** for the host's career passports.
   the YIN jam mirror *proposes* each fresh note; a single-note
   `window.noteDetect.setVerifyTarget` push *confirms* it against the player's
   real tuning; only confirmed notes classify (chord tone / key tone / outside
-  via `jamCarrierInfo` + the style's scale). During a jam the verify slot
-  idles (no judged chart notes), so gold owns it; browser/downlevel falls back
-  to YIN-classified with `verifier:'yin'` and the recap says which ear
-  listened.
+  via `jamCarrierInfo` + the style's scale). Jam runs deliberately DON'T arm
+  the chart verifier (the mirror never judges, and an armed contained chart
+  suspends the host detect loop, silently killing `setVerifyTarget`) — gold
+  arms the detector bare via `goldArm()` and owns the verify slot for the run;
+  browser/downlevel falls back to YIN-classified with `verifier:'yin'` and the
+  recap says which ear listened.
 - **Recap honesty before gating**: every jam recap with confirmed notes shows
-  "Verified: N% in key · N% chord tones · over N chord changes".
+  descriptive counts — "Verified notes: N of M sat in the key, N on chord
+  tones, played over N chord changes" (a mirror line, never a score-to-beat).
 - **`GOLD_BAR`** (duration / in-key % / chord hops / distinct tones /
   comb-only) mints `goldImprov[styleId]` in `virtuoso.progress` (gained-only)
   and emits `virtuoso:progress {kind:'gold_improv', …}` for the career relay.
   **Bar values are PLACEHOLDERS pending Byron's on-device tuning session.**
 - Verification: `smoke-gold.mjs` (gate math per axis, gained-only store,
-  midi→position probe mapping) — 13 checks green against a live host.
+  midi→position probe mapping) — 16 checks green against a live host.
 
 ## Planned — action items for a future session
 

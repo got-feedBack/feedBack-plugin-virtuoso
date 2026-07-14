@@ -17008,14 +17008,18 @@
       const ear = gold.verifier === 'comb'
         ? 'verified by the harmonic-comb ear'
         : 'heard by the browser ear — Gold listens through the desktop verifier';
-      goldHtml = `<div class="virtuoso-jam-recap-line">Verified: <b>${Math.round(gold.inKeyPct * 100)}%</b> in key · <b>${Math.round(gold.inChordPct * 100)}%</b> chord tones · over <b>${gold.chordHops}</b> chord change${gold.chordHops === 1 ? '' : 's'} <span class="virtuoso-jam-recap-sub">(${esc(ear)})</span></div>`;
+      // Descriptive N-of-M counts, the recap's own convention — a mirror line,
+      // not a score-to-beat (percent-vs-threshold framing stays out of the jam).
+      goldHtml = `<div class="virtuoso-jam-recap-line">Verified notes: <b>${gold.inKey} of ${gold.confirmed}</b> sat in the key, <b>${gold.inChord}</b> on chord tones, played over <b>${gold.chordHops}</b> chord change${gold.chordHops === 1 ? '' : 's'} <span class="virtuoso-jam-recap-sub">(${esc(ear)})</span></div>`;
       if (gold.met) {
         const styleId = currentJamStyleId();
         const minted = goldStore(styleId, gold);
-        emitProgress('gold_improv', styleId, {
+        // Gained-only, like every other emit in this file: only an actual mint
+        // reaches the bus/relay — a repeat gold-bar jam is recap-only.
+        if (minted) emitProgress('gold_improv', styleId, {
           style: styleId, durationMs: gold.durationMs,
           inKeyPct: Math.round(gold.inKeyPct * 100) / 100,
-          chords: gold.chordHops, pcs: gold.pcs, verifier: gold.verifier,
+          chords: gold.chordHops, pcCount: gold.pcCount, verifier: gold.verifier,
         });
         goldHtml += `<div class="virtuoso-jam-recap-line virtuoso-jam-recap-gold">🏅 <b>GOLD</b> — ${minted ? 'a verified improv: this style\'s gold rung is yours.' : 'another gold-bar jam (already minted).'}</div>`;
       }
@@ -20641,11 +20645,12 @@
   // The harmonic-comb NoteVerifier is the DETECTION AUTHORITY: the YIN mirror
   // proposes each fresh note, the comb confirms it (a single-note verify
   // target against the player's real tuning), and only confirmed notes
-  // classify against the chord/key under the playhead. During a jam the
-  // verify slot idles (a jam chart has no judged notes — ndPushVerifyTarget
-  // never pushes), so gold may own it. Browser/downlevel (no comb) falls back
-  // to YIN-classified notes with verifier:'yin'; the Gold bar is comb-only by
-  // default — the recap says which ear listened. Values are PLACEHOLDERS
+  // classify against the chord/key under the playhead. Jam runs deliberately
+  // skip the chart verifier (startPitchTracker: `_ndVerifyMode = … && !isJamMode()`
+  // — the mirror never judges), so gold owns the one verify slot for the whole
+  // run via goldArm's bare detector enable. Browser/downlevel (no comb) falls
+  // back to YIN-classified notes with verifier:'yin'; the Gold bar is comb-only
+  // by default — the recap says which ear listened. Values are PLACEHOLDERS
   // until the on-device tuning session calibrates them.
   const GOLD_BAR = {
     minMs: 180000,       // ≥3 minutes of deliberate jam
@@ -20663,14 +20668,6 @@
     _goldPending = null;
   }
 
-  function goldKeyScalePcs() {
-    const cfg = activeBundle && activeBundle.config;
-    if (!cfg) return null;
-    const keyPc = NOTE_ALIASES[cfg.key] ?? 0;
-    const ivs = SCALE_INTERVALS[cfg.scale] || [];
-    return ivs.length ? new Set(ivs.map(i => (keyPc + i) % 12)) : null;
-  }
-
   function goldClassify(pc, chartT) {
     const g = _goldMirror;
     if (!g) return;
@@ -20679,14 +20676,47 @@
     g.confirmed++;
     g.pcs.add(pc);
     const seg = cur ? `${cur.rootPc ?? 'x'}:${(cur.cpcs || []).join('')}` : null;
-    if (seg && seg !== g.lastSeg) { g.chordHops++; g.lastSeg = seg; }
+    // chordHops counts chord CHANGES played over, not segments touched — the
+    // first note seeds the cursor without counting.
+    if (seg && g.lastSeg && seg !== g.lastSeg) g.chordHops++;
+    if (seg) g.lastSeg = seg;
     if (cur && Array.isArray(cur.cpcs) && cur.cpcs.includes(pc)) { g.inChord++; g.inKey++; return; }
-    const scale = goldKeyScalePcs();
-    if (scale && scale.has(pc)) { g.inKey++; return; }
+    // Same scale source the recap analysis uses (incl. its major fallback) —
+    // gold and the recap must never disagree on what "in key" means.
+    const cfg = activeBundle && activeBundle.config;
+    if (cfg && scalePcs(cfg).includes(pc)) { g.inKey++; return; }
     g.outside++;
   }
 
-  function goldCombActive() { return _ndVerifyMode && isJamMode() && ndVerifyAvailable(); }
+  // Jam-run detector arm: enable note_detect BARE — no chart pushed, no
+  // contained slot claimed — so the host's timing-free _runVerifyTarget path
+  // scores gold's single-note pushes on desktop AND browser. Async like
+  // _ndArmVerify: a stop racing enable() must not leave the detector on.
+  let _goldArmed = false, _goldWeEnabled = false, _goldArmGen = 0;
+  async function goldArm() {
+    if (!ndVerifyAvailable()) return;
+    const myGen = ++_goldArmGen;
+    let weEnabled = false;
+    try {
+      if (!window.noteDetect.isEnabled?.()) { await window.noteDetect.enable?.(); weEnabled = true; }
+    } catch (_) { return; }   // no detector → the YIN fallback classifies
+    if (myGen !== _goldArmGen) {
+      // Run stopped (or restarted) during enable() — undo our enable, don't arm.
+      if (weEnabled) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} }
+      return;
+    }
+    _goldWeEnabled = weEnabled;
+    _goldArmed = true;
+  }
+  function goldDisarm() {
+    _goldArmGen++;   // invalidate an in-flight goldArm
+    _goldPending = null;
+    if (!_goldArmed) return;
+    _goldArmed = false;
+    try { window.noteDetect.setVerifyTarget(null); } catch (_) {}
+    if (_goldWeEnabled) { try { window.noteDetect.disable?.({ silent: true }); } catch (_) {} _goldWeEnabled = false; }
+  }
+  function goldCombActive() { return _goldArmed; }
 
   // Any correct (string, fret) position produces the same pitch for the comb.
   function goldMidiTarget(midi, omOverride) {
@@ -20710,12 +20740,14 @@
     const tgt = goldMidiTarget(midi);
     if (!tgt) return;
     _goldPending = { pc, chartT: currentPracticeTime, until: performance.now() + 350 };
-    try { window.noteDetect.setVerifyTarget(tgt, _ndVerifyCtx || { openMidis: _ptOpenMidis || [] }); } catch (_) { /* comb briefly gone */ }
+    try { window.noteDetect.setVerifyTarget(tgt, { openMidis: _ptOpenMidis || [] }); } catch (_) { /* comb briefly gone */ }
   }
 
-  // Registered once at load; no-ops unless a confirm is pending, so it never
-  // fights the exercise verifier's own listener (whose hits it ignores).
+  // Registered once at load; gated on _goldArmed (jam runs only — gold owns
+  // the slot there), so it can never react to an exercise verifier's events
+  // or clobber an exercise's live verify target.
   function goldOnVerify(ev) {
+    if (!_goldArmed) return;
     const d = ev && ev.detail;
     const pending = _goldPending;
     if (!d || !d.isHit || !pending) return;
@@ -20731,17 +20763,19 @@
     const inKeyPct = g.inKey / g.confirmed;
     const res = {
       confirmed: g.confirmed,
+      inChord: g.inChord,
+      inKey: g.inKey,
       inChordPct: g.inChord / g.confirmed,
       inKeyPct,
       chordHops: g.chordHops,
-      pcs: g.pcs.size,
+      pcCount: g.pcs.size,   // a COUNT — `pcs` elsewhere in this file is a pitch-class list
       verifier: g.comb ? 'comb' : 'yin',
       durationMs: (s && s.duration_ms) || 0,
     };
     res.met = res.durationMs >= GOLD_BAR.minMs
       && inKeyPct >= GOLD_BAR.minInKeyPct
       && res.chordHops >= GOLD_BAR.minChordHops
-      && res.pcs >= GOLD_BAR.minPcs
+      && res.pcCount >= GOLD_BAR.minPcs
       && (!GOLD_BAR.combOnly || g.comb);
     return res;
   }
@@ -20757,7 +20791,7 @@
       durationMs: res.durationMs,
       inKeyPct: Math.round(res.inKeyPct * 100) / 100,
       chords: res.chordHops,
-      pcs: res.pcs,
+      pcCount: res.pcCount,
       verifier: res.verifier,
     };
     progressSave(o);
@@ -20942,6 +20976,10 @@
     // Swap the bundles (identical derivation to attachRenderer): the highway gets
     // a chord-free view + bgReactive:false; other renderers get the full bundle.
     activeBundle = makeBundle(exercise);
+    // A swapped chart is a new timeline: drop the in-flight gold confirm and
+    // the chord-segment cursor so nothing classifies (or "hops") across bundles.
+    _goldPending = null;
+    if (_goldMirror) _goldMirror.lastSeg = null;
     maybeResyncMixer(cfg);   // jam style hot-swap → the mixer follows the new style
     rendererBundle = (cfg.renderer === 'highway_3d')
       ? Object.assign({}, activeBundle, { chords: [], chordTemplates: [], bgReactive: false })
@@ -22319,7 +22357,12 @@
     // Verifier mode lifts the chord exemption: the harmonic-comb verifier is
     // polyphonic, so chords/diads become judged (shown AND scored), not exempt.
     // The sub-floor exemption stays — a mic still can't hear sub-70Hz strings.
-    _ndVerifyMode = ndVerifyAvailable();
+    // Jam runs never arm the chart verifier: the mirror never judges, and the
+    // ONE verify slot belongs to the Gold rung's single-note confirms (see
+    // goldArm). Arming the contained chart instead would suspend the host's
+    // detect loop and setVerifyTarget would go silently dead (note_detect
+    // screen.js, the _ndHostChartSuspended early-return before _runVerifyTarget).
+    _ndVerifyMode = ndVerifyAvailable() && !isJamMode();
     // Muted ghosts (mt) are never judged — the HOST's own convention (note_detect
     // skips mt in matchNotes/checkMisses/engine push): correct muting must not
     // read as a miss (the DapperTap mt bug, fixed the host's way).
@@ -22431,6 +22474,10 @@
       // resolves — checking it synchronously here would race and wrongly fall
       // back on a fresh enable. _ndArmVerify awaits enable() first.
       _ndArmVerify();
+    } else if (isJamMode()) {
+      // Jam: no chart verifier — arm the detector BARE for the Gold rung's
+      // single-note comb confirms. Gold owns the verify slot for this run.
+      goldArm();
     }
 
     // Live pitch-strip / input-presence ear (host minigames YIN). Optional and
@@ -22598,6 +22645,7 @@
   function stopPitchTracker() {
     if (_ptHandle) { try { _ptHandle.stop(); } catch (_) {} _ptHandle = null; }
     ndStopVerify();   // clear the verify target + listener, restore note_detect
+    goldDisarm();     // drop a pending gold confirm + our bare detector enable (never leaks into the next run)
     stopLevelMeter();   // tear down the level/onset tap (poll / RAF / mic stream)
     // Clear scoring state so a later silent preview can't read this run's
     // notes/hits and feed stale hit/miss counts to the pathway tier gate.
@@ -25930,6 +25978,7 @@
       evaluate: goldEvaluate,
       store: goldStore,
       midiTarget: goldMidiTarget,
+      armed: () => _goldArmed,
     },
     getActiveBundleInfo: () => activeBundle ? { config: activeBundle.config, duration: activeBundle.songInfo && activeBundle.songInfo.duration, leadIn: activeBundle.leadIn } : null,
     sgStats: () => { const out = { ready: 0, loading: 0, failed: 0 }; for (const k of Object.keys(sgBuffers)) out[sgBuffers[k].state] = (out[sgBuffers[k].state] || 0) + 1; return out; } };
