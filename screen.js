@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.11';
+  const VIRTUOSO_VERSION = '0.1.17';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17209,6 +17209,100 @@
     }
     return null;
   }
+  // ── PR 1.3 · the prescriptive coach loop ────────────────────────────────────
+  // The DESCRIPTIVE diagnostics (the heatmap/lean hero + the fault stat lines)
+  // name WHAT happened; this names the FIX — ONE next drill to run, chosen from
+  // the already-computed verdict + geometry data (heat.fgMiss / transMiss,
+  // leanMs, nearMiss, the bass felt verdict). Display-only, downstream-only: it
+  // re-reads the same signals the judge already produced and never re-judges
+  // (consume-the-host-judge). The prescription is always a REAL Ladder rung the
+  // player owns off the screen — teach the fix, never fake a score. The fault→
+  // drill table is instrument-aware (guitar vs bass rungs) and never prescribes
+  // the rung you just ran (falls to its sibling). Returns { why, pathwayId } | null.
+  function buildCoachRx(s, r, info) {
+    if (!info || !s) return null;
+    if (s.jam || s.mode === 'session') return null;   // Jam is a mirror; a Workout has no single fault
+    if (_downshiftChipShown) return null;             // the mid-run downshift chip already nudged — don't stack two (learning-design 2026-07-14: a finger fault at a too-high tempo is a ceiling problem, not a weak finger)
+    const felt = s.felt;
+    if ((r.judgedPassed || 0) < 8 && !(felt && felt.verdict)) return null;
+    const isBass = /^bass/.test((activeBundle && activeBundle.config && activeBundle.config.stringSetup) || '');
+    const curPw = s.mode === 'pathway' ? s.pathway_id : null;
+    return coachRxFor({ isBass, curPw, info, felt });
+  }
+  // The PURE fault→drill mapping (no DOM / no closure state) — the durable IP of
+  // the coach loop, unit-tested via the __virtuosoCoach debug hook. Ranks the
+  // already-computed faults and returns the first that trips its threshold.
+  function coachRxFor(ctx) {
+    const { isBass, curPw, info, felt } = ctx || {};
+    if (!info) return null;
+    // Never send them back to the rung they just ran — fall to its sibling.
+    const pick = (primary, alt) => (primary !== curPw ? primary : (alt && alt !== curPw ? alt : null));
+    const heat = info.heat;
+    if (heat && heat.missTotal >= 3) {
+      // 1 · a fretting finger the hand keeps dropping (names a mechanic — the
+      //     clearest, most fixable fault; guitar-pedagogy's ranking).
+      const fgTop = Object.entries(heat.fgMiss || {}).sort((a, b) => b[1] - a[1])[0];
+      if (fgTop && fgTop[1] >= 3 && fgTop[1] / Math.max(1, heat.missTotal) >= 0.4) {
+        const fn = Number(fgTop[0]);
+        const names = { 1: 'index', 2: 'middle', 3: 'ring', 4: 'pinky' };   // players say index/middle/ring/pinky (bass-pedagogy 2026-07-14)
+        // Bass routes a weak PINKY to the dedicated hammer-on/pull-off
+        // strengthener; every other finger (and all guitar) to one-finger-per-fret.
+        const id = isBass
+          ? (fn === 4 ? pick('bass_finger_legato', 'bass_finger_gym') : pick('bass_finger_gym', 'bass_finger_legato'))
+          : pick('chromatic_warmup', 'fs_spider_adjacent');
+        if (id) {
+          // Copy tracks the RESOLVED drill, not the branch (the fallback can flip it).
+          const why = id === 'bass_finger_legato'
+            ? 'Your pinky slipped most — strengthen it with hammer-ons and pull-offs.'
+            : `Your ${names[fn] || 'fretting'} finger slipped most — build one clean finger per fret.`;
+          return { why, pathwayId: id };
+        }
+      }
+      // 2 · a string crossing the picking hand fumbles.
+      const trTop = Object.entries(heat.transMiss || {}).sort((a, b) => b[1] - a[1])[0];
+      if (trTop && trTop[1] >= 3) {
+        const [a, b] = trTop[0].split('>').map(Number);
+        const nm = i => (heat.opens[i] != null ? pcName(heat.opens[i] % 12) : String(i));
+        // The fault is a fumbled ADJACENT crossing → drill the crossing itself
+        // (alternate-picking keeps the pattern unbroken across strings), NOT
+        // string-skipping (which trains jumping OVER a string) — guitar-pedagogy
+        // 2026-07-14. Bass keeps rh_crossing (raking across adjacent strings).
+        const id = isBass ? pick('bass_rh_crossing', 'bass_rh_pulse') : pick('pick_alternate', 'pick_economy');
+        if (id) return { why: `The ${nm(a)}→${nm(b)} string crossing tripped you up — drill clean crossing.`, pathwayId: id };
+      }
+    }
+    // 3 · time: leaning off the click (the run median, or the bass felt verdict).
+    //     Isolate the timekeeping motor. Guitar → a single palm-muted note (the
+    //     pick hand IS the metronome). Bass → the i–m motor drill (bass_rh_pulse,
+    //     frets 5–9 — ABOVE the detector floor, so it stays gradable; bass-pedagogy
+    //     2026-07-14 flagged bass_root_click's sub-70 Hz open roots as a web
+    //     false-miss risk, so root_click is only the sibling fallback).
+    const feltWord = (felt && (felt.verdict === 'rushing' || felt.verdict === 'dragging')) ? felt.verdict : null;
+    const timingLean = ((info.leanN || 0) >= 12 && Math.abs(info.leanMs) >= 30) ? (info.leanMs < 0 ? 'rushing' : 'dragging') : null;
+    const lean = feltWord || timingLean;
+    if (lean) {
+      const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_single_string', 'rhy_subdivision');
+      if (id) return { why: `You were ${lean === 'rushing' ? 'ahead of' : 'behind'} the click — lock your pulse to the beat.`, pathwayId: id };
+    }
+    // 4 · timing consistency: right pitch, just outside the window, over and over.
+    if ((info.nearMiss || 0) >= 4) {
+      const id = isBass ? pick('bass_rh_pulse', 'bass_root_click') : pick('rhy_subdivision', 'rhy_single_string');
+      if (id) return { why: 'Several notes landed right but just off the beat — tighten the grid.', pathwayId: id };
+    }
+    return null;
+  }
+  function coachRxHtml(rx) {
+    if (!rx || !PATHWAYS[rx.pathwayId]) return '';
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<button type="button" class="virtuoso-results-coach" id="virtuoso-results-coach-go" data-pw="${rx.pathwayId}">`
+      + `<span class="virtuoso-results-coach-lead">Practice next</span>`
+      + `<span class="virtuoso-results-coach-why">${esc(rx.why)}</span>`
+      + `<span class="virtuoso-results-coach-cta">${esc(PATHWAYS[rx.pathwayId].label)} →</span>`
+      + `</button>`;
+  }
+  // Debug/test hook: the pure mapping, exposed for the smoke suite (immune to the
+  // "smoke mocks the verifier" blind spot — it takes a fault fixture directly).
+  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxHtml };
   // ── J-3 end-of-jam reflection (warm, NO score — mirror not judge) ───────────
   // A deliberate Jam stop opens the SAME modal shell as the results card, but
   // with descriptive content only: time jammed, how many notes, the tones you
@@ -17292,6 +17386,13 @@
     // neck, the lean strip for groove runs — suppressed on rough/sparse/felt/
     // Workout runs and whenever the mid-run downshift chip already spoke.
     const hero = buildResultsHero(r, info, { rough, judged, isWorkout, isFelt });
+    // The prescriptive coach line (PR 1.3): ONE next drill for the run's dominant
+    // fault. Complements the descriptive hero — hero names the fault, this names
+    // the fix. Suppressed on Workouts (no single fault) and on an EARNED clear —
+    // a clear is the win moment; a "here's what's still wrong, go drill it" button
+    // undercuts it and competes with the climb CTA (learning-design 2026-07-14:
+    // the climb IS the prescription). Null too when nothing crosses threshold.
+    const coachHtml = (isWorkout || earned) ? '' : coachRxHtml(buildCoachRx(s, r, info));
 
     // 1 · VERDICT slot — earned outcomes only; ONE hero (felt > proof > tier > travel).
     // Bass felt FLIP: the verdict WORD is the hero, tempo demoted (Option A — the
@@ -17573,11 +17674,12 @@
       (isWorkout
         ? sessionHeadHtml + chaptersHtml + strip + shareBtn
         : isFelt
-        ? feltBodyHtml + strip + shareBtn
+        ? feltBodyHtml + coachHtml + strip + shareBtn
         : verdict +
           `<div class="virtuoso-results-pct">${(judged && !reduceMotion) ? '0%' : headline}</div>` +
           `<div class="virtuoso-results-head">${sub}</div>` +
           (hero ? hero.html : '') +
+          coachHtml +
           strip +
           `<div class="virtuoso-results-practiced">Practiced ${dur}${s.bpm ? ` @ ${s.bpm} BPM` : ''}</div>` +
           shareBtn) +
@@ -17684,6 +17786,19 @@
       closeResultsModal();
       // D-J10: same device hand-off as the primary jam CTA.
       jamArmFromDrill(jamStyle, (readConfig() || {}).key, s.displayName || '');
+    });
+    // Coach prescription (PR 1.3): close-and-arm into the Ladder, the SAME open
+    // path the picker node-click uses (set the select + dispatch change → mode
+    // switch happens first so the guided form is live).
+    $('virtuoso-results-coach-go')?.addEventListener('click', (ev) => {
+      const id = ev.currentTarget.getAttribute('data-pw');
+      if (!id) return;
+      closeResultsModal();
+      selectMode('guided');
+      const sel = $('virtuoso-pathway');
+      if (sel && [...sel.options].some(o => o.value === id)) { sel.value = id; sel.dispatchEvent(new Event('change')); }
+      else applyPathwayById(id);
+      focusPlay();
     });
     $('virtuoso-results-details-toggle')?.addEventListener('click', () => {
       const sec = $('virtuoso-results-details'), btn = $('virtuoso-results-details-toggle');
