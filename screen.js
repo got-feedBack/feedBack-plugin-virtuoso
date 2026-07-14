@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.1.11';
+  const VIRTUOSO_VERSION = '0.1.21';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -19362,6 +19362,7 @@
   }
   function startPlayback() {
     if (!activeBundle) return;
+    previewStop();         // a graded run supersedes any "Hear it" preview
     closeResultsModal();   // a new run dismisses the previous run's results
     stopTuner();  // the practice scorer owns the strip during playback
     sessionEnd(); // flush any in-progress session before starting a new one
@@ -19392,6 +19393,49 @@
   // hit Play to instantly replay the same passage). The ⏮ button jumps to the
   // very start — Logic's "press Stop again to go to the top".
   function stopPlayback() { sessionEnd(); playing = false; paused = false; _preRollUntil = 0; _wrapAnim = null; hideDownshiftChip(); if (_jamPending) jamPendingClear(); releaseWakeLock(); currentPracticeTime = playStartChartTime; playAnchorChartTime = playStartChartTime; stopAudio(); stopPitchTracker(); if (rafId) { cancelAnimationFrame(rafId); rafId = null; } drawOnce(); syncPlayButton(); refreshStatusFromState(); }
+  // ── PR 2.1 · "Hear it" — audition the target phrase (Ear-Mode enabler) ───────
+  // Ear Mode's foundation (docs/ear-mode.md): play the current exercise's NOTES as
+  // audio, UNGRADED — no scorer, no session, no RAF clock. Just schedule the
+  // notes-only voice through the same audio bus playback uses, so the player can
+  // HEAR the phrase (the "call" a future Echo rung will have them reproduce).
+  // Notes only (no metronome/backing); an A–B loop bounds the phrase. Never fights
+  // a graded run; a second click stops it. Fire-and-forget — a timer resets the UI
+  // when the phrase ends (no clock drives it).
+  let _demoActive = false, _demoTimer = null;
+  function previewStop() {
+    if (_demoTimer) { clearTimeout(_demoTimer); _demoTimer = null; }
+    if (!_demoActive) return;
+    _demoActive = false;
+    stopAudio();
+    syncListenButton();
+  }
+  function previewListen() {
+    if (_demoActive) { previewStop(); return; }        // toggle off
+    if (!activeBundle || playing) return;              // needs a bundle; never over a graded run
+    ensureAudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    stopAudio();                                       // clear any lingering nodes
+    const lead = activeBundle.leadIn || 0, dur = activeBundle.songInfo?.duration || 0;
+    const hasLoop = segmentLoopA != null && segmentLoopB != null;
+    const from = hasLoop ? Math.min(segmentLoopA, segmentLoopB) : lead;   // skip the count-in
+    const to = hasLoop ? Math.max(segmentLoopA, segmentLoopB) : dur;
+    if (!(to > from)) return;
+    // Notes-only demo: clone the bundle with an audio profile that sounds ONLY the
+    // practice voice — the phrase to hear, no click, no band.
+    const demo = { ...activeBundle, config: { ...activeBundle.config, audio: { notes: true, metronome: false, harmony: false } } };
+    schedulePreviewAudio(demo, from, AUDIO_LOOKAHEAD_SECONDS, to);
+    _demoActive = true;
+    _demoTimer = setTimeout(previewStop, (to - from) * 1000 + 600);   // +ring-out tail
+    syncListenButton();
+  }
+  function syncListenButton() {
+    const b = $('virtuoso-listen');
+    if (!b) return;
+    b.classList.toggle('active', _demoActive);
+    b.innerHTML = _demoActive ? '◼ Stop' : '🔊 Hear it';
+    b.setAttribute('aria-pressed', _demoActive ? 'true' : 'false');
+    b.title = _demoActive ? 'Stop the preview' : 'Hear it — play the target phrase, no scoring';
+  }
   // Pause freezes the run in place: clock + audio + judgment stop, the session
   // and the pitch-tracker state stay alive, the playhead holds. Resume re-anchors
   // the clock/audio from the frozen playhead (the seekTo pattern). Wake lock is
@@ -25159,6 +25203,7 @@
     $('virtuoso-pathway-scale')?.addEventListener('change', (ev) => { setFieldSilent('scale', ev.target.value); if (activeBundle) onGenerate(); });
     $('virtuoso-play').addEventListener('click', onPlayToggle);
     $('virtuoso-stop')?.addEventListener('click', onStop);
+    $('virtuoso-listen')?.addEventListener('click', previewListen);   // PR 2.1 · audition the phrase
     // Unified DAW ruler: one canvas handles BOTH scrub and A–B loop.
     //   • Lower track → scrub/seek (drag the playhead through the chart).
     //   • Top strip (loop zone) → loop/cycle: drag empty = paint a new loop,
