@@ -20030,6 +20030,10 @@
     if (hidden) hidden.value = '';
     instr.value = family;
     instr.dispatchEvent(new Event('change', { bubbles: true }));
+    // The dispatched change above is intentionally synthetic so all dependent
+    // controls share one update path. This click, however, is a real player
+    // declaration and must still propagate to the host.
+    hostSettingsWriteSoon();
     try { localStorage.setItem('virtuoso.instrumentFamily', family); } catch (_) {}
     syncInstrumentFamilyButtons();
     syncStringCountChips();
@@ -20070,7 +20074,7 @@
   // overrides — the old bug was all three sharing the form's customOpenMidis
   // field, so picking any rung wiped the player's D Standard). Saved from the
   // Setup-popover/user paths only; read by applyTuningAdaptL1 + bind restore.
-  function instrumentStoreSave() {
+  function instrumentStoreSave({ writeHost = true } = {}) {
     try {
       const setupEl = document.querySelector('[name="stringSetup"]');
       const hidden = $('virtuoso-custom-open-midis');
@@ -20081,11 +20085,13 @@
       }));
     } catch (_) {}
     // Host write-through (topbar parity): this function IS the user-driven L1
-    // declaration funnel — every call site is a real user panel change (pathway/
-    // programmatic writes go through setFieldSilent and never land here), so it is
-    // exactly the anti-leak boundary the host sync must respect. Debounced;
-    // no-ops while applying host → panel and on every host failure.
-    hostSettingsWriteSoon();
+    // declaration funnel. Keep L1 persistence for programmatic setup changes, but
+    // write through to the shared host setting only for an actual player action.
+    // Integration code and smoke suites intentionally dispatch synthetic `change`
+    // events; treating those as a player declaration made concurrent test pages
+    // race over the host-wide instrument setting. Debounced; no-ops while applying
+    // host → panel and on every host failure.
+    if (writeHost) hostSettingsWriteSoon();
   }
   function instrumentStoreLoad() {
     try {
@@ -20142,6 +20148,7 @@
     const hidden = $('virtuoso-custom-open-midis');
     if (hidden) hidden.value = '';
     setup.dispatchEvent(new Event('change', { bubbles: true }));
+    hostSettingsWriteSoon();  // the chip click is a real player declaration
     syncStringCountChips();
     syncTuningOptions();
   }
@@ -25190,7 +25197,7 @@
         const lcd = $('virtuoso-lcd-bpm'); if (lcd) lcd.value = formBpm.value;
       });
     }
-    instrument?.addEventListener('change', () => {
+    instrument?.addEventListener('change', (e) => {
       if (!setup) return;
       setup.value = instrument.value === 'bass' ? 'bass_4_standard' : 'guitar_6_standard';
       // A per-string custom tuning from the old family has the wrong string count /
@@ -25204,7 +25211,7 @@
       // reload (the bug: the programmatic setup.value above dispatches no 'change',
       // so the setup handler's instrumentStoreSave never ran, and the stale L1 store
       // won restore → a guitar→bass switch reverted after restart).
-      instrumentStoreSave();
+      instrumentStoreSave({ writeHost: !!e.isTrusted });
       renderPathwayList();      // repaint the instrument-aware picker (bass packs in / guitar-only out)
       // If the active Ladder rung can't be played on the new instrument, drop to
       // Custom (that path regenerates); otherwise re-derive the rung + regenerate.
@@ -25212,12 +25219,12 @@
       reapplyActivePathway();   // re-derive the active rung for the new instrument
       if (activeBundle) onGenerate();
     });
-    setup?.addEventListener('change', () => {
+    setup?.addEventListener('change', (e) => {
       syncStringSetupControls(); syncInstrumentClass(); syncStringCountChips(); syncTuningOptions();
       // User-driven setup change = the player's L1 instrument declaration.
       // (Pathway writes go through setFieldSilent — no 'change' — so a rung's
       // coded setup never overwrites the player's durable store.)
-      instrumentStoreSave();
+      instrumentStoreSave({ writeHost: !!e.isTrusted });
       renderPathwayList();      // a setup change can cross families (guitar setup → bass setup): repaint the picker
       // If this setup change crossed families and orphaned the active Ladder rung,
       // drop to Custom (that path regenerates) instead of re-deriving a hidden rung.
