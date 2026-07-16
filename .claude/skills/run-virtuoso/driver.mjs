@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 const HOST = process.env.SLOPSMITH_HOST || "http://127.0.0.1:8765";
 const SHOT_DIR = process.env.SHOT_DIR || resolve(dirname(fileURLToPath(import.meta.url)), "../../../.virtuoso-shots");
 
-const RENDERERS = ["highway_3d", "builtin_2d", "tab_2d", "notation_2d"];
+const RENDERERS = ["highway_3d", "highway_2d", "builtin_2d", "tab_2d", "notation_2d"];
 
 async function ensureHost() {
   const r = await fetch(`${HOST}/api/plugins/virtuoso/status`).catch(() => null);
@@ -64,7 +64,7 @@ async function gotoVirtuoso(page) {
   await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10_000 });
   // The bootstrap script in screen.html runs bind() on DOMContentLoaded; give
   // it a moment to wire up everything (pathway dropdown, view-switcher).
-  await page.waitForSelector(".virtuoso-view-btn", { timeout: 5_000 });
+  await page.waitForSelector("#virtuoso-view-select", { timeout: 5_000 });
 }
 
 async function generate(page) {
@@ -93,9 +93,16 @@ async function generate(page) {
 }
 
 async function switchRenderer(page, kind) {
-  const btn = await page.$(`.virtuoso-view-btn[data-renderer="${kind}"]`);
-  if (!btn) throw new Error(`Renderer button not found: ${kind}`);
-  await btn.click();
+  // View selector is a dropdown (v0.1.13): set the value + dispatch change,
+  // the same event path a user pick takes (change → onViewSwitch).
+  const ok = await page.evaluate((k) => {
+    const sel = document.querySelector("#virtuoso-view-select");
+    if (!sel || ![...sel.options].some((o) => o.value === k)) return false;
+    sel.value = k;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }, kind);
+  if (!ok) throw new Error(`Renderer option not found: ${kind}`);
   await page.waitForTimeout(600); // attachRenderer is async; let it settle
 }
 
@@ -111,6 +118,13 @@ async function withBrowser(fn) {
   try {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
     page.on("pageerror", (e) => console.error("[page error]", e.message));
     page.on("console", (m) => {
       const t = m.type();

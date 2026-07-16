@@ -59,7 +59,7 @@ async function gotoVirtuoso(page) {
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
   await page.evaluate(() => document.getElementById("v3-onboarding")?.remove()).catch(() => {});
   await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector(".virtuoso-view-btn", { timeout: 5_000 });
+  await page.waitForSelector("#virtuoso-view-select", { timeout: 5_000 });
 }
 
 async function generate(page) {
@@ -79,6 +79,13 @@ async function run() {
   try {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
     page.on("console", (m) => { if (m.type() === "error" && !isBenign(m.text())) consoleErrors.push(m.text()); });
     page.on("pageerror", (e) => { if (!isBenign(e.message)) consoleErrors.push(`pageerror: ${e.message}`); });
 
@@ -110,8 +117,13 @@ async function run() {
     //    Switch to highway_3d, then require the factory global registered AND the
     //    renderer actually attached (status != "...(fallback)"). A silent 2D
     //    fallback (the v0.3.0 feedBackViz_* rename) fails here.
-    const hwBtn = await page.$('.virtuoso-view-btn[data-renderer="highway_3d"]');
-    if (hwBtn) { await hwBtn.click(); await page.waitForTimeout(900); }
+    await page.evaluate(() => {
+      const sel = document.querySelector("#virtuoso-view-select");
+      if (!sel) return;
+      sel.value = "highway_3d";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForTimeout(900);
     const hw = await page.evaluate(() => {
       const f = window.feedBackViz_highway_3d || window.slopsmithViz_highway_3d;
       const status = (document.getElementById("virtuoso-renderer-status")?.textContent || "").trim();

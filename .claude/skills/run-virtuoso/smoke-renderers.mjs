@@ -6,7 +6,7 @@
 // so it can gate a refactor of screen.js without eyeballing PNGs.
 //
 // Per renderer it asserts:
-//   1. view switch took          — the clicked .virtuoso-view-btn is .active
+//   1. view switch took          — #virtuoso-view-select reflects the kind
 //   2. renderer attached         — #virtuoso-renderer-status is non-empty
 //   3. a render surface exists   — a sized, visible <canvas> in .virtuoso-render-host
 //   4. it actually drew          — non-uniform pixels (enforced only for the
@@ -30,11 +30,14 @@ import { fileURLToPath } from "node:url";
 const HOST = process.env.SLOPSMITH_HOST || "http://127.0.0.1:8765";
 const SHOT_DIR = process.env.SHOT_DIR || resolve(dirname(fileURLToPath(import.meta.url)), "../../../.virtuoso-shots");
 
-// kind matches data-renderer on the view buttons. enforcePixels is true only
-// where Virtuoso draws into the in-tree #virtuoso-canvas with a 2D context;
+// kind matches the #virtuoso-view-select option values. enforcePixels is true
+// only where Virtuoso draws into the in-tree #virtuoso-canvas with a 2D context;
 // highway_3d and builtin_2d borrow host viz that mount their own canvas.
+// highway_2d = the in-tree 2D highway, first-class since the view dropdown
+// (v0.1.13; previously reachable only as the fallback slot).
 const RENDERERS = [
   { kind: "highway_3d",  enforcePixels: false },
+  { kind: "highway_2d",  enforcePixels: true  },
   { kind: "builtin_2d",  enforcePixels: false },
   { kind: "tab_2d",      enforcePixels: true  },
   { kind: "notation_2d", enforcePixels: true  },
@@ -72,7 +75,7 @@ async function gotoVirtuoso(page) {
   await page.waitForFunction(() => typeof window.showScreen === "function", { timeout: 5_000 });
   await page.evaluate(() => window.showScreen("plugin-virtuoso"));
   await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector(".virtuoso-view-btn", { timeout: 5_000 });
+  await page.waitForSelector("#virtuoso-view-select", { timeout: 5_000 });
 }
 
 // Trigger a generate. Pathway mode (default) has no Regenerate button — a
@@ -92,9 +95,16 @@ async function generate(page) {
 }
 
 async function switchRenderer(page, kind) {
-  const btn = await page.$(`.virtuoso-view-btn[data-renderer="${kind}"]`);
-  if (!btn) throw new Error(`Renderer button not found: ${kind}`);
-  await btn.click();
+  // View selector is a dropdown (v0.1.13): set the value + dispatch change,
+  // the same event path a user pick takes (change → onViewSwitch).
+  const ok = await page.evaluate((k) => {
+    const sel = document.querySelector("#virtuoso-view-select");
+    if (!sel || ![...sel.options].some((o) => o.value === k)) return false;
+    sel.value = k;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }, kind);
+  if (!ok) throw new Error(`Renderer option not found: ${kind}`);
   await page.waitForTimeout(700); // attachRenderer is async (may lazy-load host viz)
 }
 
@@ -168,6 +178,13 @@ async function run() {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await ctx.addInitScript(() => { globalThis.__SS_HARNESS__ = true; });   // exposes __ss_debug.avSync() for the transport row (harmless: debug-only)
     const page = await ctx.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
     page.on("pageerror", (e) => { if (!isBenign(e.message)) pageErrors.push(e.message); });
     page.on("console", (m) => {
       if (m.type() !== "error") return;
@@ -190,9 +207,9 @@ async function run() {
       await generate(page);
 
       const active = await page
-        .$eval(`.virtuoso-view-btn[data-renderer="${r.kind}"]`, (b) => b.classList.contains("active"))
-        .catch(() => false);
-      if (!active) fails.push("view button not active after click");
+        .$eval("#virtuoso-view-select", (s) => s.value)
+        .catch(() => "");
+      if (active !== r.kind) fails.push(`view select shows "${active}" after switch`);
 
       const status = (await page.$eval("#virtuoso-renderer-status", (e) => e.textContent.trim()).catch(() => "")) || "";
       if (!status) fails.push("renderer-status label empty");
@@ -588,6 +605,13 @@ async function run() {
       const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
       await ctx2.addInitScript(() => { window.__awake = []; window.feedBackDesktop = { power: { setScreenAwake: (v) => window.__awake.push(!!v) } }; });   // feedBackDesktop = the FeedBack desktop bridge (hostDesktop() reads it first)
       const p2 = await ctx2.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await p2.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
       p2.on("pageerror", (e) => { if (!isBenign(e.message)) wlFails.push(`pageerror: ${e.message}`); });
       await p2.goto(`${HOST}/`, { waitUntil: "domcontentloaded" });
       await p2.waitForSelector("#plugin-virtuoso", { state: "attached", timeout: 20000 });

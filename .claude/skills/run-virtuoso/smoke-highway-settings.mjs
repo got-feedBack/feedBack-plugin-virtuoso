@@ -38,6 +38,13 @@ async function main() {
   try {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
+  // Seed the L1 instrument store BEFORE page scripts run: the host-settings
+  // sync (v0.1.11) treats an empty localStorage as a fresh install and ADOPTS
+  // host config — which persists whatever instrument the PREVIOUS suite's panel
+  // drives wrote through (cross-suite contamination; the panel flipped to bass
+  // mid-suite). With the store seeded, the local-wins boot path holds the
+  // deterministic 6-string default AND heals the host config for later suites.
+  await page.addInitScript(() => { try { localStorage.setItem("virtuoso.instrument", JSON.stringify({ stringSetup: "guitar_6_standard", customOpenMidis: "" })); } catch (_) {} });
     page.on("pageerror", (e) => failures.push(`pageerror: ${e.message}`));
 
     // Load + activate Virtuoso.
@@ -46,11 +53,17 @@ async function main() {
     await page.waitForFunction(() => typeof window.showScreen === "function", { timeout: 5000 });
     await page.evaluate(() => window.showScreen("plugin-virtuoso"));
     await page.waitForSelector("#virtuoso-root", { state: "attached", timeout: 10000 });
-    await page.waitForSelector(".virtuoso-view-btn", { timeout: 5000 });
+    await page.waitForSelector("#virtuoso-view-select", { timeout: 5000 });
 
-    // Ensure the 3D highway is the active view, then settle.
-    const hwBtn = await page.$('.virtuoso-view-btn[data-renderer="highway_3d"]');
-    if (hwBtn) { await hwBtn.click(); await page.waitForTimeout(600); }
+    // Ensure the 3D highway is the active view, then settle. (View selector is
+    // a dropdown since v0.1.13 — value + change, the user event path.)
+    const setView = (k) => page.evaluate((kind) => {
+      const sel = document.querySelector("#virtuoso-view-select");
+      if (!sel) return;
+      sel.value = kind;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }, k);
+    await setView("highway_3d"); await page.waitForTimeout(600);
 
     // Baseline snapshot AFTER the highway has attached once.
     const before = await page.evaluate(snapshotH3dBg);
@@ -69,9 +82,8 @@ async function main() {
 
     // Cycle through the other renderers and back to the highway (attach/detach
     // churn is the most likely place a stray settings-write could hide).
-    for (const kind of ["builtin_2d", "tab_2d", "notation_2d", "highway_3d"]) {
-      const b = await page.$(`.virtuoso-view-btn[data-renderer="${kind}"]`);
-      if (b) { await b.click(); await page.waitForTimeout(400); }
+    for (const kind of ["builtin_2d", "highway_2d", "tab_2d", "notation_2d", "highway_3d"]) {
+      await setView(kind); await page.waitForTimeout(400);
     }
 
     const after = await page.evaluate(snapshotH3dBg);
