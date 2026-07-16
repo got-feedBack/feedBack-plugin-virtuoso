@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.2.4';
+  const VIRTUOSO_VERSION = '0.2.5';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -25511,6 +25511,12 @@
     const crestGain = crestCommit();   // monotonic high-water; rose === this run lifted the crest rank
     _lastEndedSession = {
       mode: _activeSession.mode, scale: _activeSession.scale, key: _activeSession.key,
+      // pathway_id + practice_type are read by the coach loop (curPw anti-self-
+      // prescribe guard + the per-rung hysteresis bucket key) and by the results
+      // modal's jamStyleForPathway — the snapshot must carry them or curPw is
+      // always undefined (the guard silently re-prescribes the just-run rung and
+      // the hysteresis bucket collapses to one shared key across all rungs).
+      pathway_id: _activeSession.pathway_id, practice_type: _activeSession.practice_type,
       bpm: _activeSession.bpm, bpm_tier: _activeSession.bpm_tier,
       duration_ms: _activeSession.duration_ms, displayName,
       tierCleared: !!unlock, clearedTier: unlock ? unlock.tier : null,
