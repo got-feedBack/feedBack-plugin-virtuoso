@@ -3,7 +3,7 @@
  * cut-beta.mjs — publish the "Virtuoso (Beta)" build.
  *
  * WHAT IT DOES
- *   Builds a RENAMED mirror of `virtuoso-dev` (plugin id `virtuoso_beta`,
+ *   Builds a RENAMED mirror of `main` (plugin id `virtuoso_beta`,
  *   name/label "Virtuoso (Beta)", version `X.Y.Z-beta.N`) and commits it to the
  *   `virtuoso-beta` branch. Because the id differs, the beta INSTALLS ALONGSIDE
  *   the stable Virtuoso in FeedBack — two nav entries, fully independent
@@ -17,8 +17,10 @@
  *   ids, /api/plugins/virtuoso/ URLs, localStorage keys). Renaming by hand on
  *   every dev change is unmaintainable; this regenerates it mechanically.
  *
- * SOURCE = the latest COMMIT on the source ref (default virtuoso-dev), NOT your
- *   working tree. Commit your dev work first.
+ * SOURCE = the latest COMMIT on the source ref (default `main`, the single
+ *   trunk since the 2026-07-16 dev→main consolidation), NOT your working tree.
+ *   Commit/land your work first. Override with --source <ref> to cut a beta
+ *   from a feature branch (the WIP-alongside-stable use case).
  *
  * USAGE
  *   node scripts/cut-beta.mjs                 build + commit to local virtuoso-beta (no push)
@@ -52,7 +54,7 @@ const has = (f) => args.includes(f);
 const optVal = (f, d) => { const i = args.indexOf(f); return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : d; };
 const DRY = has('--dry-run');
 const PUSH = has('--push');
-const SOURCE = optVal('--source', 'virtuoso-dev');
+const SOURCE = optVal('--source', 'main');
 const FORCE_VERSION = optVal('--version', null);
 
 // ── git helpers (execFile = no shell, so quoting/newlines are safe) ─────────
@@ -175,7 +177,7 @@ try {
     console.log(`[cut-beta] virtuoso-beta already matches ${SOURCE} @ ${srcSha} — nothing to do.`);
   } else {
     const msg =
-      `beta: sync virtuoso-dev @ ${srcSha} (v${betaVersion})\n\n` +
+      `beta: sync ${SOURCE} @ ${srcSha} (v${betaVersion})\n\n` +
       `Auto-generated Virtuoso (Beta) build — a renamed (id: ${BETA_TOKEN}) mirror of\n` +
       `${SOURCE} so it installs ALONGSIDE the stable Virtuoso. Do not edit by hand;\n` +
       `regenerate with scripts/cut-beta.mjs.`;

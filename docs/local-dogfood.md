@@ -78,7 +78,8 @@ highway, never by editing Virtuoso to match a drifted host.
 ## Cut a dev beta
 
 `node scripts/cut-beta.mjs --push` regenerates the renamed `virtuoso-beta` branch (id
-`virtuoso_beta`, "Virtuoso (Beta)") from `virtuoso-dev`, so testers run WIP alongside
-stable. See `docs/beta-testing.md` / memory `project_beta_channel`. Promote
-`virtuoso-dev` → `main` only when green (the smoke suite + the desktop dogfood both clean).
+`virtuoso_beta`, "Virtuoso (Beta)") from `main` (the single trunk since the 2026-07-16
+consolidation), or from a feature branch via `--source <branch>` so testers run WIP
+alongside stable. See `docs/beta-testing.md` / memory `project_beta_channel`. Land work on
+`main` only when green (the smoke suite + the desktop dogfood both clean).
 ```
