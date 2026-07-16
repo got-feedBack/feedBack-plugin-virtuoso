@@ -1603,7 +1603,11 @@
   .virtuoso-packs-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--vir-hairline, rgba(148,163,184,0.14)); flex: 0 0 auto; }
   .virtuoso-packs-foot button { min-height: 38px; padding: 0 18px; }
   .virtuoso-packs-foot button.primary { background: var(--vir-accent-grad); border-color: var(--vir-accent-edge); color: #f8fafc; }
-  .virtuoso-band-add { margin-left: auto; font-weight: 700; }
+  .virtuoso-band-add { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding: 5px 13px; font-weight: 700; border-style: dashed; border-color: var(--vir-accent-edge, #60a5fa); color: var(--vir-accent-edge, #60a5fa); background: var(--vir-inset); }
+  .virtuoso-band-add:hover { border-style: solid; background: var(--vir-accent-grad); border-color: var(--vir-accent-edge); color: var(--vir-accent-fg, #f8fafc); }
+  .virtuoso-band-add.active { border-style: solid; background: var(--vir-accent-grad); border-color: var(--vir-accent-edge); color: var(--vir-accent-fg, #f8fafc); }
+  .virtuoso-band-add-plus { font-size: 17px; line-height: 1; font-weight: 700; margin-top: -1px; }
+  .virtuoso-band-add-label { font-size: 12px; letter-spacing: 0.01em; }
   .virtuoso-progress-sheet-section { margin-bottom: 14px; }
   .virtuoso-progress-sheet-section h4 { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; }
   .virtuoso-pm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }

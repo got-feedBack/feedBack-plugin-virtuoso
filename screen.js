@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.2.2';
+  const VIRTUOSO_VERSION = '0.2.3';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -23161,9 +23161,9 @@
     addBtn.type = 'button';
     addBtn.className = 'virtuoso-band-btn virtuoso-band-add'
       + ($('virtuoso-root')?.classList.contains('vir-packs-open') ? ' active' : '');
-    addBtn.textContent = '+';
-    addBtn.title = 'Manage pathway packs';
-    addBtn.setAttribute('aria-label', 'Manage pathway packs');
+    addBtn.innerHTML = '<span class="virtuoso-band-add-plus" aria-hidden="true">+</span><span class="virtuoso-band-add-label">Add</span>';
+    addBtn.title = 'Add pathway packs';
+    addBtn.setAttribute('aria-label', 'Add pathway packs');
     addBtn.addEventListener('click', () => togglePackManager(true));
     bandBar.appendChild(addBtn);
     // L2 — ordered pathway list for the active band
