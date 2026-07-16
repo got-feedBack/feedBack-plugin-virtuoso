@@ -140,6 +140,51 @@ try {
     ok(got.chosen === h.chosen && got.streak === h.streak, `hysteresis: ${h.n}`, `chosen=${got.chosen} streak=${got.streak}`);
   }
 
+  // ── REGRESSION (v0.2.5): the run-end _lastEndedSession snapshot must carry
+  //    pathway_id + practice_type. The bug: the snapshot copied `mode` but dropped
+  //    those two, so buildCoachRx's `curPw = s.mode==='pathway' ? s.pathway_id : null`
+  //    was ALWAYS undefined → the anti-self-prescribe pick() was a no-op (it
+  //    re-prescribed the just-run rung) and the hysteresis bucket key collapsed to
+  //    one shared "pathway:" bucket. The pure hooks above take an explicit ctx.curPw,
+  //    so they could not catch it — this drives a REAL pathway run and inspects the
+  //    actual _lastEndedSession → curPw seam.
+  console.log("\n-- run-end snapshot → curPw seam (drives a real run) --");
+  const RUNG = "chromatic_warmup", SIBLING = "fs_spider_adjacent";
+  await page.evaluate((id) => {
+    try { localStorage.removeItem("virtuoso.coach_focus"); } catch (_) {}   // clear hysteresis so the behavioral assert is fresh
+    const sel = document.querySelector("#virtuoso-pathway");
+    sel.value = id; sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }, RUNG);
+  await page.waitForTimeout(300);
+  // Start, hold > 2s (sessionEnd discards sub-2s blips), then Stop (session end).
+  await page.click("#virtuoso-play");
+  const started = await page.waitForSelector("#virtuoso-stop:not([disabled])", { timeout: 8000 }).then(() => true).catch(() => false);
+  ok(started, "real pathway run started (stop button armed)");
+  await page.waitForTimeout(4200);   // clear the 2s duration gate even with a count-in
+  await page.click("#virtuoso-stop");
+  await page.waitForTimeout(400);
+
+  const snap = await page.evaluate(() => {
+    const s = window.__virtuosoCoach.lastEndedSession();
+    return s ? { mode: s.mode, pathway_id: s.pathway_id, practice_type: s.practice_type } : null;
+  });
+  ok(!!snap, "a >2s pathway run produced a _lastEndedSession snapshot");
+  ok(!!snap && snap.mode === "pathway", "snapshot.mode === 'pathway'", snap && `mode=${snap.mode}`);
+  ok(!!snap && snap.pathway_id === RUNG, "snapshot carries pathway_id (the dropped field)", snap && `pathway_id=${snap.pathway_id}`);
+  ok(!!snap && !!snap.practice_type, "snapshot carries practice_type (the other dropped field)", snap && `practice_type=${snap.practice_type}`);
+
+  // Behavioral: feed the REAL snapshot + a finger fault through the REAL buildCoachRx.
+  // The whole point of the fix — it must NOT re-prescribe the rung just run.
+  const rx = await page.evaluate(() => {
+    const s = window.__virtuosoCoach.lastEndedSession();
+    if (!s) return { err: "no snapshot" };
+    const info = { heat: { missTotal: 5, fgMiss: { 4: 4 }, transMiss: {}, opens: [] } };   // dropped-pinky fault
+    const r = window.__virtuosoCoach.buildCoachRx(s, { judgedPassed: 10 }, info);
+    return { pathwayId: r ? r.pathwayId : null };
+  });
+  ok(rx.pathwayId && rx.pathwayId !== RUNG, "coach does NOT re-prescribe the just-run rung (curPw honored)", `→ ${rx.pathwayId}`);
+  ok(rx.pathwayId === SIBLING, "a finger fault on chromatic_warmup falls to its sibling", `→ ${rx.pathwayId} (want ${SIBLING})`);
+
   ok(pageErrs.length === 0, "no uncaught page errors", pageErrs.join(" | "));
   console.log(`\n${fails === 0 ? "PASS" : "FAIL"}  coach prescription: ${fails} failure(s)`);
   process.exit(fails ? 1 : 0);

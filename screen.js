@@ -48,7 +48,7 @@
   // a plugin's own version into its screen (note_detect hardcodes `_ND_VERSION`
   // the same way), so this is the display mirror of plugin.json's "version".
   // BUMP THIS WHENEVER plugin.json's version changes (release checklist).
-  const VIRTUOSO_VERSION = '0.2.5';
+  const VIRTUOSO_VERSION = '0.2.6';
 
   // ===========================================================================
   // §1 · CONSTANTS & MUSIC-THEORY DATA
@@ -17753,8 +17753,10 @@
     return null;
   }
   // Debug/test hook: the pure mappings, exposed for the smoke suite (immune to the
-  // "smoke mocks the verifier" blind spot — they take fixtures directly).
-  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxCandidates, applyCoachHysteresis, coachRxHtml, buildPocketDiagnosis };
+  // "smoke mocks the verifier" blind spot — they take fixtures directly). `buildCoachRx`
+  // + `lastEndedSession` additionally let the suite drive a REAL run and assert the
+  // _lastEndedSession → curPw snapshot seam (the field-drop the pure hooks couldn't catch).
+  if (typeof window !== 'undefined') window.__virtuosoCoach = { coachRxFor, coachRxCandidates, applyCoachHysteresis, coachRxHtml, buildPocketDiagnosis, buildCoachRx, lastEndedSession: () => _lastEndedSession };
   // ── J-3 end-of-jam reflection (warm, NO score — mirror not judge) ───────────
   // A deliberate Jam stop opens the SAME modal shell as the results card, but
   // with descriptive content only: time jammed, how many notes, the tones you
