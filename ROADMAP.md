@@ -131,7 +131,7 @@ readout** and mints the **Gold rung** for the host's career passports.
 
 **OPEN THREAD (the only one):** **Issue #18** asks Byron whether the leftover `feat/gold-improv-verifier` branch can be deleted. The FEATURE (his Gold rung + verify-slot fix) is fully in `main` via #11's SQUASH merge — the branch just shows "2 ahead" by hash. My analysis: content 100% in main, safe to delete; waiting on his OK (the auto-guard blocked me deleting a remote branch he authored). Once he confirms (or on explicit go-ahead): `git push origin --delete feat/gold-improv-verifier`.
 
-**Known pre-existing smoke reds (NOT regressions — fail identically on base):** `gems` (6), `backing-engine` (1) = mock-verifier reds; `progress`/`variation`/`level-gate-async` pass solo, redden only under parallel load (404 console-guard race). Don't chase them.
+**Known pre-existing smoke reds (NOT regressions — fail identically on base):** `gems` is the mock-verifier red. `backing-engine` now reproduces solo (`npm run smoke:backing`, 2026-07-20: 206 pass / 1 deterministic Cmaj7→Dmin7 common-tone voice-leading failure), so it is no longer classified as the earlier parallel-only 404 race. `progress`/`variation`/`level-gate-async` pass solo and redden only under parallel load (404 console-guard race). Don't chase them in this docs-only handoff.
 
 **Carry-forwards still open:** name/trademark clearance (the real public-launch gate); once a FeedBack release includes host #590, dogfood fullscreen on the real desktop; re-cut beta from `main` (`node scripts/cut-beta.mjs --push`) when you want testers on 0.2.6. Dev host may still be running on `:8765`.
 
