@@ -118,7 +118,24 @@ readout** and mints the **Gold rung** for the host's career passports.
 
 **At end** — move finished items here; log new **Open threads** or a **STOPPED HERE** handoff. Write durable *decisions* to project memory. Keep `CLAUDE.md` / `AGENTS.md` in sync. If `screen.js` changed, run `node --check screen.js` + the smoke suite. Commit working changes in Conventional-Commits style; **commit/push only when asked.**
 
-## STOPPED HERE (2026-06-26 — fullscreen shipped to dev + host #590 merged; PUSHED)
+## STOPPED HERE (2026-07-16 — single-trunk consolidation + widened bug-fix pass; ALL LANDED on main)
+
+**Branch model changed: `virtuoso-dev` is DELETED; `main` is the single trunk, now at v0.2.6.** Going forward: short-lived feature branches → PR → merge on green. `main` HEAD is still the published artifact Desktop auto-updates to.
+
+**Landed on `main` this session (all merged, CI-green):**
+- **#4** promote `virtuoso-dev`→`main` — **shipped the whole 2026-07-14/15 batch to all Desktop users** (0.2.0→0.2.2): topbar/string-count stack, coach loop, ear-mode 2.1, tapping, grading fixes, tunings read.
+- **#15** prominent "＋ Add" ladder-pack button (0.2.3) · **#16** host-sync fix `ignore synthetic instrument changes` (cherry-picked #14's straggler, 0.2.4) · **#3** external (OmikronApex) pytest coverage for `routes.py` (new `tests/`, 35 tests) · **#17** repoint `cut-beta.mjs` `virtuoso-dev`→`main` + beta-doc sync.
+- **#19** coach-loop bug FIX (0.2.5): `_lastEndedSession` snapshot dropped `pathway_id`/`practice_type` → "Practice next" re-prescribed the just-run rung + hysteresis bucket collapsed. **#20** the regression guard (0.2.6): `smoke-coach-rx` now drives a real >2s pathway run and asserts the snapshot→curPw seam (proven to bite).
+
+**Widened bug-hunt (3 parallel agents over the shipped batch):** coach was the ONE real bug (fixed+guarded). **Jam-mirror/ear-demo and grading/host-sync/structural-tuning audited CLEAN** (only cosmetic low nits — recorded in memory `project_single_trunk_consolidation_2026-07-16`). `smoke-gold` 16/16 on main; gold path audited clean.
+
+**OPEN THREAD (the only one):** **Issue #18** asks Byron whether the leftover `feat/gold-improv-verifier` branch can be deleted. The FEATURE (his Gold rung + verify-slot fix) is fully in `main` via #11's SQUASH merge — the branch just shows "2 ahead" by hash. My analysis: content 100% in main, safe to delete; waiting on his OK (the auto-guard blocked me deleting a remote branch he authored). Once he confirms (or on explicit go-ahead): `git push origin --delete feat/gold-improv-verifier`.
+
+**Known pre-existing smoke reds (NOT regressions — fail identically on base):** `gems` is the mock-verifier red. `backing-engine` now reproduces solo (`npm run smoke:backing`, 2026-07-20: 206 pass / 1 deterministic Cmaj7→Dmin7 common-tone voice-leading failure), so it is no longer classified as the earlier parallel-only 404 race. `progress`/`variation`/`level-gate-async` pass solo and redden only under parallel load (404 console-guard race). Don't chase them in this docs-only handoff.
+
+**Carry-forwards still open:** name/trademark clearance (the real public-launch gate); once a FeedBack release includes host #590, dogfood fullscreen on the real desktop; re-cut beta from `main` (`node scripts/cut-beta.mjs --push`) when you want testers on 0.2.6. Dev host may still be running on `:8765`.
+
+## Previous session (2026-06-26 — fullscreen shipped to dev + host #590 merged; PUSHED)
 
 The fullscreen follow-up is done on `virtuoso-dev` and the host capability it needs is merged. **Pushed to `origin/virtuoso-dev`** this session (fast-forward `5c3ca74 → 9ddf62a`, 3 commits):
 - `4989eef feat(ui): opt into host fullscreen plugin screen mode (v0.1.2)` — `plugin.json` (+`"fullscreen": true`, **0.1.1→0.1.2**), `screen.js` (`VIRTUOSO_VERSION`→0.1.2), `screen.html` (dropped the `80px` navbar pad → `padding:18px`).
